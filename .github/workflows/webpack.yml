@@ -20,10 +20,10 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: 🚀 Deploy to build branch
+      - name: 🚀 Deploy to dist branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build
-          # Set the target branch to 'build'
-          publish_branch: build
+          publish_dir: ./dist
+          # Set the target branch to 'dist'
+          publish_branch: dist
