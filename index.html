@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Screen Recorder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #f87171; /* red-400 */
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            50% {
+                opacity: .5;
+            }
+        }
+        #recordBtn[disabled], #cropCheckbox:disabled + label {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        /* Cropping Styles */
+        #cropBox {
+            position: absolute;
+            border: 2px dashed #fff;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            cursor: move;
+            z-index: 10;
+        }
+        .resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            border: 1px solid #333;
+            border-radius: 2px;
+            z-index: 11;
+        }
+        .resize-handle.top-left { top: -6px; left: -6px; cursor: nwse-resize; }
+        .resize-handle.top-right { top: -6px; right: -6px; cursor: nesw-resize; }
+        .resize-handle.bottom-left { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .resize-handle.bottom-right { bottom: -6px; right: -6px; cursor: nwse-resize; }
+        .resize-handle.top { top: -6px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .resize-handle.bottom { bottom: -6px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .resize-handle.left { left: -6px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+        .resize-handle.right { right: -6px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+
+        #cropBox.is-recording {
+            border-style: none;
+        }
+        #cropBox.is-recording .resize-handle {
+            display: none;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen transition-colors duration-300">
+
+    <div class="w-full max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <header class="p-6 border-b border-gray-200 dark:border-gray-700">
+                <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white">Screen Recorder</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Record your screen, download, and share. It's that simple.</p>
+            </header>
+
+            <main class="p-6">
+                <!-- Video Preview -->
+                <div id="videoContainer" class="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden aspect-video relative flex items-center justify-center">
+                    <video id="videoPreview" class="w-full h-full object-cover" autoplay muted playsinline></video>
+                    <div id="placeholder" class="absolute text-center text-gray-500 dark:text-gray-400 p-4">
+                        <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <p class="font-medium">Your screen preview will appear here.</p>
+                        <p class="text-xs">Click "Share Screen" to begin.</p>
+                    </div>
+                    <div id="cropTargetElement" class="absolute hidden bg-transparent pointer-events-none"></div>
+                    <div id="cropContainer" class="absolute inset-0 hidden">
+                        <div id="cropBox">
+                            <div class="resize-handle top-left"></div>
+                            <div class="resize-handle top-right"></div>
+                            <div class="resize-handle bottom-left"></div>
+                            <div class="resize-handle bottom-right"></div>
+                            <div class="resize-handle top"></div>
+                            <div class="resize-handle bottom"></div>
+                            <div class="resize-handle left"></div>
+                            <div class="resize-handle right"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Format Selection -->
+                <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                    <div>
+                        <label for="formatSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
+                        <select id="formatSelect" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white">
+                            <!-- Options will be populated by JS -->
+                        </select>
+                    </div>
+                     <div>
+                        <label for="audioSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Audio Source</label>
+                        <select id="audioSelect" class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white">
+                            <option value="default" selected>Default (System Audio + Mic)</option>
+                            <option value="system">System Audio Only</option>
+                            <option value="mic">Microphone Only</option>
+                            <option value="none">No Audio</option>
+                        </select>
+                    </div>
+                </div>
+                 <!-- Crop Checkbox -->
+                <div class="mt-4 flex items-center justify-center">
+                    <input type="checkbox" id="cropCheckbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" disabled>
+                    <label for="cropCheckbox" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Enable Cropping</label>
+                </div>
+
+                <!-- Recording Status -->
+                <div id="status" class="mt-4 flex items-center justify-center gap-2 text-gray-600 dark:text-gray-300 hidden">
+                    <div class="status-dot"></div>
+                    <span id="statusText" class="font-medium text-sm">Recording...</span>
+                </div>
+                 <!-- Error Message -->
+                <div id="error" class="mt-4 text-center text-red-500 font-medium hidden"></div>
+
+                <!-- Controls -->
+                <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <button id="shareBtn" class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"></path></svg>
+                        Share Screen
+                    </button>
+                    <button id="recordBtn" class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-blue-400 dark:disabled:bg-blue-800" disabled>
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                        <span id="recordBtnText">Start Recording</span>
+                    </button>
+                    <button id="stopBtn" class="w-full bg-red-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-red-400 dark:disabled:bg-red-800" disabled>
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg>
+                        Stop Recording
+                    </button>
+                </div>
+                 <div class="mt-4 flex justify-center">
+                    <a id="downloadLink" class="w-full sm:w-auto bg-green-600 text-white text-center font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 pointer-events-none opacity-50" href="#" download="recording.webm">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        Download
+                    </a>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const videoPreview = document.getElementById('videoPreview');
+        const videoContainer = document.getElementById('videoContainer');
+        const shareBtn = document.getElementById('shareBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const recordBtnText = document.getElementById('recordBtnText');
+        const stopBtn = document.getElementById('stopBtn');
+        const downloadLink = document.getElementById('downloadLink');
+        const placeholder = document.getElementById('placeholder');
+        const statusDiv = document.getElementById('status');
+        const errorDiv = document.getElementById('error');
+        const formatSelect = document.getElementById('formatSelect');
+        const audioSelect = document.getElementById('audioSelect');
+        const cropCheckbox = document.getElementById('cropCheckbox');
+        const cropContainer = document.getElementById('cropContainer');
+        const cropTargetElement = document.getElementById('cropTargetElement');
+        const cropBox = document.getElementById('cropBox');
+
+        let mediaRecorder;
+        let recordedChunks = [];
+        let stream;
+        let stopwatchInterval = null;
+        let startTime = 0;
+        let cropAnimationId = null;
+        
+        const supportedFormats = [];
+        const isCropApiSupported = 'CropTarget' in window && 'fromElement' in CropTarget;
+
+        // --- Initialization ---
+        window.addEventListener('load', populateSelectors);
+
+        function populateSelectors() {
+             const formatsToCheck = [
+                { name: 'AV1 + Opus (MP4)', mimeType: 'video/mp4; codecs=av01.0.05M.08,opus', ext: 'mp4' },
+                { name: 'H.265/HEVC + Opus (MP4)', mimeType: 'video/mp4; codecs=hvc1.1.6.L93.B0,opus', ext: 'mp4' },
+                { name: 'VP9 + Opus (WebM)', mimeType: 'video/webm; codecs=vp9,opus', ext: 'webm' },
+                { name: 'H.264 + AAC (MP4)', mimeType: 'video/mp4; codecs=avc1.42E01E,mp4a.40.2', ext: 'mp4' },
+                { name: 'VP9 (WebM)', mimeType: 'video/webm; codecs=vp9', ext: 'webm' },
+                { name: 'H.264 (MP4)', mimeType: 'video/mp4; codecs=avc1.42E01E', ext: 'mp4' }
+            ];
+
+            formatsToCheck.forEach(format => {
+                if (MediaRecorder.isTypeSupported(format.mimeType)) {
+                    supportedFormats.push(format);
+                    const option = document.createElement('option');
+                    option.value = format.mimeType;
+                    option.textContent = format.name;
+                    option.dataset.ext = format.ext;
+                    formatSelect.appendChild(option);
+                }
+            });
+
+            if (formatSelect.options.length === 0) {
+                 showError('No supported recording formats found in this browser.');
+                 shareBtn.disabled = true;
+            }
+        }
+
+        if (!window.MediaRecorder) {
+            showError('Your browser does not support the MediaRecorder API. Please try a different browser like Chrome or Firefox.');
+            shareBtn.disabled = true;
+        }
+
+        // --- Event Listeners ---
+        shareBtn.addEventListener('click', () => {
+            if (stream) stopSharing(); else shareScreen();
+        });
+        recordBtn.addEventListener('click', startRecording);
+        stopBtn.addEventListener('click', stopRecording);
+        cropCheckbox.addEventListener('change', toggleCropping);
+
+        // --- Functions ---
+        
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+        
+        function hideError() {
+            errorDiv.textContent = '';
+            errorDiv.classList.add('hidden');
+        }
+
+        async function shareScreen() {
+            hideError();
+            try {
+                const selectedAudio = audioSelect.value;
+                let audioConstraint = true;
+
+                if (selectedAudio === 'none') audioConstraint = false;
+                else if (selectedAudio === 'system') audioConstraint = { mediaSource: "browser" };
+                
+                stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { cursor: "always" },
+                    audio: audioConstraint 
+                });
+                
+                if (selectedAudio === 'mic') {
+                    stream.getAudioTracks().forEach(track => track.stop());
+                    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    micStream.getAudioTracks().forEach(track => stream.addTrack(track));
+                }
+
+                videoPreview.srcObject = stream;
+                await videoPreview.play();
+                placeholder.classList.add('hidden');
+                
+                shareBtn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg> Stop Sharing`;
+                recordBtn.disabled = false;
+                cropCheckbox.disabled = false;
+                formatSelect.disabled = true;
+                audioSelect.disabled = true;
+
+                stream.getVideoTracks()[0].addEventListener('ended', stopSharing);
+
+            } catch (err) {
+                console.error("Error sharing screen:", err);
+                showError("Could not start screen sharing. Please grant permission and try again.");
+                stopSharing();
+            }
+        }
+        
+        async function startRecording() {
+            if (!stream) {
+                showError("Please share your screen first.");
+                return;
+            }
+            hideError();
+            recordedChunks = [];
+            
+            const selectedFormat = formatSelect.options[formatSelect.selectedIndex];
+            const mimeType = selectedFormat.value;
+
+            let streamToRecord = stream;
+
+            if (cropCheckbox.checked) {
+                // Prefer native CropTarget API if available
+                if (isCropApiSupported) {
+                    try {
+                        const [videoTrack] = stream.getVideoTracks();
+                        const cropTarget = await CropTarget.fromElement(cropTargetElement);
+                        await videoTrack.cropTo(cropTarget);
+                    } catch (err) {
+                        console.error("Native cropping failed, falling back to canvas.", err);
+                        streamToRecord = getCanvasFallbackStream();
+                    }
+                } else {
+                    // Fallback for browsers without CropTarget API
+                     streamToRecord = getCanvasFallbackStream();
+                }
+            }
+
+
+            mediaRecorder = new MediaRecorder(streamToRecord, { mimeType: mimeType });
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) recordedChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                const selectedFormatOption = formatSelect.options[formatSelect.selectedIndex];
+                const fileExtension = selectedFormatOption.dataset.ext;
+                const mimeTypeBlob = selectedFormatOption.value.split(';')[0];
+                
+                downloadLink.download = `recording.${fileExtension}`;
+                const blob = new Blob(recordedChunks, { type: mimeTypeBlob });
+                const url = URL.createObjectURL(blob);
+                
+                downloadLink.href = url;
+                downloadLink.classList.remove('pointer-events-none', 'opacity-50');
+            };
+
+            mediaRecorder.start();
+            statusDiv.classList.remove('hidden');
+            stopBtn.disabled = false;
+            recordBtn.disabled = true;
+            shareBtn.disabled = true;
+            cropCheckbox.disabled = true;
+            if (cropCheckbox.checked) {
+                cropBox.classList.add('is-recording');
+            }
+            startStopwatch();
+        }
+
+        function getCanvasFallbackStream() {
+            const cropCanvas = document.createElement('canvas');
+            const ctx = cropCanvas.getContext('2d');
+            const videoRect = videoPreview.getBoundingClientRect();
+            const boxRect = cropBox.getBoundingClientRect();
+            const trackSettings = stream.getVideoTracks()[0].getSettings();
+
+            const scaleX = trackSettings.width / videoRect.width;
+            const scaleY = trackSettings.height / videoRect.height;
+
+            const sourceX = (boxRect.left - videoRect.left) * scaleX;
+            const sourceY = (boxRect.top - videoRect.top) * scaleY;
+            const sourceWidth = boxRect.width * scaleX;
+            const sourceHeight = boxRect.height * scaleY;
+
+            cropCanvas.width = Math.round(sourceWidth);
+            cropCanvas.height = Math.round(sourceHeight);
+
+            function drawCropFrame() {
+                ctx.drawImage(videoPreview, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, cropCanvas.width, cropCanvas.height);
+                cropAnimationId = requestAnimationFrame(drawCropFrame);
+            }
+            drawCropFrame();
+
+            const canvasStream = cropCanvas.captureStream();
+            stream.getAudioTracks().forEach(track => canvasStream.addTrack(track.clone()));
+            return canvasStream;
+        }
+
+        async function stopRecording() {
+            await removeCrop();
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            statusDiv.classList.add('hidden');
+            stopBtn.disabled = true;
+            recordBtn.disabled = false;
+            shareBtn.disabled = false;
+            cropCheckbox.disabled = false;
+            if (cropCheckbox.checked) {
+                cropBox.classList.remove('is-recording');
+            }
+            stopStopwatch();
+        }
+
+        async function stopSharing() {
+            await removeCrop();
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') stopRecording();
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            
+            stream = null;
+            videoPreview.srcObject = null;
+            placeholder.classList.remove('hidden');
+            shareBtn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"></path></svg> Share Screen`;
+            recordBtn.disabled = true;
+            stopBtn.disabled = true;
+            cropCheckbox.checked = false;
+            cropCheckbox.disabled = true;
+            cropContainer.classList.add('hidden');
+            cropBox.classList.remove('is-recording');
+            formatSelect.disabled = false;
+            audioSelect.disabled = false;
+            downloadLink.classList.add('pointer-events-none', 'opacity-50');
+            downloadLink.removeAttribute('href');
+            stopStopwatch();
+        }
+        
+        function startStopwatch() {
+            startTime = Date.now();
+            recordBtn.querySelector('svg').style.display = 'none';
+            stopwatchInterval = setInterval(() => {
+                const seconds = Math.floor((Date.now() - startTime) / 1000);
+                const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+                const secs = (seconds % 60).toString().padStart(2, '0');
+                recordBtnText.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopStopwatch() {
+            clearInterval(stopwatchInterval);
+            stopwatchInterval = null;
+            recordBtnText.textContent = 'Start Recording';
+            const icon = recordBtn.querySelector('svg');
+            if (icon) icon.style.display = 'inline-block';
+        }
+
+        // --- Cropping Logic ---
+        function toggleCropping() {
+            if (cropCheckbox.checked) {
+                cropContainer.classList.remove('hidden');
+                cropTargetElement.classList.remove('hidden');
+                initializeCropBox();
+            } else {
+                cropContainer.classList.add('hidden');
+                cropTargetElement.classList.add('hidden');
+            }
+        }
+
+        function initializeCropBox() {
+            const styles = { left: '10%', top: '10%', width: '80%', height: '80%' };
+            Object.assign(cropBox.style, styles);
+            Object.assign(cropTargetElement.style, styles);
+            cropBox.addEventListener('mousedown', onCropBoxMouseDown);
+        }
+
+        let dragState = {};
+
+        function onCropBoxMouseDown(e) {
+            e.preventDefault();
+            const handle = e.target.closest('.resize-handle');
+            dragState = {
+                resizing: !!handle,
+                dragging: !handle,
+                handle: handle ? handle.className.replace('resize-handle ', '').trim() : null,
+                startX: e.clientX,
+                startY: e.clientY,
+                containerRect: videoContainer.getBoundingClientRect(),
+                initialLeft: cropBox.offsetLeft,
+                initialTop: cropBox.offsetTop,
+                initialWidth: cropBox.offsetWidth,
+                initialHeight: cropBox.offsetHeight
+            };
+            window.addEventListener('mousemove', onCropBoxMouseMove);
+            window.addEventListener('mouseup', onCropBoxMouseUp);
+        }
+        
+        function onCropBoxMouseMove(e) {
+            let styles = {};
+            const dx = e.clientX - dragState.startX;
+            const dy = e.clientY - dragState.startY;
+
+            if (dragState.dragging) {
+                let newLeft = dragState.initialLeft + dx;
+                let newTop = dragState.initialTop + dy;
+
+                newLeft = Math.max(0, Math.min(newLeft, dragState.containerRect.width - dragState.initialWidth));
+                newTop = Math.max(0, Math.min(newTop, dragState.containerRect.height - dragState.initialHeight));
+                
+                styles = { left: `${newLeft}px`, top: `${newTop}px` };
+
+            } else if (dragState.resizing) {
+                let newLeft = dragState.initialLeft;
+                let newTop = dragState.initialTop;
+                let newWidth = dragState.initialWidth;
+                let newHeight = dragState.initialHeight;
+
+                if (dragState.handle.includes('right')) newWidth += dx;
+                if (dragState.handle.includes('left')) {
+                    newWidth -= dx;
+                    newLeft += dx;
+                }
+                if (dragState.handle.includes('bottom')) newHeight += dy;
+                if (dragState.handle.includes('top')) {
+                    newHeight -= dy;
+                    newTop += dy;
+                }
+                
+                const minSize = 20;
+                
+                if (newWidth < minSize) {
+                    if (dragState.handle.includes('left')) newLeft = dragState.initialLeft + dragState.initialWidth - minSize;
+                    newWidth = minSize;
+                }
+                if (newHeight < minSize) {
+                    if (dragState.handle.includes('top')) newTop = dragState.initialTop + dragState.initialHeight - minSize;
+                    newHeight = minSize;
+                }
+
+                // Clamp to container bounds
+                if (newLeft < 0) {
+                    newWidth += newLeft;
+                    newLeft = 0;
+                }
+                if (newTop < 0) {
+                    newHeight += newTop;
+                    newTop = 0;
+                }
+                if (newLeft + newWidth > dragState.containerRect.width) {
+                    newWidth = dragState.containerRect.width - newLeft;
+                }
+                if (newTop + newHeight > dragState.containerRect.height) {
+                    newHeight = dragState.containerRect.height - newTop;
+                }
+
+                styles = {
+                    left: `${newLeft}px`,
+                    top: `${newTop}px`,
+                    width: `${newWidth}px`,
+                    height: `${newHeight}px`,
+                };
+            }
+             if (Object.keys(styles).length) {
+                Object.assign(cropBox.style, styles);
+                Object.assign(cropTargetElement.style, cropBox.style);
+             }
+        }
+
+        function onCropBoxMouseUp() {
+            window.removeEventListener('mousemove', onCropBoxMouseMove);
+            window.removeEventListener('mouseup', onCropBoxMouseUp);
+        }
+
+        async function removeCrop() {
+            if (cropAnimationId) {
+                cancelAnimationFrame(cropAnimationId);
+                cropAnimationId = null;
+            }
+            if (stream && isCropApiSupported) {
+                const [videoTrack] = stream.getVideoTracks();
+                if ('cropTo' in videoTrack) {
+                   try { await videoTrack.cropTo(null); } catch (e) { /* ignore */ }
+                }
+            }
+        }
+
+    </script>
+</body>
+</html>
+
