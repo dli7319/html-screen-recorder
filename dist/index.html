@@ -119,7 +119,6 @@
         </header>
 
         <main class="p-6">
-          <!-- Video Preview -->
           <div
             id="videoContainer"
             class="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden aspect-video relative flex items-center justify-center"
@@ -170,7 +169,6 @@
             </div>
           </div>
 
-          <!-- Format Selection -->
           <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
             <div>
               <label
@@ -181,9 +179,7 @@
               <select
                 id="formatSelect"
                 class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"
-              >
-                <!-- Options will be populated by JS -->
-              </select>
+              ></select>
             </div>
             <div>
               <label
@@ -204,7 +200,6 @@
               </select>
             </div>
           </div>
-          <!-- Crop Checkbox -->
           <div class="mt-4 flex items-center justify-center">
             <input
               type="checkbox"
@@ -219,7 +214,6 @@
             >
           </div>
 
-          <!-- Recording Status -->
           <div
             id="status"
             class="mt-4 flex items-center justify-center gap-2 text-gray-600 dark:text-gray-300 hidden"
@@ -229,13 +223,11 @@
               >Recording...</span
             >
           </div>
-          <!-- Error Message -->
           <div
             id="error"
             class="mt-4 text-center text-red-500 font-medium hidden"
           ></div>
 
-          <!-- Controls -->
           <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <button
               id="shareBtn"
@@ -297,7 +289,6 @@
               id="downloadLink"
               class="w-full sm:w-auto bg-green-600 text-white text-center font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 pointer-events-none opacity-50"
               href="#"
-              download="recording.webm"
             >
               <svg
                 class="w-5 h-5"
@@ -431,6 +422,10 @@
 
       async function shareScreen() {
         hideError();
+        // Reset download link from any previous recording
+        downloadLink.classList.add("pointer-events-none", "opacity-50");
+        downloadLink.removeAttribute("href");
+
         try {
           const selectedAudio = audioSelect.value;
           let audioConstraint = true;
@@ -489,7 +484,6 @@
         let streamToRecord = stream;
 
         if (cropCheckbox.checked) {
-          // Prefer native CropTarget API if available
           if (isCropApiSupported) {
             try {
               const [videoTrack] = stream.getVideoTracks();
@@ -505,7 +499,6 @@
               streamToRecord = getCanvasFallbackStream();
             }
           } else {
-            // Fallback for browsers without CropTarget API
             streamToRecord = getCanvasFallbackStream();
           }
         }
@@ -519,6 +512,8 @@
         };
 
         mediaRecorder.onstop = () => {
+          // This is the centralized cleanup function for when a recording ends.
+          // 1. Create the downloadable file.
           const now = new Date();
           const year = now.getFullYear();
           const month = (now.getMonth() + 1).toString().padStart(2, "0");
@@ -539,9 +534,25 @@
 
           downloadLink.href = url;
           downloadLink.classList.remove("pointer-events-none", "opacity-50");
+
+          // 2. Reset the UI for recording.
+          statusDiv.classList.add("hidden");
+          stopStopwatch();
+          stopBtn.disabled = true;
+          if (cropCheckbox.checked) {
+            cropBox.classList.remove("is-recording");
+          }
+          // Only re-enable controls if the user is still sharing.
+          if (stream && stream.active) {
+            recordBtn.disabled = false;
+            shareBtn.disabled = false;
+            cropCheckbox.disabled = false;
+          }
         };
 
         mediaRecorder.start();
+
+        // Update UI to "recording" state
         statusDiv.classList.remove("hidden");
         stopBtn.disabled = false;
         recordBtn.disabled = true;
@@ -596,27 +607,24 @@
 
       async function stopRecording() {
         await removeCrop();
-        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
           mediaRecorder.stop();
         }
-        statusDiv.classList.add("hidden");
-        stopBtn.disabled = true;
-        recordBtn.disabled = false;
-        shareBtn.disabled = false;
-        cropCheckbox.disabled = false;
-        if (cropCheckbox.checked) {
-          cropBox.classList.remove("is-recording");
-        }
-        stopStopwatch();
       }
 
       async function stopSharing() {
         await removeCrop();
-        if (mediaRecorder && mediaRecorder.state !== "inactive")
-          stopRecording();
-        if (stream) stream.getTracks().forEach((track) => track.stop());
+        // If a recording is in progress, stop it. The onstop handler will generate the download.
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
 
-        stream = null;
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          stream = null;
+        }
+
+        // Reset the UI for SHARING only. onstop handles the recording UI.
         videoPreview.srcObject = null;
         placeholder.classList.remove("hidden");
         shareBtn.innerHTML = `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"></path></svg> Share Screen`;
@@ -628,9 +636,6 @@
         cropBox.classList.remove("is-recording");
         formatSelect.disabled = false;
         audioSelect.disabled = false;
-        downloadLink.classList.add("pointer-events-none", "opacity-50");
-        downloadLink.removeAttribute("href");
-        stopStopwatch();
       }
 
       function startStopwatch() {
@@ -752,7 +757,6 @@
             newHeight = minSize;
           }
 
-          // Clamp to container bounds
           if (newLeft < 0) {
             newWidth += newLeft;
             newLeft = 0;
