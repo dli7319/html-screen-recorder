@@ -428,27 +428,86 @@
 
         try {
           const selectedAudio = audioSelect.value;
-          let audioConstraint = true;
+          let displayStream;
+          let micStream;
+          let finalStream = new MediaStream();
 
-          if (selectedAudio === "none") audioConstraint = false;
-          else if (selectedAudio === "system")
-            audioConstraint = { mediaSource: "browser" };
+          // 1. Get Display Stream (Video + System Audio if needed)
+          const wantsSystemAudio =
+            selectedAudio === "default" || selectedAudio === "system";
 
-          stream = await navigator.mediaDevices.getDisplayMedia({
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: { cursor: "always" },
-            audio: audioConstraint,
+            // Request system audio only if 'default' or 'system' is selected
+            audio: wantsSystemAudio,
           });
 
-          if (selectedAudio === "mic") {
-            stream.getAudioTracks().forEach((track) => track.stop());
-            const micStream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
-              video: false,
-            });
-            micStream
-              .getAudioTracks()
-              .forEach((track) => stream.addTrack(track));
+          // Add video track to final stream
+          displayStream.getVideoTracks().forEach((track) => {
+            finalStream.addTrack(track);
+          });
+
+          // 2. Get Mic Stream (if 'default' or 'mic' is selected)
+          const wantsMicAudio =
+            selectedAudio === "default" || selectedAudio === "mic";
+          if (wantsMicAudio) {
+            try {
+              micStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false,
+              });
+            } catch (micErr) {
+              console.error("Could not get microphone:", micErr);
+              showError("Could not access microphone. Continuing without it.");
+              // Continue without mic
+            }
           }
+
+          // 3. Combine Audio Tracks
+          const systemAudioTrack = displayStream.getAudioTracks()[0];
+          const micAudioTrack = micStream ? micStream.getAudioTracks()[0] : null;
+
+          if (
+            wantsSystemAudio &&
+            wantsMicAudio &&
+            systemAudioTrack &&
+            micAudioTrack
+          ) {
+            // ---- Both system and mic ----
+            // Use AudioContext to merge the two audio streams
+            const audioContext = new AudioContext();
+            const destination = audioContext.createMediaStreamDestination();
+
+            // Add system audio source
+            if (systemAudioTrack) {
+              const systemSource = audioContext.createMediaStreamSource(
+                new MediaStream([systemAudioTrack])
+              );
+              systemSource.connect(destination);
+            }
+
+            // Add mic audio source
+            if (micAudioTrack) {
+              const micSource = audioContext.createMediaStreamSource(
+                new MediaStream([micAudioTrack])
+              );
+              micSource.connect(destination);
+            }
+
+            // Add the combined audio track to the final stream
+            destination.stream.getAudioTracks().forEach((track) => {
+              finalStream.addTrack(track);
+            });
+          } else if (wantsSystemAudio && systemAudioTrack) {
+            // ---- System audio only ----
+            finalStream.addTrack(systemAudioTrack);
+          } else if (wantsMicAudio && micAudioTrack) {
+            // ---- Mic audio only ----
+            finalStream.addTrack(micAudioTrack);
+          }
+          // If 'none' is selected, no audio tracks are added. This is correct.
+
+          stream = finalStream; // This is the stream that will be recorded
 
           videoPreview.srcObject = stream;
           await videoPreview.play();
@@ -460,13 +519,23 @@
           formatSelect.disabled = true;
           audioSelect.disabled = true;
 
+          // When the user stops sharing via the browser UI, the video track ends.
           stream.getVideoTracks()[0].addEventListener("ended", stopSharing);
         } catch (err) {
           console.error("Error sharing screen:", err);
-          showError(
-            "Could not start screen sharing. Please grant permission and try again."
-          );
-          stopSharing();
+          let errorMsg =
+            "Could not start screen sharing. Please grant permission and try again.";
+          if (err.name === "NotAllowedError") {
+            errorMsg =
+              "Screen sharing permission was denied. Please allow permission and try again.";
+          } else if (err.name === "NotFoundError") {
+            errorMsg =
+              "No screen sharing sources found. This can happen if your browser is misconfigured.";
+          } else if (err.name === "InvalidStateError") {
+            errorMsg = "An invalid state occurred. Please reload the page.";
+          }
+          showError(errorMsg);
+          stopSharing(); // Ensure UI is reset
         }
       }
 
@@ -503,9 +572,16 @@
           }
         }
 
-        mediaRecorder = new MediaRecorder(streamToRecord, {
-          mimeType: mimeType,
-        });
+        try {
+          mediaRecorder = new MediaRecorder(streamToRecord, {
+            mimeType: mimeType,
+          });
+        } catch (err) {
+          console.error("Failed to create MediaRecorder:", err);
+          showError(`Failed to start recording. Unsupported format: ${mimeType}`);
+          stopSharing();
+          return;
+        }
 
         mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0) recordedChunks.push(event.data);
