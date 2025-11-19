@@ -1,11 +1,12 @@
 export async function shareScreen(wantsSystemAudio: boolean, wantsMicAudio: boolean): Promise<MediaStream> {
-    let displayStream: MediaStream;
+
     let micStream: MediaStream | undefined;
-    let finalStream = new MediaStream();
+    const finalStream = new MediaStream();
 
     // 1. Get Display Stream (Video + System Audio if needed)
-    displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: "always" } as any,
+    const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: "always" } as unknown as MediaTrackConstraints,
+
         audio: wantsSystemAudio,
     });
 

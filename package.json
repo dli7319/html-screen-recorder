@@ -5,15 +5,21 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "lint": "eslint ."
   },
   "type": "module",
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@rollup/plugin-typescript": "^12.3.0",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "jiti": "^2.6.1",
     "rollup": "^4.52.4",
     "tslib": "^2.8.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.47.0"
   }
 }

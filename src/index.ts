@@ -22,7 +22,8 @@ const cropTargetElement = document.getElementById("cropTargetElement") as HTMLDi
 const cropBox = document.getElementById("cropBox") as HTMLDivElement;
 
 let stream: MediaStream | null = null;
-let stopwatchInterval: any = null;
+let stopwatchInterval: number | null = null;
+
 let startTime = 0;
 
 const cropper = new Cropper(cropBox, cropTargetElement, videoContainer, videoPreview);
@@ -103,12 +104,14 @@ async function handleShareScreen() {
     micAudioToggle.disabled = true;
 
     stream.getVideoTracks()[0].addEventListener("ended", stopSharing);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error sharing screen:", err);
     let errorMsg = "Could not start screen sharing. Please grant permission and try again.";
-    if (err.name === "NotAllowedError") errorMsg = "Screen sharing permission was denied. Please allow permission and try again.";
-    else if (err.name === "NotFoundError") errorMsg = "No screen sharing sources found. This can happen if your browser is misconfigured.";
-    else if (err.name === "InvalidStateError") errorMsg = "An invalid state occurred. Please reload the page.";
+    const error = err as Error;
+    if (error.name === "NotAllowedError") errorMsg = "Screen sharing permission was denied. Please allow permission and try again.";
+    else if (error.name === "NotFoundError") errorMsg = "No screen sharing sources found. This can happen if your browser is misconfigured.";
+    else if (error.name === "InvalidStateError") errorMsg = "An invalid state occurred. Please reload the page.";
+
 
     showError(errorMsg);
     stopSharing();
@@ -137,8 +140,8 @@ async function startRecording() {
 
   try {
     recorder.start(streamToRecord, format);
-  } catch (err: any) {
-    showError(err.message);
+  } catch (err: unknown) {
+    showError((err as Error).message);
     stopSharing();
     return;
   }

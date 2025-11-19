@@ -68,7 +68,7 @@ export class Cropper {
             if ("cropTo" in videoTrack) {
                 try {
                     await (videoTrack as unknown as CropMediaStreamTrack).cropTo(null);
-                } catch (e) {
+                } catch {
                     /* ignore */
                 }
             }
