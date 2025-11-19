@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "rollup -c",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "type": "module",
   "author": "",
@@ -17,6 +19,7 @@
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "jiti": "^2.6.1",
+    "prettier": "^3.6.2",
     "rollup": "^4.52.4",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3",
