@@ -146,62 +146,61 @@ export class Cropper {
   }
 
   private onCropBoxMouseMove = (e: MouseEvent) => {
-    let styles: Partial<CSSStyleDeclaration> = {};
     const dx = e.clientX - this.dragState.startX;
     const dy = e.clientY - this.dragState.startY;
+    const {
+      initialLeft,
+      initialTop,
+      initialWidth,
+      initialHeight,
+      containerRect,
+    } = this.dragState;
+
+    const clamp = (val: number, min: number, max: number) =>
+      Math.max(min, Math.min(val, max));
 
     if (this.dragState.dragging) {
-      let newLeft = this.dragState.initialLeft + dx;
-      let newTop = this.dragState.initialTop + dy;
+      const maxLeft = containerRect.width - initialWidth;
+      const maxTop = containerRect.height - initialHeight;
+      const left = clamp(initialLeft + dx, 0, maxLeft);
+      const top = clamp(initialTop + dy, 0, maxTop);
 
-      newLeft = Math.max(
-        0,
-        Math.min(
-          newLeft,
-          this.dragState.containerRect.width - this.dragState.initialWidth
-        )
-      );
-      newTop = Math.max(
-        0,
-        Math.min(
-          newTop,
-          this.dragState.containerRect.height - this.dragState.initialHeight
-        )
-      );
-
-      styles = { left: `${newLeft}px`, top: `${newTop}px` };
+      Object.assign(this.cropBox.style, { left: `${left}px`, top: `${top}px` });
+      Object.assign(this.cropTargetElement.style, {
+        left: `${left}px`,
+        top: `${top}px`,
+      });
     } else if (this.dragState.resizing) {
-      let newLeft = this.dragState.initialLeft;
-      let newTop = this.dragState.initialTop;
-      let newWidth = this.dragState.initialWidth;
-      let newHeight = this.dragState.initialHeight;
+      let newLeft = initialLeft;
+      let newTop = initialTop;
+      let newWidth = initialWidth;
+      let newHeight = initialHeight;
 
-      if (this.dragState.handle?.includes('right')) newWidth += dx;
-      if (this.dragState.handle?.includes('left')) {
+      const handle = this.dragState.handle || '';
+      if (handle.includes('right')) newWidth += dx;
+      if (handle.includes('left')) {
         newWidth -= dx;
         newLeft += dx;
       }
-      if (this.dragState.handle?.includes('bottom')) newHeight += dy;
-      if (this.dragState.handle?.includes('top')) {
+      if (handle.includes('bottom')) newHeight += dy;
+      if (handle.includes('top')) {
         newHeight -= dy;
         newTop += dy;
       }
 
       const minSize = 20;
-
       if (newWidth < minSize) {
-        if (this.dragState.handle?.includes('left'))
-          newLeft =
-            this.dragState.initialLeft + this.dragState.initialWidth - minSize;
+        if (handle.includes('left'))
+          newLeft = initialLeft + initialWidth - minSize;
         newWidth = minSize;
       }
       if (newHeight < minSize) {
-        if (this.dragState.handle?.includes('top'))
-          newTop =
-            this.dragState.initialTop + this.dragState.initialHeight - minSize;
+        if (handle.includes('top'))
+          newTop = initialTop + initialHeight - minSize;
         newHeight = minSize;
       }
 
+      // Boundary checks
       if (newLeft < 0) {
         newWidth += newLeft;
         newLeft = 0;
@@ -210,21 +209,19 @@ export class Cropper {
         newHeight += newTop;
         newTop = 0;
       }
-      if (newLeft + newWidth > this.dragState.containerRect.width)
-        newWidth = this.dragState.containerRect.width - newLeft;
-      if (newTop + newHeight > this.dragState.containerRect.height)
-        newHeight = this.dragState.containerRect.height - newTop;
+      if (newLeft + newWidth > containerRect.width)
+        newWidth = containerRect.width - newLeft;
+      if (newTop + newHeight > containerRect.height)
+        newHeight = containerRect.height - newTop;
 
-      styles = {
+      const styles = {
         left: `${newLeft}px`,
         top: `${newTop}px`,
         width: `${newWidth}px`,
         height: `${newHeight}px`,
       };
-    }
-    if (Object.keys(styles).length) {
       Object.assign(this.cropBox.style, styles);
-      Object.assign(this.cropTargetElement.style, this.cropBox.style);
+      Object.assign(this.cropTargetElement.style, styles);
     }
   };
 

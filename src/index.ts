@@ -24,18 +24,20 @@ window.addEventListener('load', () => {
     ui.showError(
       'Your browser does not support the MediaRecorder API. Please try a different browser like Chrome or Firefox.'
     );
-    ui.shareBtn.disabled = true;
+    ui.disableShareBtn();
   }
 });
 
 // --- Event Listeners ---
-ui.shareBtn.addEventListener('click', () => {
-  if (stream) stopSharing();
-  else handleShareScreen();
+ui.bindEvents({
+  onShare: () => {
+    if (stream) stopSharing();
+    else handleShareScreen();
+  },
+  onRecord: startRecording,
+  onStop: stopRecording,
+  onCropToggle: toggleCropping,
 });
-ui.recordBtn.addEventListener('click', startRecording);
-ui.stopBtn.addEventListener('click', stopRecording);
-ui.cropCheckbox.addEventListener('change', toggleCropping);
 
 // --- Functions ---
 

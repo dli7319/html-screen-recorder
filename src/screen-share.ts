@@ -2,28 +2,23 @@ export async function shareScreen(
   wantsSystemAudio: boolean,
   wantsMicAudio: boolean
 ): Promise<MediaStream> {
-  let micStream: MediaStream | undefined;
   const finalStream = new MediaStream();
 
-  // 1. Get Display Stream (Video + System Audio if needed)
+  // 1. Get Display Stream
   const displayStream = await navigator.mediaDevices.getDisplayMedia({
     video: { cursor: 'always' } as unknown as MediaTrackConstraints,
-
     audio: wantsSystemAudio,
   });
 
-  // Add video track to final stream
-  displayStream.getVideoTracks().forEach((track) => {
-    finalStream.addTrack(track);
-  });
+  displayStream
+    .getVideoTracks()
+    .forEach((track) => finalStream.addTrack(track));
 
-  // 2. Get Mic Stream (if toggle is checked)
+  // 2. Get Mic Stream
+  let micStream: MediaStream | undefined;
   if (wantsMicAudio) {
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (micErr) {
       console.error('Could not get microphone:', micErr);
       throw new Error('Could not access microphone. Continuing without it.');
@@ -31,31 +26,18 @@ export async function shareScreen(
   }
 
   // 3. Combine Audio Tracks
-  const systemAudioTrack = displayStream.getAudioTracks()[0];
-  const micAudioTrack = micStream ? micStream.getAudioTracks()[0] : null;
+  const systemTrack = displayStream.getAudioTracks()[0];
+  const micTrack = micStream?.getAudioTracks()[0];
 
-  if (systemAudioTrack && micAudioTrack) {
-    // ---- Both system and mic ----
-    const audioContext = new AudioContext();
-    const destination = audioContext.createMediaStreamDestination();
-
-    const systemSource = audioContext.createMediaStreamSource(
-      new MediaStream([systemAudioTrack])
-    );
-    systemSource.connect(destination);
-
-    const micSource = audioContext.createMediaStreamSource(
-      new MediaStream([micAudioTrack])
-    );
-    micSource.connect(destination);
-
-    destination.stream.getAudioTracks().forEach((track) => {
-      finalStream.addTrack(track);
-    });
-  } else if (systemAudioTrack) {
-    finalStream.addTrack(systemAudioTrack);
-  } else if (micAudioTrack) {
-    finalStream.addTrack(micAudioTrack);
+  if (systemTrack && micTrack) {
+    const ctx = new AudioContext();
+    const dest = ctx.createMediaStreamDestination();
+    ctx.createMediaStreamSource(new MediaStream([systemTrack])).connect(dest);
+    ctx.createMediaStreamSource(new MediaStream([micTrack])).connect(dest);
+    dest.stream.getAudioTracks().forEach((t) => finalStream.addTrack(t));
+  } else {
+    if (systemTrack) finalStream.addTrack(systemTrack);
+    if (micTrack) finalStream.addTrack(micTrack);
   }
 
   return finalStream;
