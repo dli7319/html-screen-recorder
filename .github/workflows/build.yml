@@ -1,4 +1,4 @@
-name: NodeJS with Webpack
+name: Build
 
 on:
   workflow_dispatch:
@@ -22,6 +22,12 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm install
+
+      - name: 🛠️ Build
+        run: npm run build
 
       - name: 🚀 Deploy to dist branch
         uses: peaceiris/actions-gh-pages@v4
