@@ -1,7 +1,16 @@
+export interface ShareResult {
+  stream: MediaStream;
+  analysers: {
+    system?: AnalyserNode;
+    mic?: AnalyserNode;
+  };
+  audioContext?: AudioContext;
+}
+
 export async function shareScreen(
   wantsSystemAudio: boolean,
   wantsMicAudio: boolean
-): Promise<MediaStream> {
+): Promise<ShareResult> {
   const finalStream = new MediaStream();
 
   // 1. Get Display Stream
@@ -25,20 +34,41 @@ export async function shareScreen(
     }
   }
 
-  // 3. Combine Audio Tracks
+  // 3. Setup Audio Context & Analysers
+  const analysers: ShareResult['analysers'] = {};
+  let audioContext: AudioContext | undefined;
+
   const systemTrack = displayStream.getAudioTracks()[0];
   const micTrack = micStream?.getAudioTracks()[0];
 
-  if (systemTrack && micTrack) {
-    const ctx = new AudioContext();
-    const dest = ctx.createMediaStreamDestination();
-    ctx.createMediaStreamSource(new MediaStream([systemTrack])).connect(dest);
-    ctx.createMediaStreamSource(new MediaStream([micTrack])).connect(dest);
+  if (systemTrack || micTrack) {
+    audioContext = new AudioContext();
+    const dest = audioContext.createMediaStreamDestination();
+
+    if (systemTrack) {
+      const source = audioContext.createMediaStreamSource(
+        new MediaStream([systemTrack])
+      );
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      analyser.connect(dest);
+      analysers.system = analyser;
+    }
+
+    if (micTrack) {
+      const source = audioContext.createMediaStreamSource(
+        new MediaStream([micTrack])
+      );
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      analyser.connect(dest);
+      analysers.mic = analyser;
+    }
+
     dest.stream.getAudioTracks().forEach((t) => finalStream.addTrack(t));
-  } else {
-    if (systemTrack) finalStream.addTrack(systemTrack);
-    if (micTrack) finalStream.addTrack(micTrack);
   }
 
-  return finalStream;
+  return { stream: finalStream, analysers, audioContext };
 }

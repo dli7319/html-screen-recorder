@@ -1,4 +1,4 @@
-import { shareScreen } from './screen-share';
+import { ShareResult, shareScreen } from './screen-share';
 import { Recorder } from './recorder';
 import { Cropper } from './cropper';
 import { FORMATS_TO_CHECK } from './constants';
@@ -16,6 +16,9 @@ const cropper = new Cropper(
 const recorder = new Recorder(onRecordingStop);
 
 let stream: MediaStream | null = null;
+let audioContext: AudioContext | null | undefined = null;
+let analysers: ShareResult['analysers'] | null = null;
+let visualizationAnimationFrame: number | null = null;
 
 // --- Initialization ---
 window.addEventListener('load', () => {
@@ -46,7 +49,14 @@ async function handleShareScreen() {
 
   try {
     const audioConfig = ui.getAudioConfig();
-    stream = await shareScreen(audioConfig.systemAudio, audioConfig.micAudio);
+const shareResult = await shareScreen(
+      audioConfig.systemAudio,
+      audioConfig.micAudio
+    );
+
+    stream = shareResult.stream;
+    analysers = shareResult.analysers;
+    audioContext = shareResult.audioContext;
 
     ui.videoPreview.srcObject = stream;
     await ui.videoPreview.play();
@@ -54,6 +64,8 @@ async function handleShareScreen() {
     ui.setSharingState(true);
 
     stream.getVideoTracks()[0].addEventListener('ended', stopSharing);
+
+    visualizeAudio();
   } catch (err: unknown) {
     console.error('Error sharing screen:', err);
     let errorMsg =
@@ -126,6 +138,17 @@ async function stopSharing() {
     recorder.stop();
   }
 
+  if (visualizationAnimationFrame) {
+    cancelAnimationFrame(visualizationAnimationFrame);
+    visualizationAnimationFrame = null;
+  }
+
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+  analysers = null;
+
   if (stream) {
     stream.getTracks().forEach((track) => track.stop());
     stream = null;
@@ -133,6 +156,31 @@ async function stopSharing() {
 
   ui.setSharingState(false);
   cropper.hide();
+}
+
+function visualizeAudio() {
+  if (!analysers) return;
+
+  const bufferLength = 256;
+  const dataArray = new Uint8Array(bufferLength);
+
+  if (analysers.system) {
+    analysers.system.getByteFrequencyData(dataArray);
+    const average = dataArray.reduce((src, a) => src + a, 0) / bufferLength;
+    ui.updateAudioLevel('system', average / 128); // Normalize somewhat
+  } else {
+    ui.updateAudioLevel('system', 0);
+  }
+
+  if (analysers.mic) {
+    analysers.mic.getByteFrequencyData(dataArray);
+    const average = dataArray.reduce((src, a) => src + a, 0) / bufferLength;
+    ui.updateAudioLevel('mic', average / 128);
+  } else {
+    ui.updateAudioLevel('mic', 0);
+  }
+
+  visualizationAnimationFrame = requestAnimationFrame(visualizeAudio);
 }
 
 function toggleCropping() {

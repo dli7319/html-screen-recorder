@@ -57,20 +57,32 @@
           </div>
           <!-- Updated Audio Controls -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Audio Sources</label>
-            <!-- This div mimics the height of the select dropdown for alignment -->
-            <div class="w-full rounded-md h-[42px] flex items-center space-x-6 px-3">
-              <div class="flex items-center">
-                <input id="systemAudioToggle" type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
-                <label for="systemAudioToggle" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">System
-                  Audio</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Audio Sources</label>
+            <div class="space-y-3">
+              <!-- System Audio Row -->
+              <div class="flex flex-col space-y-1">
+                <div class="flex items-center">
+                  <input id="systemAudioToggle" type="checkbox"
+                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
+                  <label for="systemAudioToggle" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">System Audio</label>
+                </div>
+                <!-- Visualizer -->
+                <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
+                  <div id="systemAudioVisualizer" class="bg-indigo-500 h-full w-0 transition-all duration-75 ease-out"></div>
+                </div>
               </div>
-              <div class="flex items-center">
-                <input id="micAudioToggle" type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                <label for="micAudioToggle"
-                  class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Microphone</label>
+
+              <!-- Microphone Row -->
+              <div class="flex flex-col space-y-1">
+                <div class="flex items-center">
+                  <input id="micAudioToggle" type="checkbox"
+                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                  <label for="micAudioToggle" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Microphone</label>
+                </div>
+                <!-- Visualizer -->
+                <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
+                  <div id="micAudioVisualizer" class="bg-indigo-500 h-full w-0 transition-all duration-75 ease-out"></div>
+                </div>
               </div>
             </div>
           </div>

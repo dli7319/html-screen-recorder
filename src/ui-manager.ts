@@ -47,6 +47,12 @@ export class UIManager {
   private cropContainer = document.getElementById(
     'cropContainer'
   ) as HTMLDivElement;
+  private systemAudioVisualizer = document.getElementById(
+    'systemAudioVisualizer'
+  ) as HTMLDivElement;
+  private micAudioVisualizer = document.getElementById(
+    'micAudioVisualizer'
+  ) as HTMLDivElement;
 
   bindEvents(callbacks: {
     onShare: () => void;
@@ -181,4 +187,10 @@ export class UIManager {
     this.cropContainer.classList.toggle('hidden', !show);
     this.cropTargetElement.classList.toggle('hidden', !show);
   }
-}
+
+  updateAudioLevel(source: 'system' | 'mic', level: number) {
+    const visualizer = source === 'system' ? this.systemAudioVisualizer : this.micAudioVisualizer;
+    if (visualizer) {
+      visualizer.style.width = `${Math.min(100, Math.max(0, level * 100))}%`;
+    }
+  }}
