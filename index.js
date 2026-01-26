@@ -22,23 +22,33 @@
                 throw new Error('Could not access microphone. Continuing without it.');
             }
         }
-        // 3. Combine Audio Tracks
+        // 3. Setup Audio Context & Analysers
+        const analysers = {};
+        let audioContext;
         const systemTrack = displayStream.getAudioTracks()[0];
         const micTrack = micStream === null || micStream === void 0 ? void 0 : micStream.getAudioTracks()[0];
-        if (systemTrack && micTrack) {
-            const ctx = new AudioContext();
-            const dest = ctx.createMediaStreamDestination();
-            ctx.createMediaStreamSource(new MediaStream([systemTrack])).connect(dest);
-            ctx.createMediaStreamSource(new MediaStream([micTrack])).connect(dest);
+        if (systemTrack || micTrack) {
+            audioContext = new AudioContext();
+            const dest = audioContext.createMediaStreamDestination();
+            if (systemTrack) {
+                const source = audioContext.createMediaStreamSource(new MediaStream([systemTrack]));
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+                analyser.connect(dest);
+                analysers.system = analyser;
+            }
+            if (micTrack) {
+                const source = audioContext.createMediaStreamSource(new MediaStream([micTrack]));
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+                analyser.connect(dest);
+                analysers.mic = analyser;
+            }
             dest.stream.getAudioTracks().forEach((t) => finalStream.addTrack(t));
         }
-        else {
-            if (systemTrack)
-                finalStream.addTrack(systemTrack);
-            if (micTrack)
-                finalStream.addTrack(micTrack);
-        }
-        return finalStream;
+        return { stream: finalStream, analysers, audioContext };
     }
 
     class Recorder {
@@ -332,6 +342,8 @@
             this.micAudioToggle = document.getElementById('micAudioToggle');
             this.cropCheckbox = document.getElementById('cropCheckbox');
             this.cropContainer = document.getElementById('cropContainer');
+            this.systemAudioVisualizer = document.getElementById('systemAudioVisualizer');
+            this.micAudioVisualizer = document.getElementById('micAudioVisualizer');
         }
         bindEvents(callbacks) {
             this.shareBtn.addEventListener('click', callbacks.onShare);
@@ -447,6 +459,12 @@
             this.cropContainer.classList.toggle('hidden', !show);
             this.cropTargetElement.classList.toggle('hidden', !show);
         }
+        updateAudioLevel(source, level) {
+            const visualizer = source === 'system' ? this.systemAudioVisualizer : this.micAudioVisualizer;
+            if (visualizer) {
+                visualizer.style.width = `${Math.min(100, Math.max(0, level * 100))}%`;
+            }
+        }
     }
 
     const ui = new UIManager();
@@ -454,6 +472,9 @@
     const cropper = new Cropper(ui.cropBox, ui.cropTargetElement, ui.videoContainer, ui.videoPreview);
     const recorder = new Recorder(onRecordingStop);
     let stream = null;
+    let audioContext = null;
+    let analysers = null;
+    let visualizationAnimationFrame = null;
     // --- Initialization ---
     window.addEventListener('load', () => {
         ui.populateFormats(FORMATS_TO_CHECK);
@@ -479,11 +500,15 @@
         ui.hideError();
         try {
             const audioConfig = ui.getAudioConfig();
-            stream = await shareScreen(audioConfig.systemAudio, audioConfig.micAudio);
+            const shareResult = await shareScreen(audioConfig.systemAudio, audioConfig.micAudio);
+            stream = shareResult.stream;
+            analysers = shareResult.analysers;
+            audioContext = shareResult.audioContext;
             ui.videoPreview.srcObject = stream;
             await ui.videoPreview.play();
             ui.setSharingState(true);
             stream.getVideoTracks()[0].addEventListener('ended', stopSharing);
+            visualizeAudio();
         }
         catch (err) {
             console.error('Error sharing screen:', err);
@@ -546,12 +571,44 @@
         if (recorder.isRecording()) {
             recorder.stop();
         }
+        if (visualizationAnimationFrame) {
+            cancelAnimationFrame(visualizationAnimationFrame);
+            visualizationAnimationFrame = null;
+        }
+        if (audioContext) {
+            audioContext.close();
+            audioContext = null;
+        }
+        analysers = null;
         if (stream) {
             stream.getTracks().forEach((track) => track.stop());
             stream = null;
         }
         ui.setSharingState(false);
         cropper.hide();
+    }
+    function visualizeAudio() {
+        if (!analysers)
+            return;
+        const bufferLength = 256;
+        const dataArray = new Uint8Array(bufferLength);
+        if (analysers.system) {
+            analysers.system.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((src, a) => src + a, 0) / bufferLength;
+            ui.updateAudioLevel('system', average / 128); // Normalize somewhat
+        }
+        else {
+            ui.updateAudioLevel('system', 0);
+        }
+        if (analysers.mic) {
+            analysers.mic.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((src, a) => src + a, 0) / bufferLength;
+            ui.updateAudioLevel('mic', average / 128);
+        }
+        else {
+            ui.updateAudioLevel('mic', 0);
+        }
+        visualizationAnimationFrame = requestAnimationFrame(visualizeAudio);
     }
     function toggleCropping() {
         if (ui.cropCheckbox.checked) {
