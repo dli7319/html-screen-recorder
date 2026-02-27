@@ -28,7 +28,8 @@
         const systemTrack = displayStream.getAudioTracks()[0];
         const micTrack = micStream === null || micStream === void 0 ? void 0 : micStream.getAudioTracks()[0];
         if (systemTrack || micTrack) {
-            audioContext = new AudioContext();
+            audioContext = new AudioContext({ latencyHint: 'playback' });
+            audioContext.resume();
             const dest = audioContext.createMediaStreamDestination();
             if (systemTrack) {
                 const source = audioContext.createMediaStreamSource(new MediaStream([systemTrack]));
