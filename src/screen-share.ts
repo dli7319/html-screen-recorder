@@ -42,7 +42,8 @@ export async function shareScreen(
   const micTrack = micStream?.getAudioTracks()[0];
 
   if (systemTrack || micTrack) {
-    audioContext = new AudioContext();
+    audioContext = new AudioContext({ latencyHint: 'playback' });
+    audioContext.resume();
     const dest = audioContext.createMediaStreamDestination();
 
     if (systemTrack) {
