@@ -189,8 +189,12 @@ export class UIManager {
   }
 
   updateAudioLevel(source: 'system' | 'mic', level: number) {
-    const visualizer = source === 'system' ? this.systemAudioVisualizer : this.micAudioVisualizer;
+    const visualizer =
+      source === 'system'
+        ? this.systemAudioVisualizer
+        : this.micAudioVisualizer;
     if (visualizer) {
       visualizer.style.width = `${Math.min(100, Math.max(0, level * 100))}%`;
     }
-  }}
+  }
+}
