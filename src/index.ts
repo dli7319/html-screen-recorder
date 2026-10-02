@@ -49,7 +49,7 @@ async function handleShareScreen() {
 
   try {
     const audioConfig = ui.getAudioConfig();
-const shareResult = await shareScreen(
+    const shareResult = await shareScreen(
       audioConfig.systemAudio,
       audioConfig.micAudio
     );
