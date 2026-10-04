@@ -37,7 +37,7 @@
     one is visually prominent at a time, chosen by `data-phase` on the transport
     container - see the "transport phases" block in styles.css.
   -->
-  <body class="shell">
+  <body class="shell" data-adv="open">
     <div class="app">
       <header class="appbar">
         <div class="mark" aria-hidden="true">
@@ -60,11 +60,21 @@
           <span id="pauseBtnText" class="sr-only">Pause</span>
         </button>
 
+        <!-- Sliders, not a sun.
+
+             The previous icon and the first attempt at a fix were both a ring
+             with radiating spokes - Feather's "settings" gear. At 20px the
+             teeth read as rays and the glyph looks like brightness or theme,
+             which is what the user saw. A cog has to have a toothed rim to
+             read as a cog at this size, and the drawer is literally a set of
+             adjustments, so sliders say it plainly and cannot be misread. -->
         <button id="openSettings" type="button" title="Recording settings" class="icon-btn"
           aria-label="Recording settings" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" />
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round">
+            <path d="M4 7h9M18.5 7H20M4 17h2.5M12 17h8" />
+            <circle cx="15.5" cy="7" r="2.2" />
+            <circle cx="9" cy="17" r="2.2" />
           </svg>
         </button>
       </header>
@@ -136,10 +146,16 @@
               <span class="sw" aria-hidden="true"></span>
               <span class="name">System audio</span>
             </label>
-            <input id="systemVolume" type="range" class="level" min="0" max="100" value="100"
-              aria-label="System audio level in the recording" />
+            <!-- The fader is the level you set; the meter beneath it is the
+                 level actually coming through. Both stay visible because they
+                 answer different questions and a recording without the meter
+                 is a recording you cannot diagnose. -->
+            <div class="strip">
+              <input id="systemVolume" type="range" class="level" min="0" max="100" value="100"
+                aria-label="System audio level in the recording" />
+              <span class="meter"><i id="systemAudioVisualizer"></i></span>
+            </div>
             <span id="systemVolumeValue" class="pct">100%</span>
-            <span class="meter"><i id="systemAudioVisualizer"></i></span>
           </div>
 
           <div class="source">
@@ -148,10 +164,12 @@
               <span class="sw" aria-hidden="true"></span>
               <span class="name">Microphone</span>
             </label>
-            <input id="micVolume" type="range" class="level" min="0" max="100" value="100"
-              aria-label="Microphone level in the recording" />
+            <div class="strip">
+              <input id="micVolume" type="range" class="level" min="0" max="100" value="100"
+                aria-label="Microphone level in the recording" />
+              <span class="meter"><i id="micAudioVisualizer"></i></span>
+            </div>
             <span id="micVolumeValue" class="pct">100%</span>
-            <span class="meter"><i id="micAudioVisualizer"></i></span>
           </div>
         </div>
 
@@ -286,9 +304,10 @@
         </div>
       </div>
 
-      <!-- Microphone conditioning. Collapsed by default: the three defaults suit
-           a typical room, and almost nobody changes them. -->
-      <button id="advToggle" type="button" class="adv-toggle" aria-expanded="false">
+      <!-- Microphone conditioning. Open by default: the note inside is the only
+           place that says this applies to the microphone alone, and hiding that
+           disclosure was hiding the answer to a question the section raises. -->
+      <button id="advToggle" type="button" class="adv-toggle" aria-expanded="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
           <path d="m9 6 6 6-6 6" />
         </svg>

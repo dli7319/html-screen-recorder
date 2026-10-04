@@ -759,10 +759,18 @@ kbd {
     height: 1px;
 }
 
+/*
+   Square with rounded corners and a checkmark, NOT a filled dot in a circle.
+
+   A dot inside a ring is a radio button, and radio buttons mean "pick exactly
+   one of these". These are independent: system audio and microphone can both
+   be on, or either alone. The shape has to say "independent on/off", so this
+   is a checkbox.
+*/
 .source .sw {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
     border: 1.5px solid var(--border-strong);
     display: grid;
     place-items: center;
@@ -776,10 +784,11 @@ kbd {
 
 .source:has(input:checked) .sw::after {
     content: '';
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #fff;
+    width: 8px;
+    height: 4.5px;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: rotate(-45deg) translate(1px, -1px);
 }
 
 .source .level {
@@ -805,25 +814,33 @@ kbd {
 }
 
 /*
-   Live activity, as a hairline along the bottom of the channel. The slider is
-   the level you set; this is the level the source is actually producing, so
-   the two answer different questions and can share the same control.
+   Level meter. It was briefly a 2px hairline along the bottom of the pill,
+   which was a mistake: it looked like decoration and answered nothing. The
+   meter is the difference between "the mic is muted" and "the mic is broken",
+   so it sits directly under the fader as a readable bar - set level above,
+   actual level below, the way a mixer channel shows them.
 */
+.strip {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: none;
+}
+
 .meter {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 3px;
-    height: 2px;
+    width: 100%;
+    height: 4px;
     border-radius: 2px;
-    background: rgba(0, 0, 0, 0.08);
+    /* The track has to be visible at zero level, otherwise the meter reads as
+       absent exactly when it is telling you the source is silent. */
+    background: var(--border-strong);
     overflow: hidden;
     pointer-events: none;
     transition: opacity 0.15s ease;
 }
 
 .source:not(:has(input:checked)) .meter {
-    opacity: 0;
+    opacity: 0.35;
 }
 
 .meter i {
@@ -929,6 +946,12 @@ kbd {
     color: var(--ink);
 }
 
+/* An empty count is not a count of zero - it is the badge before anything
+   exists. It rendered as a small empty rectangle beside "Takes". */
+.takes-head .count:empty {
+    display: none;
+}
+
 .takes-head .count {
     font-size: 11px;
     font-weight: 500;
@@ -1013,6 +1036,20 @@ kbd {
     margin-bottom: 24px;
 }
 
+/* The last field's own spacing stacked on the group's, opening a wide gap
+   above the next section title. */
+.group .field:last-child,
+.group .row3:last-child {
+    margin-bottom: 0;
+}
+
+/* Pause is a recording-time control. At rest it is disabled, and a disabled
+   circle sitting in the header reads as a broken button. Hiding it is clearer
+   than dimming it - the control appears when it can actually be used. */
+.icon-btn[disabled] {
+    display: none;
+}
+
 .field {
     display: flex;
     flex-direction: column;
@@ -1033,12 +1070,30 @@ kbd {
     line-height: 1.5;
 }
 
+/*
+   The chevron is ours, not the browser's.
+
+   Two rounds of `padding-right` increases did nothing to the arrow, and the
+   reason is that a native select arrow is not laid out in the padding box:
+   Chrome pins it to the control's right edge and only pushes the text away
+   from it. So the arrow stayed cramped while the text got more room.
+
+   `appearance: none` removes the browser's arrow entirely and this draws its
+   own, positioned with a real inset from the edge. That is also what the rest
+   of the control's styling already assumes.
+*/
 .drawer select {
+    appearance: none;
+    -webkit-appearance: none;
     height: 36px;
-    padding: 0 32px 0 11px;
+    padding: 0 34px 0 12px;
     font: 500 13.5px var(--font);
     color: var(--ink);
-    background: var(--surface);
+    background-color: var(--surface);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 13px 13px;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
     cursor: pointer;
@@ -1055,11 +1110,13 @@ kbd {
     gap: 9px;
 }
 
-/* Three selects across a 380px drawer is tight: at full select padding the
-   preset text ("Source") clips. The values are short and never wrap, so give
-   the arrow less room and step the type down slightly. */
+/* Three selects across a 380px drawer is tight: at full padding the preset
+   text ("Source") clips. The values are short and never wrap, so the type
+   steps down slightly - but the chevron keeps the same inset as every other
+   select, because it is a real background image now and is not competing
+   with the text for the same space. */
 .row3 .field select {
-    padding: 0 22px 0 9px;
+    padding: 0 32px 0 9px;
     font-size: 12.5px;
 }
 
@@ -1234,5 +1291,20 @@ kbd {
 
     .row3 {
         grid-template-columns: 1fr;
+    }
+}
+
+/*
+   Dark variant of the select chevron.
+
+   This must sit after `.drawer select` in the file. An identical-specificity
+   override placed earlier loses to the base rule regardless of the media
+   query - the same source-order trap that hid the countdown scrim behind
+   Tailwind's layered `.hidden`. It is a data-URI, so it cannot inherit
+   currentColor and needs its own value per scheme.
+*/
+@media (prefers-color-scheme: dark) {
+    .drawer select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     }
 }
