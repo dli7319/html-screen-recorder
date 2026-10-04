@@ -295,6 +295,26 @@
     </div>
   </div>
 
+  <!--
+    Update banner. Hidden until a service worker is sitting in `waiting`.
+
+    This never reloads by itself. Takes live in memory as blob URLs, so a
+    reload destroys an in-flight recording and any take not yet downloaded -
+    the one thing an update must not do. The user picks the moment.
+  -->
+  <div id="updateBanner" hidden
+    class="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-white shadow-2xl">
+    <span class="text-sm font-medium">A new version is ready.</span>
+    <button id="updateReloadBtn" type="button"
+      class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-indigo-700">
+      Refresh
+    </button>
+    <button id="updateDismissBtn" type="button"
+      class="px-1 text-sm text-gray-300 transition-colors hover:text-white">
+      Later
+    </button>
+  </div>
+
   <script src="./index.js"></script>
 </body>
 
