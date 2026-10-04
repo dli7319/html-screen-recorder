@@ -43,7 +43,26 @@ ui.bindEvents({
   onRecord: startRecording,
   onStop: stopRecording,
   onCropToggle: toggleCropping,
+  onPause: togglePause,
 });
+
+/**
+ * Pause/resume the in-flight capture. The stopwatch is paused alongside the
+ * recorder so the timer keeps reporting the time actually captured.
+ */
+function togglePause() {
+  if (!recorder.isActive()) return;
+
+  if (recorder.isPaused()) {
+    recorder.resume();
+    stopwatch.resume();
+    ui.setPausedState(false);
+  } else {
+    recorder.pause();
+    stopwatch.pause();
+    ui.setPausedState(true);
+  }
+}
 
 // --- Functions ---
 
@@ -151,14 +170,14 @@ function onRecordingStop(blob: Blob, ext: string) {
 
 async function stopRecording() {
   await cropper.stopCrop(stream);
-  if (recorder.isRecording()) {
+  if (recorder.isActive()) {
     recorder.stop();
   }
 }
 
 async function stopSharing() {
   await cropper.stopCrop(stream);
-  if (recorder.isRecording()) {
+  if (recorder.isActive()) {
     recorder.stop();
   }
 

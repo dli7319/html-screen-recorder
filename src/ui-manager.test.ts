@@ -23,7 +23,14 @@ function renderUI(): UIManager {
     <button id="recordBtn"><span id="recordBtnText">Start Recording</span></button>
     <button id="stopBtn"></button>
     <a id="downloadLink"></a>
-    <div id="status" class="hidden"></div>
+    <div id="status" class="hidden">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Recording...</span>
+      <button id="pauseBtn">
+        <svg><use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use></svg>
+        <span id="pauseBtnText">Pause</span>
+      </button>
+    </div>
     <div id="error" class="hidden"></div>
     <select id="formatSelect"></select>
     <input type="checkbox" id="systemAudioToggle" />
@@ -305,17 +312,76 @@ describe('UIManager read/write helpers', () => {
     const onRecord = vi.fn();
     const onStop = vi.fn();
     const onCropToggle = vi.fn();
-    ui.bindEvents({ onShare, onRecord, onStop, onCropToggle });
+    const onPause = vi.fn();
+    ui.bindEvents({ onShare, onRecord, onStop, onCropToggle, onPause });
 
     $('shareBtn').click();
     $('recordBtn').click();
     $('stopBtn').click();
+    $('pauseBtn').click();
     $('cropCheckbox').dispatchEvent(new Event('change'));
 
     expect(onShare).toHaveBeenCalledOnce();
     expect(onRecord).toHaveBeenCalledOnce();
     expect(onStop).toHaveBeenCalledOnce();
     expect(onCropToggle).toHaveBeenCalledOnce();
+    expect(onPause).toHaveBeenCalledOnce();
+  });
+});
+
+describe('UIManager.setPausedState', () => {
+  it('presents Pause while capturing', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.setPausedState(false);
+
+    expect($('statusText').textContent).toBe('Recording...');
+    expect($('pauseBtnText').textContent).toBe('Pause');
+    expect($('pauseBtn').title).toContain('Pause');
+    expect($('statusDot').classList.contains('is-paused')).toBe(false);
+  });
+
+  it('presents Resume and marks the indicator while paused', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.setPausedState(true);
+
+    expect($('statusText').textContent).toBe('Paused');
+    expect($('pauseBtnText').textContent).toBe('Resume');
+    expect($('pauseBtn').title).toContain('Resume');
+    expect($('statusDot').classList.contains('is-paused')).toBe(true);
+  });
+
+  it('swaps the button glyph between pause and resume', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+
+    const icon = document.getElementById('pauseBtnIcon')!;
+    ui.setPausedState(true);
+    expect(icon.getAttribute('href')).toBe('./icons.svg#icon-record');
+    ui.setPausedState(false);
+    expect(icon.getAttribute('href')).toBe('./icons.svg#icon-pause');
+  });
+
+  it('clears the paused presentation when recording stops', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.setPausedState(true);
+    ui.setRecordingState(false);
+
+    expect($('statusDot').classList.contains('is-paused')).toBe(false);
+    expect($('pauseBtnText').textContent).toBe('Pause');
+  });
+
+  it('clears the paused presentation when a new recording starts', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.setPausedState(true);
+    ui.setRecordingState(false);
+    ui.setRecordingState(true);
+
+    expect($('statusDot').classList.contains('is-paused')).toBe(false);
+    expect($('statusText').textContent).toBe('Recording...');
   });
 });
 

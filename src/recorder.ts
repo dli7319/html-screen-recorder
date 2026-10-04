@@ -33,12 +33,35 @@ export class Recorder {
   }
 
   stop() {
-    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+    // Guard on "not inactive" rather than "recording": MediaRecorder moves to a
+    // distinct 'paused' state while paused, and stop() has to work from there.
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
+    }
+  }
+
+  pause() {
+    if (this.mediaRecorder?.state === 'recording') {
+      this.mediaRecorder.pause();
+    }
+  }
+
+  resume() {
+    if (this.mediaRecorder?.state === 'paused') {
+      this.mediaRecorder.resume();
     }
   }
 
   isRecording(): boolean {
     return this.mediaRecorder?.state === 'recording';
+  }
+
+  isPaused(): boolean {
+    return this.mediaRecorder?.state === 'paused';
+  }
+
+  /** True while a capture is in flight, including while it is paused. */
+  isActive(): boolean {
+    return this.isRecording() || this.isPaused();
   }
 }

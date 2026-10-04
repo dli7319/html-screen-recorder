@@ -88,6 +88,76 @@ describe('Stopwatch', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('does not count time spent paused', () => {
+    const ticks: string[] = [];
+    const stopwatch = new Stopwatch();
+    stopwatch.start((time) => ticks.push(time));
+
+    vi.advanceTimersByTime(2000); // 2s captured
+    stopwatch.pause();
+    vi.advanceTimersByTime(60_000); // 60s paused - must not count
+    stopwatch.resume();
+    vi.advanceTimersByTime(1000); // 1s more
+
+    stopwatch.stop();
+    expect(ticks.at(-1)).toBe('00:03');
+  });
+
+  it('reports elapsed capture time excluding pauses', () => {
+    const stopwatch = new Stopwatch();
+    stopwatch.start(() => {});
+
+    vi.advanceTimersByTime(4000);
+    expect(stopwatch.elapsed()).toBe(4000);
+
+    stopwatch.pause();
+    vi.advanceTimersByTime(30_000);
+    expect(stopwatch.elapsed()).toBe(4000); // frozen while paused
+
+    stopwatch.resume();
+    vi.advanceTimersByTime(1000);
+    expect(stopwatch.elapsed()).toBe(5000);
+    stopwatch.stop();
+  });
+
+  it('exposes its paused state', () => {
+    const stopwatch = new Stopwatch();
+    expect(stopwatch.isPaused()).toBe(false);
+
+    stopwatch.start(() => {});
+    stopwatch.pause();
+    expect(stopwatch.isPaused()).toBe(true);
+
+    stopwatch.resume();
+    expect(stopwatch.isPaused()).toBe(false);
+    stopwatch.stop();
+  });
+
+  it('ignores pause and resume when not running', () => {
+    const stopwatch = new Stopwatch();
+    expect(() => {
+      stopwatch.pause();
+      stopwatch.resume();
+    }).not.toThrow();
+    expect(stopwatch.elapsed()).toBe(0);
+  });
+
+  it('ignores a repeated pause', () => {
+    const ticks: string[] = [];
+    const stopwatch = new Stopwatch();
+    stopwatch.start((time) => ticks.push(time));
+
+    vi.advanceTimersByTime(1000);
+    stopwatch.pause();
+    vi.advanceTimersByTime(5000);
+    stopwatch.pause(); // no-op, must not extend the pause window
+    vi.advanceTimersByTime(5000);
+    stopwatch.resume();
+
+    expect(stopwatch.elapsed()).toBe(1000);
+    stopwatch.stop();
+  });
+
   it('is safe to stop before it was ever started', () => {
     const stopwatch = new Stopwatch();
     expect(() => stopwatch.stop()).not.toThrow();
