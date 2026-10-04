@@ -207,16 +207,35 @@
             Stop Recording
           </button>
         </div>
-        <div class="mt-4 flex justify-center">
-          <a id="downloadLink"
-            class="w-full sm:w-auto bg-green-600 text-white text-center font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 pointer-events-none opacity-50"
-            href="#">
-            <svg class="w-5 h-5">
-              <use href="./icons.svg#icon-download"></use>
-            </svg>
-            Download
-          </a>
-        </div>
+        <!-- Every recording and screenshot lands here, so a take is never
+             lost by making the next one. -->
+        <section class="mt-6">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Takes <span id="takeCount"
+                class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400"></span>
+            </h2>
+            <div class="flex items-center gap-2">
+              <button id="downloadAllBtn" type="button" disabled
+                title="Download every take"
+                class="text-sm bg-green-600 text-white font-semibold py-1.5 px-3 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-green-400 dark:disabled:bg-green-900 transition-colors">
+                Download all
+              </button>
+              <button id="clearTakesBtn" type="button" disabled
+                title="Remove every take from the gallery"
+                class="text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 py-1.5 px-2 transition-colors">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div id="takeList" class="mt-2"></div>
+
+          <p id="takesEmpty"
+            class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            No takes yet. Recordings and screenshots will show up here.
+          </p>
+        </section>
       </main>
     </div>
   </div>

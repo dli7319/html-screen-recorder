@@ -9,8 +9,17 @@ import { captureFrame, downloadBlob } from './screenshot';
 import { Stopwatch } from './stopwatch';
 import { fixWebmDuration } from './webm-duration';
 import { UIManager } from './ui-manager';
+import { SettingsPanel } from './settings-panel';
+import { TakeStore } from './takes';
+import { GalleryView } from './gallery-view';
 
 const ui = new UIManager();
+const settings = new SettingsPanel();
+const takes = new TakeStore();
+const gallery = new GalleryView(
+  document.querySelector('main') as HTMLElement,
+  takes
+);
 const stopwatch = new Stopwatch();
 const cropper = new Cropper(
   ui.cropBox,
@@ -35,24 +44,31 @@ let currentGains: { system?: GainNode; mic?: GainNode } = {};
 function applyVolume(source: 'system' | 'mic') {
   const gain = source === 'system' ? currentGains.system : currentGains.mic;
   if (!gain) return;
-  gain.gain.value = ui.getVolume(source);
+  gain.gain.value = settings.getVolume(source);
 }
 
 // Faders stay live while recording; balancing the two inputs is exactly the
 // sort of thing you discover you need mid-take.
-ui.bindVolumeControls(applyVolume);
+settings.bindVolumeControls(applyVolume);
 
 // --- Initialization ---
 // Keep the preview matched to the shared surface as it changes shape.
 ui.videoPreview.addEventListener('resize', syncPreviewAspect);
 
 window.addEventListener('load', () => {
-  ui.populateFormats(FORMATS_TO_CHECK);
-  ui.populateQuality();
+  gallery.bind();
+  settings.populateQuality();
+
   if (!window.MediaRecorder) {
     ui.showError(
       'Your browser does not support the MediaRecorder API. Please try a different browser like Chrome or Firefox.'
     );
+    ui.disableShareBtn();
+    return;
+  }
+
+  if (!settings.populateFormats(FORMATS_TO_CHECK)) {
+    ui.showError('No supported recording formats found in this browser.');
     ui.disableShareBtn();
   }
 });
@@ -115,13 +131,13 @@ async function handleShareScreen() {
   ui.hideError();
 
   try {
-    const audioConfig = ui.getAudioConfig();
+    const audioConfig = settings.getAudioConfig();
     // Capture constraints can only take effect here, so the settings are read
     // at share time rather than at record time.
     const shareResult = await shareScreen(
       audioConfig.systemAudio,
-      ui.getMicOptions(),
-      ui.getQuality()
+      settings.getMicOptions(),
+      settings.getQuality()
     );
     currentGains = shareResult.gains;
     applyVolume('system');
@@ -186,7 +202,7 @@ async function startRecording() {
   }
   ui.hideError();
 
-  const format = ui.getFormat();
+  const format = settings.getFormat();
   let streamToRecord = stream;
 
   if (ui.cropCheckbox.checked) {
@@ -196,7 +212,7 @@ async function startRecording() {
   try {
     // Re-read the encoder settings here: unlike the capture constraints these
     // can change between takes, so the current selection is what applies.
-    const quality = ui.getQuality();
+    const quality = settings.getQuality();
     recorder.start(streamToRecord, format, {
       videoBitsPerSecond: quality.videoBitsPerSecond,
     });
@@ -227,10 +243,16 @@ async function onRecordingStop(blob: Blob, ext: string) {
 
   const fixedBlob = await fixWebmDuration(blob, durationMs);
 
-  const filename = timestampFilename(ext);
-  const url = URL.createObjectURL(fixedBlob);
+  // The take is added to the gallery rather than written to a single download
+  // link, so making the next one cannot lose this one.
+  takes.add({
+    kind: 'recording',
+    blob: fixedBlob,
+    filename: timestampFilename(ext),
+    formatName: settings.getFormat().name,
+    durationMs,
+  });
 
-  ui.setDownloadLink(url, filename);
   ui.setRecordingState(false);
 }
 
