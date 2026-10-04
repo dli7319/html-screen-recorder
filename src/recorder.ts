@@ -1,4 +1,5 @@
 import { RecordingFormat } from './types';
+import { EncoderConfig, buildRecorderOptions } from './quality';
 
 /**
  * How often MediaRecorder hands back a chunk.
@@ -17,12 +18,19 @@ export class Recorder {
 
   constructor(private onStopCallback: (blob: Blob, ext: string) => void) {}
 
-  start(stream: MediaStream, format: RecordingFormat) {
+  start(
+    stream: MediaStream,
+    format: RecordingFormat,
+    encoder: EncoderConfig = {}
+  ) {
     this.recordedChunks = [];
     try {
-      this.mediaRecorder = new MediaRecorder(stream, {
-        mimeType: format.mimeType,
-      });
+      // Bitrate is an encoder setting, not a track setting: it can change
+      // between takes without the user re-picking a window.
+      this.mediaRecorder = new MediaRecorder(
+        stream,
+        buildRecorderOptions(format, encoder)
+      );
     } catch (err) {
       console.error('Failed to create MediaRecorder:', err);
       throw new Error(

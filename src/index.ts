@@ -48,6 +48,7 @@ ui.videoPreview.addEventListener('resize', syncPreviewAspect);
 
 window.addEventListener('load', () => {
   ui.populateFormats(FORMATS_TO_CHECK);
+  ui.populateQuality();
   if (!window.MediaRecorder) {
     ui.showError(
       'Your browser does not support the MediaRecorder API. Please try a different browser like Chrome or Firefox.'
@@ -115,9 +116,12 @@ async function handleShareScreen() {
 
   try {
     const audioConfig = ui.getAudioConfig();
+    // Capture constraints can only take effect here, so the settings are read
+    // at share time rather than at record time.
     const shareResult = await shareScreen(
       audioConfig.systemAudio,
-      ui.getMicOptions()
+      ui.getMicOptions(),
+      ui.getQuality()
     );
     currentGains = shareResult.gains;
     applyVolume('system');
@@ -190,7 +194,12 @@ async function startRecording() {
   }
 
   try {
-    recorder.start(streamToRecord, format);
+    // Re-read the encoder settings here: unlike the capture constraints these
+    // can change between takes, so the current selection is what applies.
+    const quality = ui.getQuality();
+    recorder.start(streamToRecord, format, {
+      videoBitsPerSecond: quality.videoBitsPerSecond,
+    });
   } catch (err: unknown) {
     ui.showError((err as Error).message);
     stopSharing();

@@ -34,6 +34,10 @@ function renderUI(): UIManager {
     </div>
     <div id="error" class="hidden"></div>
     <select id="formatSelect"></select>
+    <select id="resolutionSelect"></select>
+    <select id="frameRateSelect"></select>
+    <select id="bitrateSelect"></select>
+    <p id="qualitySummary"></p>
     <input type="checkbox" id="systemAudioToggle" />
     <input type="checkbox" id="micAudioToggle" />
     <input type="checkbox" id="micNoiseSuppression" checked />
@@ -390,6 +394,92 @@ describe('UIManager.setPausedState', () => {
 
     expect($('statusDot').classList.contains('is-paused')).toBe(false);
     expect($('statusText').textContent).toBe('Recording...');
+  });
+});
+
+describe('UIManager quality settings', () => {
+  it('starts on Auto for all three', () => {
+    const ui = renderUI();
+    ui.populateQuality();
+
+    expect(ui.getQuality()).toEqual({
+      width: undefined,
+      frameRate: undefined,
+      videoBitsPerSecond: undefined,
+    });
+  });
+
+  it('reads each preset back as its value', () => {
+    const ui = renderUI();
+    ui.populateQuality();
+    ($('resolutionSelect') as HTMLSelectElement).value = '720p';
+    ($('frameRateSelect') as HTMLSelectElement).value = '30';
+    ($('bitrateSelect') as HTMLSelectElement).value = 'medium';
+
+    expect(ui.getQuality()).toEqual({
+      width: 1280,
+      frameRate: 30,
+      videoBitsPerSecond: 6_000_000,
+    });
+  });
+
+  it('summarises the settings in plain language', () => {
+    const ui = renderUI();
+    ui.populateQuality();
+
+    expect($('qualitySummary').textContent).toBe(
+      'source res · source fps · auto bitrate'
+    );
+  });
+
+  it('refreshes the summary when a preset changes', () => {
+    const ui = renderUI();
+    ui.populateQuality();
+    ($('resolutionSelect') as HTMLSelectElement).value = '480p';
+    $('resolutionSelect').dispatchEvent(new Event('change'));
+
+    expect($('qualitySummary').textContent).toContain('854w');
+  });
+
+  it('locks resolution and frame rate while sharing', () => {
+    // These live in the track, so changing them mid-share would silently do
+    // nothing - locking is what stops the UI lying about that.
+    const ui = renderUI();
+    ui.populateQuality();
+    ui.setSharingState(true);
+
+    expect(($('resolutionSelect') as HTMLSelectElement).disabled).toBe(true);
+    expect(($('frameRateSelect') as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it('leaves the bitrate live while sharing', () => {
+    // The opposite of the capture settings: the bitrate is an encoder setting
+    // and can take effect on the next take without re-sharing.
+    const ui = renderUI();
+    ui.populateQuality();
+    ui.setSharingState(true);
+
+    expect(($('bitrateSelect') as HTMLSelectElement).disabled).toBe(false);
+  });
+
+  it('unlocks the capture settings again when sharing stops', () => {
+    const ui = renderUI();
+    ui.populateQuality();
+    ui.setSharingState(true);
+    ui.setSharingState(false);
+
+    expect(($('resolutionSelect') as HTMLSelectElement).disabled).toBe(false);
+    expect(($('frameRateSelect') as HTMLSelectElement).disabled).toBe(false);
+  });
+
+  it('offers every preset as an option', () => {
+    const ui = renderUI();
+    ui.populateQuality();
+
+    const count = (id: string) => ($(id) as HTMLSelectElement).options.length;
+    expect(count('resolutionSelect')).toBe(4);
+    expect(count('frameRateSelect')).toBe(4);
+    expect(count('bitrateSelect')).toBe(4);
   });
 });
 

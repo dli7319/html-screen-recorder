@@ -54,6 +54,35 @@
               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
             <select id="formatSelect"
               class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+
+            <!-- Capture quality. Resolution and frame rate live in the track,
+                 so they can only change at share time; the bitrate is an
+                 encoder setting and stays live between takes. -->
+            <div class="mt-3 grid grid-cols-3 gap-2">
+              <div>
+                <label for="resolutionSelect"
+                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Resolution</label>
+                <select id="resolutionSelect"
+                  title="Capture resolution. Source keeps the window at its own size."
+                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+              </div>
+              <div>
+                <label for="frameRateSelect"
+                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Frame rate</label>
+                <select id="frameRateSelect"
+                  title="Capture frame rate. Source keeps the window's own rate."
+                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+              </div>
+              <div>
+                <label for="bitrateSelect"
+                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Bitrate</label>
+                <select id="bitrateSelect"
+                  title="Video bitrate. Applies to the next take without re-sharing."
+                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+              </div>
+            </div>
+            <p id="qualitySummary"
+              class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"></p>
           </div>
           <!-- Updated Audio Controls -->
           <div>

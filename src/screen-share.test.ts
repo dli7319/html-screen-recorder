@@ -150,6 +150,34 @@ describe('shareScreen microphone constraints', () => {
   });
 });
 
+describe('shareScreen capture quality', () => {
+  it('forwards the capture constraints to getDisplayMedia', async () => {
+    await shareScreen(false, mic(), { width: 1280, frameRate: 30 });
+
+    const [constraints] = getDisplayMedia.mock.calls[0];
+    expect(constraints.video.width).toEqual({ ideal: 1280 });
+    expect(constraints.video.frameRate).toEqual({ ideal: 30 });
+  });
+
+  it('never sends a height, so the source keeps its aspect ratio', async () => {
+    await shareScreen(false, mic(), { width: 1920 });
+    const [constraints] = getDisplayMedia.mock.calls[0];
+    expect(constraints.video).not.toHaveProperty('height');
+  });
+
+  it('sends only the cursor when quality is left on Auto', async () => {
+    await shareScreen(false, mic());
+    const [constraints] = getDisplayMedia.mock.calls[0];
+    expect(constraints.video).toEqual({ cursor: 'always' });
+  });
+
+  it('defaults the capture constraints to empty when omitted', async () => {
+    // Existing callers keep working unchanged.
+    await shareScreen(false, mic());
+    expect(getDisplayMedia).toHaveBeenCalled();
+  });
+});
+
 describe('shareScreen display constraints', () => {
   it('always keeps the cursor visible', async () => {
     await shareScreen(false, mic());
