@@ -134,9 +134,7 @@ describe('SettingsPanel quality settings', () => {
     const settings = renderSettings();
     settings.populateQuality();
 
-    expect($('qualitySummary').textContent).toBe(
-      'source res · source fps · auto bitrate'
-    );
+    expect($('qualitySummary').textContent).toBe('Source · Auto');
   });
 
   it('refreshes the summary when a preset changes', () => {

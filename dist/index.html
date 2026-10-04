@@ -115,38 +115,36 @@
         </div>
       </div>
 
-      <!-- The only always-visible controls: audio sources with their live
-           levels, a summary of the settings in the drawer, and the transport. -->
+      <!-- The only always-visible controls, on one line.
+
+           Each audio source is a single channel: its mute state, its level and
+           its live activity are one control, not three. They were previously a
+           toggle pill plus a separate fader row, which read as two unrelated
+           things belonging to the same source. -->
       <div class="sessionbar">
-        <div class="sources">
-          <label class="source" for="systemAudioToggle">
-            <input id="systemAudioToggle" type="checkbox" checked />
-            <span class="sw" aria-hidden="true"></span>
-            <span class="name">System audio</span>
+        <div class="channels">
+          <div class="source">
+            <label class="source-toggle" for="systemAudioToggle">
+              <input id="systemAudioToggle" type="checkbox" checked />
+              <span class="sw" aria-hidden="true"></span>
+              <span class="name">System audio</span>
+            </label>
+            <input id="systemVolume" type="range" class="level" min="0" max="100" value="100"
+              aria-label="System audio level in the recording" />
+            <span id="systemVolumeValue" class="pct">100%</span>
             <span class="meter"><i id="systemAudioVisualizer"></i></span>
-          </label>
+          </div>
 
-          <label class="source" for="micAudioToggle">
-            <input id="micAudioToggle" type="checkbox" />
-            <span class="sw" aria-hidden="true"></span>
-            <span class="name">Microphone</span>
+          <div class="source">
+            <label class="source-toggle" for="micAudioToggle">
+              <input id="micAudioToggle" type="checkbox" />
+              <span class="sw" aria-hidden="true"></span>
+              <span class="name">Microphone</span>
+            </label>
+            <input id="micVolume" type="range" class="level" min="0" max="100" value="100"
+              aria-label="Microphone level in the recording" />
+            <span id="micVolumeValue" class="pct">100%</span>
             <span class="meter"><i id="micAudioVisualizer"></i></span>
-          </label>
-
-          <!-- Levels sit with the sources they belong to rather than in the
-               drawer: they are adjusted live, and hiding a live control is
-               worse than one more row. -->
-          <div class="faders">
-            <label class="fader" for="systemVolume">
-              <span>System</span>
-              <input id="systemVolume" type="range" min="0" max="100" value="100" />
-              <span id="systemVolumeValue" class="pct">100%</span>
-            </label>
-            <label class="fader" for="micVolume">
-              <span>Mic</span>
-              <input id="micVolume" type="range" min="0" max="100" value="100" />
-              <span id="micVolumeValue" class="pct">100%</span>
-            </label>
           </div>
         </div>
 

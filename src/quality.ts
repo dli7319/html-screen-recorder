@@ -135,13 +135,19 @@ export function describeQuality(
   capture: CaptureConstraints,
   encoder: EncoderConfig
 ): string {
-  const parts: string[] = [];
-  parts.push(capture.width ? `${capture.width}w` : 'source res');
-  parts.push(capture.frameRate ? `${capture.frameRate}fps` : 'source fps');
-  parts.push(
-    encoder.videoBitsPerSecond
-      ? `${(encoder.videoBitsPerSecond / 1_000_000).toFixed(1)} Mbps`
-      : 'auto bitrate'
-  );
-  return parts.join(' · ');
+  // Shown in the settings chip on the session bar, which shares one line with
+  // the transport. The previous wording ("source res · source fps · auto
+  // bitrate") described each preset instead of stating the setting, and was
+  // too long to fit alongside the controls.
+  const dims: string[] = [];
+  if (capture.width) dims.push(`${capture.width}w`);
+  if (capture.frameRate) dims.push(`${capture.frameRate}fps`);
+  // "Source" covers both when neither is constrained, which is the default.
+  const capturePart = dims.length ? dims.join(' ') : 'Source';
+
+  const bitratePart = encoder.videoBitsPerSecond
+    ? `${(encoder.videoBitsPerSecond / 1_000_000).toFixed(1)} Mbps`
+    : 'Auto';
+
+  return `${capturePart} · ${bitratePart}`;
 }
