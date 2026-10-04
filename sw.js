@@ -73,8 +73,8 @@
 	* recording is destroyed by a reload. pwa.ts surfaces a "new version" banner
 	* instead and the user picks the moment.
 	*/
-	const PRECACHE_MANIFEST = ["./index.html","./index.js","./styles.css","./tailwind.css","./icons.svg","./manifest.json","./fonts/inter-latin.woff2","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-512-maskable.png","./icons/apple-touch-icon.png"];
-	const CACHE_VERSION = "e7b1292ba45e";
+	const PRECACHE_MANIFEST = ["./index.html","./index.js","./styles.css","./tailwind.css","./icons.svg","./manifest.json","./fonts/roboto-latin.woff2","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-512-maskable.png","./icons/apple-touch-icon.png"];
+	const CACHE_VERSION = "3f9d8cdff13a";
 	const PRECACHE = parsePrecache(PRECACHE_MANIFEST);
 	const CACHE = cacheName(CACHE_VERSION);
 	self.addEventListener("install", (event) => {
