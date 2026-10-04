@@ -1,9 +1,120 @@
 (function() {
+	//#region src/quality.ts
+	/**
+	* `Auto` entries map to "set nothing" so the browser picks. That is the right
+	* default for screen capture: the ideal settings depend on the content, the
+	* codec and the machine, and a hardcoded number will be wrong more often than
+	* the browser is.
+	*/
+	const RESOLUTION_PRESETS = [
+		{
+			id: "source",
+			label: "Source",
+			width: void 0
+		},
+		{
+			id: "1080p",
+			label: "1080p (1920 wide)",
+			width: 1920
+		},
+		{
+			id: "720p",
+			label: "720p (1280 wide)",
+			width: 1280
+		},
+		{
+			id: "480p",
+			label: "480p (854 wide)",
+			width: 854
+		}
+	];
+	const FRAME_RATE_PRESETS = [
+		{
+			id: "source",
+			label: "Source",
+			frameRate: void 0
+		},
+		{
+			id: "60",
+			label: "60 fps",
+			frameRate: 60
+		},
+		{
+			id: "30",
+			label: "30 fps",
+			frameRate: 30
+		},
+		{
+			id: "24",
+			label: "24 fps",
+			frameRate: 24
+		}
+	];
+	const BITRATE_PRESETS = [
+		{
+			id: "auto",
+			label: "Auto",
+			videoBitsPerSecond: void 0
+		},
+		{
+			id: "high",
+			label: "High (~12 Mbps)",
+			videoBitsPerSecond: 12e6
+		},
+		{
+			id: "medium",
+			label: "Medium (~6 Mbps)",
+			videoBitsPerSecond: 6e6
+		},
+		{
+			id: "low",
+			label: "Low (~2.5 Mbps)",
+			videoBitsPerSecond: 25e5
+		}
+	];
+	/** Look up a preset's value by id, falling back to the first (`Auto`) entry. */
+	function resolvePreset(presets, id) {
+		return presets.find((p) => p.id === id) ?? presets[0];
+	}
+	/**
+	* Build the `getDisplayMedia` video constraints.
+	*
+	* Pure so the exact object handed to the browser is pinned by tests. The
+	* `cursor` option is a Chrome extension not yet in the standard types, hence
+	* the cast - it is still part of the constraints the browser receives.
+	*/
+	function buildVideoConstraints(capture) {
+		const constraints = { cursor: "always" };
+		if (capture.width) constraints.width = { ideal: capture.width };
+		if (capture.frameRate) constraints.frameRate = { ideal: capture.frameRate };
+		return constraints;
+	}
+	/**
+	* Build the `MediaRecorder` options.
+	*
+	* Also pure: an unset bitrate must be *absent* from the object rather than
+	* present and undefined, so the browser's own per-codec default applies.
+	*/
+	function buildRecorderOptions(format, encoder) {
+		const options = { mimeType: format.mimeType };
+		if (encoder.videoBitsPerSecond) options.videoBitsPerSecond = encoder.videoBitsPerSecond;
+		if (encoder.audioBitsPerSecond) options.audioBitsPerSecond = encoder.audioBitsPerSecond;
+		return options;
+	}
+	/** Human-readable summary of what will actually be asked for. */
+	function describeQuality(capture, encoder) {
+		const parts = [];
+		parts.push(capture.width ? `${capture.width}w` : "source res");
+		parts.push(capture.frameRate ? `${capture.frameRate}fps` : "source fps");
+		parts.push(encoder.videoBitsPerSecond ? `${(encoder.videoBitsPerSecond / 1e6).toFixed(1)} Mbps` : "auto bitrate");
+		return parts.join(" · ");
+	}
+	//#endregion
 	//#region src/screen-share.ts
-	async function shareScreen(wantsSystemAudio, mic) {
+	async function shareScreen(wantsSystemAudio, mic, capture = {}) {
 		const finalStream = new MediaStream();
 		const displayStream = await navigator.mediaDevices.getDisplayMedia({
-			video: { cursor: "always" },
+			video: buildVideoConstraints(capture),
 			audio: wantsSystemAudio
 		});
 		displayStream.getVideoTracks().forEach((track) => finalStream.addTrack(track));
@@ -67,10 +178,10 @@
 			this.mediaRecorder = null;
 			this.recordedChunks = [];
 		}
-		start(stream, format) {
+		start(stream, format, encoder = {}) {
 			this.recordedChunks = [];
 			try {
-				this.mediaRecorder = new MediaRecorder(stream, { mimeType: format.mimeType });
+				this.mediaRecorder = new MediaRecorder(stream, buildRecorderOptions(format, encoder));
 			} catch (err) {
 				console.error("Failed to create MediaRecorder:", err);
 				throw new Error(`Failed to start recording. Unsupported format: ${format.mimeType}`);
@@ -377,6 +488,7 @@
 	*/
 	function matchShortcut(event) {
 		if (event.metaKey || event.ctrlKey || event.altKey) return null;
+		if (event.key === "Escape") return "cancel";
 		if (isTypingTarget(event.target)) return null;
 		switch (event.key.toLowerCase()) {
 			case "r": return "record";
@@ -401,7 +513,10 @@
 				case "stop":
 					handlers.onStop?.();
 					break;
-				case "screenshot": handlers.onScreenshot?.();
+				case "screenshot":
+					handlers.onScreenshot?.();
+					break;
+				case "cancel": handlers.onCancel?.();
 			}
 		};
 		window.addEventListener("keydown", onKeyDown);
@@ -455,6 +570,108 @@
 		anchor.remove();
 		setTimeout(() => URL.revokeObjectURL(url), 1e3);
 	}
+	//#endregion
+	//#region src/countdown.ts
+	function runCountdown(options) {
+		const { seconds, onTick, onDone, onCancel } = options;
+		let timerId = null;
+		let finished = false;
+		let cancelled = false;
+		const finish = () => {
+			if (finished || cancelled) return;
+			finished = true;
+			timerId = null;
+			onDone();
+		};
+		const tick = (remaining) => {
+			if (cancelled) return;
+			if (remaining <= 0) {
+				finish();
+				return;
+			}
+			onTick?.(remaining);
+			timerId = window.setTimeout(() => tick(remaining - 1), 1e3);
+		};
+		if (seconds <= 0) finish();
+		else tick(seconds);
+		return {
+			cancel() {
+				if (finished || cancelled) return;
+				cancelled = true;
+				if (timerId !== null) {
+					window.clearTimeout(timerId);
+					timerId = null;
+				}
+				onCancel?.();
+			},
+			isActive() {
+				return !finished && !cancelled;
+			}
+		};
+	}
+	//#endregion
+	//#region src/pip.ts
+	var PictureInPicture = class {
+		constructor(video, options = {}) {
+			this.video = video;
+			this.options = options;
+			this.active = false;
+			this.onLeave = () => {
+				if (!this.active) return;
+				this.active = false;
+				this.options.onChange?.(false);
+			};
+			document.addEventListener("leavepictureinpicture", this.onLeave);
+		}
+		/**
+		* Whether the browser supports PiP at all.
+		*
+		* Reported rather than assumed: some contexts disable it (certain embedded
+		* frames, or a browser built without it), and a button that silently does
+		* nothing is worse than no button.
+		*/
+		isSupported() {
+			return typeof document.pictureInPictureEnabled === "boolean" ? document.pictureInPictureEnabled : typeof this.video.requestPictureInPicture === "function";
+		}
+		isActive() {
+			return this.active;
+		}
+		/** Open the floating window. Must be called from a user gesture. */
+		async enter() {
+			if (!this.isSupported() || this.active) return false;
+			try {
+				await this.video.requestPictureInPicture();
+				this.active = true;
+				this.options.onChange?.(true);
+				return true;
+			} catch (err) {
+				console.error("Picture-in-picture failed:", err);
+				return false;
+			}
+		}
+		/** Close the floating window, if one is open. */
+		async exit() {
+			if (document.pictureInPictureElement !== this.video) {
+				this.active = false;
+				return;
+			}
+			try {
+				await document.exitPictureInPicture();
+			} catch (err) {
+				console.error("Leaving picture-in-picture failed:", err);
+			}
+			this.active = false;
+			this.options.onChange?.(false);
+		}
+		async toggle() {
+			if (this.active) await this.exit();
+			else await this.enter();
+		}
+		/** Stop listening. The floating window is left alone. */
+		destroy() {
+			document.removeEventListener("leavepictureinpicture", this.onLeave);
+		}
+	};
 	//#endregion
 	//#region src/stopwatch.ts
 	var Stopwatch = class {
@@ -688,6 +905,14 @@
 	}
 	//#endregion
 	//#region src/ui-manager.ts
+	/**
+	* The transport and status surface: the preview, the share/record/stop/pause
+	* controls, and the status row.
+	*
+	* Capture *settings* live in SettingsPanel, and produced output lives in
+	* GalleryView. What remains here is the state the user is in - idle, sharing,
+	* recording, paused - and the controls that move between those states.
+	*/
 	var UIManager = class {
 		constructor() {
 			this.videoPreview = document.getElementById("videoPreview");
@@ -700,7 +925,7 @@
 			this.recordBtn = document.getElementById("recordBtn");
 			this.recordBtnText = document.getElementById("recordBtnText");
 			this.stopBtn = document.getElementById("stopBtn");
-			this.downloadLink = document.getElementById("downloadLink");
+			this.screenshotBtn = document.getElementById("screenshotBtn");
 			this.placeholder = document.getElementById("placeholder");
 			this.statusDiv = document.getElementById("status");
 			this.statusText = document.getElementById("statusText");
@@ -709,17 +934,11 @@
 			this.pauseBtnText = document.getElementById("pauseBtnText");
 			this.pauseBtnIcon = document.getElementById("pauseBtnIcon");
 			this.statsText = document.getElementById("statsText");
+			this.countdownOverlay = document.getElementById("countdownOverlay");
+			this.countdownNumber = document.getElementById("countdownNumber");
+			this.pipBtn = document.getElementById("pipBtn");
+			this.pipBtnText = document.getElementById("pipBtnText");
 			this.errorDiv = document.getElementById("error");
-			this.formatSelect = document.getElementById("formatSelect");
-			this.systemAudioToggle = document.getElementById("systemAudioToggle");
-			this.micAudioToggle = document.getElementById("micAudioToggle");
-			this.micNoiseSuppression = document.getElementById("micNoiseSuppression");
-			this.micEchoCancellation = document.getElementById("micEchoCancellation");
-			this.micAutoGain = document.getElementById("micAutoGain");
-			this.systemVolume = document.getElementById("systemVolume");
-			this.micVolume = document.getElementById("micVolume");
-			this.systemVolumeValue = document.getElementById("systemVolumeValue");
-			this.micVolumeValue = document.getElementById("micVolumeValue");
 			this.cropCheckbox = document.getElementById("cropCheckbox");
 			this.cropContainer = document.getElementById("cropContainer");
 			this.systemAudioVisualizer = document.getElementById("systemAudioVisualizer");
@@ -731,6 +950,22 @@
 			this.stopBtn.addEventListener("click", callbacks.onStop);
 			this.cropCheckbox.addEventListener("change", callbacks.onCropToggle);
 			this.pauseBtn.addEventListener("click", callbacks.onPause);
+			this.screenshotBtn.addEventListener("click", callbacks.onScreenshot);
+			this.pipBtn.addEventListener("click", callbacks.onPip);
+		}
+		/**
+		* Reflect whether the preview is currently floating. The label changes
+		* rather than the button disappearing, so the control stays put and its
+		* state is readable at a glance.
+		*/
+		setPipState(active) {
+			this.pipBtnText.textContent = active ? "Close" : "Pop out";
+			this.pipBtn.title = active ? "Close the floating preview" : "Show the preview in a floating window";
+			this.pipBtn.classList.toggle("bg-teal-600", active);
+		}
+		/** Whether the browser can do PiP at all; hides the control if not. */
+		setPipSupported(supported) {
+			this.pipBtn.dataset.supported = supported ? "true" : "false";
 		}
 		/**
 		* Reflect a paused capture in the status row: the label, the button, and the
@@ -752,21 +987,6 @@
 		}
 		clearStats() {
 			this.statsText.textContent = "";
-		}
-		populateFormats(formats) {
-			formats.forEach((format) => {
-				if (MediaRecorder.isTypeSupported(format.mimeType)) {
-					const option = document.createElement("option");
-					option.value = format.mimeType;
-					option.textContent = format.name;
-					option.dataset.ext = format.ext;
-					this.formatSelect.appendChild(option);
-				}
-			});
-			if (this.formatSelect.options.length === 0) {
-				this.showError("No supported recording formats found in this browser.");
-				this.disableShareBtn();
-			}
 		}
 		disableShareBtn() {
 			this.shareBtn.disabled = true;
@@ -798,13 +1018,11 @@
 				toggle(this.shareBtnStart, false);
 				toggle(this.shareBtnStop, true);
 				this.recordBtn.disabled = false;
+				this.screenshotBtn.disabled = false;
+				this.pipBtn.disabled = false;
+				this.pipBtn.classList.remove("hidden");
+				this.pipBtn.classList.add("flex");
 				this.cropCheckbox.disabled = false;
-				this.formatSelect.disabled = true;
-				this.systemAudioToggle.disabled = true;
-				this.micAudioToggle.disabled = true;
-				this.setMicProcessingDisabled(true);
-				this.downloadLink.classList.add("pointer-events-none", "opacity-50");
-				this.downloadLink.removeAttribute("href");
 			} else {
 				this.videoPreview.srcObject = null;
 				this.resetPreviewAspect();
@@ -812,15 +1030,15 @@
 				toggle(this.shareBtnStart, true);
 				toggle(this.shareBtnStop, false);
 				this.recordBtn.disabled = true;
+				this.screenshotBtn.disabled = true;
+				this.pipBtn.disabled = true;
+				this.pipBtn.classList.add("hidden");
+				this.pipBtn.classList.remove("flex");
 				this.stopBtn.disabled = true;
 				this.cropCheckbox.checked = false;
 				this.cropCheckbox.disabled = true;
 				toggle(this.cropContainer, false);
 				this.cropBox.classList.remove("is-recording");
-				this.formatSelect.disabled = false;
-				this.systemAudioToggle.disabled = false;
-				this.micAudioToggle.disabled = false;
-				this.setMicProcessingDisabled(false);
 			}
 		}
 		setRecordingState(isRecording) {
@@ -850,10 +1068,106 @@
 		updateStopwatch(text) {
 			this.recordBtnText.textContent = text;
 		}
-		setDownloadLink(url, filename) {
-			this.downloadLink.href = url;
-			this.downloadLink.download = filename;
-			this.downloadLink.classList.remove("pointer-events-none", "opacity-50");
+		/**
+		* Present the countdown.
+		*
+		* The Record button stays armed and reads "Cancel", so the countdown can be
+		* called off from the control that started it rather than hunting for an
+		* escape hatch.
+		*/
+		setCountdownState(active) {
+			this.countdownOverlay.classList.toggle("hidden", !active);
+			if (active) {
+				this.recordBtn.disabled = false;
+				this.recordBtnText.textContent = "Cancel";
+				this.recordBtn.title = "Cancel the countdown (Esc)";
+			} else {
+				this.countdownNumber.textContent = "";
+				this.recordBtn.title = "Start Recording (R)";
+			}
+		}
+		showCountdown(remaining) {
+			this.countdownNumber.textContent = String(remaining);
+		}
+		hideCountdown() {
+			this.countdownOverlay.classList.add("hidden");
+			this.countdownNumber.textContent = "";
+		}
+		toggleCropping(show) {
+			this.cropContainer.classList.toggle("hidden", !show);
+			this.cropTargetElement.classList.toggle("hidden", !show);
+		}
+		updateAudioLevel(source, level) {
+			const visualizer = source === "system" ? this.systemAudioVisualizer : this.micAudioVisualizer;
+			if (visualizer) visualizer.style.width = `${Math.min(100, Math.max(0, level * 100))}%`;
+		}
+	};
+	//#endregion
+	//#region src/settings-panel.ts
+	/**
+	* Everything the user configures before capturing: format, capture quality,
+	* and the audio inputs.
+	*
+	* Split out of UIManager because this is a coherent block of settings with its
+	* own locking rules, and because leaving it merged meant every feature added
+	* more fields to a class that also owns the preview, the transport buttons and
+	* the status row.
+	*/
+	var SettingsPanel = class {
+		constructor() {
+			this.formatSelect = document.getElementById("formatSelect");
+			this.resolutionSelect = document.getElementById("resolutionSelect");
+			this.frameRateSelect = document.getElementById("frameRateSelect");
+			this.bitrateSelect = document.getElementById("bitrateSelect");
+			this.qualitySummary = document.getElementById("qualitySummary");
+			this.countdownSelect = document.getElementById("countdownSelect");
+			this.systemAudioToggle = document.getElementById("systemAudioToggle");
+			this.micAudioToggle = document.getElementById("micAudioToggle");
+			this.micNoiseSuppression = document.getElementById("micNoiseSuppression");
+			this.micEchoCancellation = document.getElementById("micEchoCancellation");
+			this.micAutoGain = document.getElementById("micAutoGain");
+			this.systemVolume = document.getElementById("systemVolume");
+			this.micVolume = document.getElementById("micVolume");
+			this.systemVolumeValue = document.getElementById("systemVolumeValue");
+			this.micVolumeValue = document.getElementById("micVolumeValue");
+		}
+		populateFormats(formats) {
+			formats.forEach((format) => {
+				if (MediaRecorder.isTypeSupported(format.mimeType)) {
+					const option = document.createElement("option");
+					option.value = format.mimeType;
+					option.textContent = format.name;
+					option.dataset.ext = format.ext;
+					this.formatSelect.appendChild(option);
+				}
+			});
+			return this.formatSelect.options.length > 0;
+		}
+		/**
+		* Populate the quality selects and wire their change handling in one call.
+		*
+		* Deliberately one method rather than a populate/bind pair that must be
+		* called in the right order - a summary that silently stops updating is the
+		* kind of bug nobody reports.
+		*/
+		populateQuality() {
+			const fill = (select, presets) => {
+				select.innerHTML = "";
+				presets.forEach((preset) => {
+					const option = document.createElement("option");
+					option.value = preset.id;
+					option.textContent = preset.label;
+					select.appendChild(option);
+				});
+			};
+			fill(this.resolutionSelect, RESOLUTION_PRESETS);
+			fill(this.frameRateSelect, FRAME_RATE_PRESETS);
+			fill(this.bitrateSelect, BITRATE_PRESETS);
+			const sync = () => this.syncQualitySummary();
+			this.resolutionSelect.addEventListener("change", sync);
+			this.frameRateSelect.addEventListener("change", sync);
+			this.bitrateSelect.addEventListener("change", sync);
+			this.syncQualitySummary();
 		}
 		getFormat() {
 			const selected = this.formatSelect.options[this.formatSelect.selectedIndex];
@@ -862,6 +1176,35 @@
 				mimeType: selected.value,
 				ext: selected.dataset.ext
 			};
+		}
+		/**
+		* The quality settings in effect.
+		*
+		* Split across the two half-interfaces because they have different
+		* lifetimes: capture constraints are fixed once sharing starts, encoder
+		* settings can change between takes.
+		*/
+		getQuality() {
+			const resolution = resolvePreset(RESOLUTION_PRESETS, this.resolutionSelect.value);
+			const frameRate = resolvePreset(FRAME_RATE_PRESETS, this.frameRateSelect.value);
+			const bitrate = resolvePreset(BITRATE_PRESETS, this.bitrateSelect.value);
+			return {
+				width: resolution.width,
+				frameRate: frameRate.frameRate,
+				videoBitsPerSecond: bitrate.videoBitsPerSecond
+			};
+		}
+		syncQualitySummary() {
+			const q = this.getQuality();
+			this.qualitySummary.textContent = describeQuality(q, q);
+		}
+		/**
+		* Seconds to count down before capturing. Zero means start straight away -
+		* the off setting is a value, not an absence.
+		*/
+		getCountdownSeconds() {
+			const value = Number(this.countdownSelect.value);
+			return Number.isFinite(value) && value > 0 ? value : 0;
 		}
 		getAudioConfig() {
 			return {
@@ -904,26 +1247,223 @@
 			wire(this.systemVolume, this.systemVolumeValue, "system");
 			wire(this.micVolume, this.micVolumeValue, "mic");
 		}
-		setMicProcessingDisabled(disabled) {
-			this.micNoiseSuppression.disabled = disabled;
-			this.micEchoCancellation.disabled = disabled;
-			this.micAutoGain.disabled = disabled;
-		}
-		toggleCropping(show) {
-			this.cropContainer.classList.toggle("hidden", !show);
-			this.cropTargetElement.classList.toggle("hidden", !show);
-		}
-		updateAudioLevel(source, level) {
-			const visualizer = source === "system" ? this.systemAudioVisualizer : this.micAudioVisualizer;
-			if (visualizer) visualizer.style.width = `${Math.min(100, Math.max(0, level * 100))}%`;
+		/**
+		* Lock the settings that cannot change while a share is live.
+		*
+		* Only the capture-time settings lock. The bitrate is an encoder setting and
+		* deliberately stays live, since it can take effect on the next take without
+		* re-sharing - graying it out would imply the opposite.
+		*/
+		setLocked(locked) {
+			this.formatSelect.disabled = locked;
+			this.resolutionSelect.disabled = locked;
+			this.frameRateSelect.disabled = locked;
+			this.systemAudioToggle.disabled = locked;
+			this.micAudioToggle.disabled = locked;
+			this.micNoiseSuppression.disabled = locked;
+			this.micEchoCancellation.disabled = locked;
+			this.micAutoGain.disabled = locked;
 		}
 	};
 	//#endregion
+	//#region src/takes.ts
+	/**
+	* Owns the collection of takes and the blob URLs hanging off them.
+	*
+	* The URL lifecycle is the reason this exists as a class rather than an array.
+	* A blob URL keeps the whole recording in memory until it is explicitly
+	* revoked, and the previous single-download code never revoked anything. One
+	* leaked URL was survivable; a gallery of a dozen takes would not be.
+	*/
+	var TakeStore = class {
+		constructor() {
+			this.takes = [];
+			this.listeners = /* @__PURE__ */ new Set();
+			this.counter = 0;
+		}
+		add(input) {
+			const take = {
+				id: `take-${++this.counter}`,
+				kind: input.kind,
+				blob: input.blob,
+				url: URL.createObjectURL(input.blob),
+				filename: input.filename,
+				size: input.blob.size,
+				durationMs: input.durationMs,
+				createdAt: input.createdAt ?? Date.now(),
+				formatName: input.formatName
+			};
+			this.takes.unshift(take);
+			this.emit();
+			return take;
+		}
+		/** Remove one take and release its blob URL. */
+		remove(id) {
+			const index = this.takes.findIndex((take) => take.id === id);
+			if (index === -1) return;
+			const [removed] = this.takes.splice(index, 1);
+			URL.revokeObjectURL(removed.url);
+			this.emit();
+		}
+		/** Remove every take, releasing every blob URL. */
+		clear() {
+			for (const take of this.takes) URL.revokeObjectURL(take.url);
+			const had = this.takes.length > 0;
+			this.takes = [];
+			if (had) this.emit();
+		}
+		/** Release everything. The store is unusable afterwards. */
+		destroy() {
+			this.clear();
+			this.listeners.clear();
+		}
+		list() {
+			return this.takes;
+		}
+		count() {
+			return this.takes.length;
+		}
+		totalBytes() {
+			return this.takes.reduce((total, take) => total + take.size, 0);
+		}
+		byKind(kind) {
+			return this.takes.filter((take) => take.kind === kind);
+		}
+		/**
+		* Subscribe to changes. Returns the unsubscribe function, so wiring it up is
+		* a single call with no bookkeeping on the caller.
+		*/
+		onChange(listener) {
+			this.listeners.add(listener);
+			return () => this.listeners.delete(listener);
+		}
+		emit() {
+			const listeners = Array.from(this.listeners);
+			for (const listener of listeners) listener();
+		}
+	};
+	//#endregion
+	//#region src/gallery-view.ts
+	/**
+	* Renders the take list and its actions.
+	*
+	* Kept separate from UIManager because it is a view over a collection rather
+	* than a set of fixed controls: it rebuilds itself when the store changes,
+	* which is a different shape of job from wiring one button to one handler.
+	*
+	* It queries its own markup from a root element, so the gallery is one
+	* self-contained block rather than another batch of element fields spread
+	* across the manager.
+	*/
+	var GalleryView = class {
+		constructor(root, store) {
+			this.root = root;
+			this.store = store;
+			this.unsubscribe = null;
+			this.onDownloadAll = () => {
+				downloadAll(this.store.list());
+			};
+			this.onClear = () => {
+				this.store.clear();
+			};
+			this.list = this.require("#takeList");
+			this.emptyState = this.require("#takesEmpty");
+			this.count = this.require("#takeCount");
+			this.downloadAllBtn = this.require("#downloadAllBtn");
+			this.clearBtn = this.require("#clearTakesBtn");
+		}
+		require(selector) {
+			const el = this.root.querySelector(selector);
+			if (!el) throw new Error(`Gallery markup is missing ${selector}`);
+			return el;
+		}
+		/** Start rendering, wire the actions, and keep rendering as takes change. */
+		bind() {
+			this.unsubscribe?.();
+			this.unsubscribe = this.store.onChange(() => this.render());
+			this.downloadAllBtn.addEventListener("click", this.onDownloadAll);
+			this.clearBtn.addEventListener("click", this.onClear);
+			this.render();
+		}
+		unbind() {
+			this.unsubscribe?.();
+			this.unsubscribe = null;
+			this.downloadAllBtn.removeEventListener("click", this.onDownloadAll);
+			this.clearBtn.removeEventListener("click", this.onClear);
+		}
+		render() {
+			const takes = this.store.list();
+			const has = takes.length > 0;
+			this.emptyState.classList.toggle("hidden", has);
+			this.downloadAllBtn.disabled = !has;
+			this.clearBtn.disabled = !has;
+			this.count.textContent = has ? `${takes.length} · ${formatBytes(this.store.totalBytes())}` : "";
+			this.list.replaceChildren(...takes.map((take) => this.renderTake(take)));
+		}
+		renderTake(take) {
+			const row = document.createElement("div");
+			row.className = "flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0";
+			row.dataset.takeId = take.id;
+			const icon = document.createElement("span");
+			icon.className = "text-lg leading-none shrink-0";
+			icon.textContent = take.kind === "recording" ? "🎬" : "📷";
+			icon.title = take.kind === "recording" ? "Recording" : "Screenshot";
+			const detail = document.createElement("div");
+			detail.className = "flex-1 min-w-0";
+			const name = document.createElement("p");
+			name.className = "text-sm font-medium text-gray-900 dark:text-gray-100 truncate";
+			name.textContent = take.filename;
+			name.title = take.filename;
+			const meta = document.createElement("p");
+			meta.className = "text-xs text-gray-500 dark:text-gray-400";
+			meta.textContent = [this.describeTake(take), take.formatName].filter(Boolean).join(" · ");
+			detail.append(name, meta);
+			const download = document.createElement("button");
+			download.type = "button";
+			download.className = "text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0";
+			download.textContent = "Download";
+			download.title = `Download ${take.filename}`;
+			download.addEventListener("click", () => {
+				downloadBlob(take.blob, take.filename);
+			});
+			const remove = document.createElement("button");
+			remove.type = "button";
+			remove.className = "text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 shrink-0";
+			remove.textContent = "Remove";
+			remove.title = `Remove ${take.filename} from the gallery`;
+			remove.addEventListener("click", () => this.store.remove(take.id));
+			row.append(icon, detail, download, remove);
+			return row;
+		}
+		/** Length and size for a recording, just size for a screenshot. */
+		describeTake(take) {
+			const parts = [formatBytes(take.size)];
+			if (take.durationMs !== void 0) parts.unshift(formatDuration(take.durationMs));
+			return parts.join(" · ");
+		}
+	};
+	/**
+	* Download every take in turn.
+	*
+	* Browsers throttle parallel downloads kicked off by a single gesture, so
+	* these are spaced out rather than fired together. Returns how many queued.
+	*/
+	function downloadAll(takes, delayMs = 250) {
+		takes.forEach((take, index) => {
+			window.setTimeout(() => downloadBlob(take.blob, take.filename), index * delayMs);
+		});
+		return takes.length;
+	}
+	//#endregion
 	//#region src/index.ts
 	const ui = new UIManager();
+	const settings = new SettingsPanel();
+	const takes = new TakeStore();
+	const gallery = new GalleryView(document.querySelector("main"), takes);
 	const stopwatch = new Stopwatch();
 	const cropper = new Cropper(ui.cropBox, ui.cropTargetElement, ui.videoContainer, ui.videoPreview);
 	const recorder = new Recorder(onRecordingStop);
+	const pip = new PictureInPicture(document.getElementById("videoPreview"), { onChange: (active) => ui.setPipState(active) });
 	let stream = null;
 	let audioContext = null;
 	let analysers = null;
@@ -934,17 +1474,30 @@
 	* builds a fresh audio graph.
 	*/
 	let currentGains = {};
+	/**
+	* The countdown in flight, if any. Kept at module level so the button and the
+	* Escape key can both reach it and so a new capture cannot start underneath
+	* one that is still counting.
+	*/
+	let activeCountdown = null;
 	function applyVolume(source) {
 		const gain = source === "system" ? currentGains.system : currentGains.mic;
 		if (!gain) return;
-		gain.gain.value = ui.getVolume(source);
+		gain.gain.value = settings.getVolume(source);
 	}
-	ui.bindVolumeControls(applyVolume);
+	settings.bindVolumeControls(applyVolume);
 	ui.videoPreview.addEventListener("resize", syncPreviewAspect);
 	window.addEventListener("load", () => {
-		ui.populateFormats(FORMATS_TO_CHECK);
+		gallery.bind();
+		ui.setPipSupported(pip.isSupported());
+		settings.populateQuality();
 		if (!window.MediaRecorder) {
 			ui.showError("Your browser does not support the MediaRecorder API. Please try a different browser like Chrome or Firefox.");
+			ui.disableShareBtn();
+			return;
+		}
+		if (!settings.populateFormats(FORMATS_TO_CHECK)) {
+			ui.showError("No supported recording formats found in this browser.");
 			ui.disableShareBtn();
 		}
 	});
@@ -953,29 +1506,56 @@
 			if (stream) stopSharing();
 			else handleShareScreen();
 		},
-		onRecord: startRecording,
+		onRecord: toggleRecord,
 		onStop: stopRecording,
 		onCropToggle: toggleCropping,
-		onPause: togglePause
+		onPause: togglePause,
+		onScreenshot: captureScreenshot,
+		onPip: () => {
+			pip.toggle();
+		}
 	});
 	bindShortcuts({
-		onRecord: () => {
-			if (!recorder.isActive()) startRecording();
-		},
+		onRecord: toggleRecord,
 		onPause: togglePause,
 		onStop: () => {
 			if (recorder.isActive()) stopRecording();
 		},
-		onScreenshot: captureScreenshot
+		onScreenshot: captureScreenshot,
+		onCancel: cancelCountdown
 	});
 	/**
-	* Save the preview's current frame as a PNG. Silent when there is nothing to
-	* capture - a shortcut should never throw up an error banner mid-take.
+	* The Record button does two jobs: it starts a take, and it aborts a countdown
+	* that is already running. Having one control that reverses itself keeps there
+	* from being a second button that only exists for a few seconds.
+	*/
+	function toggleRecord() {
+		if (activeCountdown) {
+			cancelCountdown();
+			return;
+		}
+		if (recorder.isActive()) return;
+		startRecording();
+	}
+	function cancelCountdown() {
+		activeCountdown?.cancel();
+	}
+	/**
+	* Capture the preview's current frame as a PNG and file it as a take.
+	*
+	* Silent when there is nothing to capture - a shortcut should never throw up
+	* an error banner mid-take - but when it does land it goes to the gallery like
+	* a recording, so a screenshot cannot be lost by taking the next one.
 	*/
 	async function captureScreenshot() {
 		const blob = await captureFrame(ui.videoPreview);
 		if (!blob) return;
-		downloadBlob(blob, timestampFilename("png"));
+		takes.add({
+			kind: "screenshot",
+			blob,
+			filename: timestampFilename("png"),
+			formatName: "PNG"
+		});
 	}
 	/**
 	* Pause/resume the in-flight capture. The stopwatch is paused alongside the
@@ -996,7 +1576,7 @@
 	async function handleShareScreen() {
 		ui.hideError();
 		try {
-			const shareResult = await shareScreen(ui.getAudioConfig().systemAudio, ui.getMicOptions());
+			const shareResult = await shareScreen(settings.getAudioConfig().systemAudio, settings.getMicOptions(), settings.getQuality());
 			currentGains = shareResult.gains;
 			applyVolume("system");
 			applyVolume("mic");
@@ -1039,17 +1619,50 @@
 		const h = ui.videoPreview.videoHeight;
 		if (w && h) ui.setPreviewAspect(w, h);
 	}
-	async function startRecording() {
+	/**
+	* Begin a take: count down first if one is configured, then capture.
+	*
+	* The countdown runs before any capture setup so nothing is recorded during
+	* it - the stopwatch in particular must not start until the take actually
+	* does, or the reported length would include the countdown.
+	*/
+	function startRecording() {
 		if (!stream) {
 			ui.showError("Please share your screen first.");
 			return;
 		}
 		ui.hideError();
-		const format = ui.getFormat();
+		const seconds = settings.getCountdownSeconds();
+		if (seconds <= 0) {
+			startCapture();
+			return;
+		}
+		ui.setCountdownState(true);
+		activeCountdown = runCountdown({
+			seconds,
+			onTick: (remaining) => ui.showCountdown(remaining),
+			onDone: () => {
+				activeCountdown = null;
+				ui.setCountdownState(false);
+				ui.hideCountdown();
+				startCapture();
+			},
+			onCancel: () => {
+				activeCountdown = null;
+				ui.setCountdownState(false);
+				ui.hideCountdown();
+			}
+		});
+	}
+	/** Start capturing now. Called once the countdown has finished, or at once. */
+	async function startCapture() {
+		if (!stream) return;
+		const format = settings.getFormat();
 		let streamToRecord = stream;
 		if (ui.cropCheckbox.checked) streamToRecord = await cropper.startCrop(stream);
 		try {
-			recorder.start(streamToRecord, format);
+			const quality = settings.getQuality();
+			recorder.start(streamToRecord, format, { videoBitsPerSecond: quality.videoBitsPerSecond });
 		} catch (err) {
 			ui.showError(err.message);
 			stopSharing();
@@ -1066,9 +1679,13 @@
 		const durationMs = stopwatch.elapsed();
 		stopwatch.stop();
 		const fixedBlob = await fixWebmDuration(blob, durationMs);
-		const filename = timestampFilename(ext);
-		const url = URL.createObjectURL(fixedBlob);
-		ui.setDownloadLink(url, filename);
+		takes.add({
+			kind: "recording",
+			blob: fixedBlob,
+			filename: timestampFilename(ext),
+			formatName: settings.getFormat().name,
+			durationMs
+		});
 		ui.setRecordingState(false);
 	}
 	async function stopRecording() {
@@ -1076,6 +1693,7 @@
 		if (recorder.isActive()) recorder.stop();
 	}
 	async function stopSharing() {
+		cancelCountdown();
 		await cropper.stopCrop(stream);
 		if (recorder.isActive()) recorder.stop();
 		if (visualizationAnimationFrame) {

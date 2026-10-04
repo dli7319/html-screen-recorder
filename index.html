@@ -26,6 +26,24 @@
         <div id="videoContainer"
           class="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden aspect-video relative flex items-center justify-center">
           <video id="videoPreview" class="w-full h-full object-contain" autoplay muted playsinline></video>
+          <!-- The 3-2-1, sitting over the preview so the count is where the
+               capture is about to happen. -->
+          <!-- Pop the preview out so it stays visible while you work
+               elsewhere. Lives on the preview because that is the thing it
+               acts on. -->
+          <button id="pipBtn" type="button" disabled
+            title="Picture-in-picture"
+            class="absolute top-2 right-2 hidden items-center gap-1.5 rounded-md bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-black/75 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:opacity-50 transition-colors">
+            <svg class="w-4 h-4">
+              <use href="./icons.svg#icon-pip"></use>
+            </svg>
+            <span id="pipBtnText">Pop out</span>
+          </button>
+          <div id="countdownOverlay"
+            class="absolute inset-0 hidden flex items-center justify-center bg-black/50">
+            <span id="countdownNumber"
+              class="font-bold text-white tabular-nums text-7xl sm:text-8xl"></span>
+          </div>
           <div id="placeholder" class="absolute text-center text-gray-500 dark:text-gray-400 p-4">
             <svg class="w-16 h-16 mx-auto mb-2">
               <use href="./icons.svg#icon-placeholder"></use>
@@ -54,6 +72,48 @@
               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
             <select id="formatSelect"
               class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+
+            <!-- Capture quality. Resolution and frame rate live in the track,
+                 so they can only change at share time; the bitrate is an
+                 encoder setting and stays live between takes. -->
+            <div class="mt-3 grid grid-cols-3 gap-2">
+              <div>
+                <label for="resolutionSelect"
+                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Resolution</label>
+                <select id="resolutionSelect"
+                  title="Capture resolution. Source keeps the window at its own size."
+                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+              </div>
+              <div>
+                <label for="frameRateSelect"
+                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Frame rate</label>
+                <select id="frameRateSelect"
+                  title="Capture frame rate. Source keeps the window's own rate."
+                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+              </div>
+              <div>
+                <label for="bitrateSelect"
+                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Bitrate</label>
+                <select id="bitrateSelect"
+                  title="Video bitrate. Applies to the next take without re-sharing."
+                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+              </div>
+            </div>
+            <p id="qualitySummary"
+              class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"></p>
+
+            <div class="mt-2 flex items-center gap-2">
+              <label for="countdownSelect"
+                class="text-xs font-medium text-gray-600 dark:text-gray-400">Countdown</label>
+              <select id="countdownSelect"
+                title="Count down before capturing starts. Press Escape or Record again to cancel."
+                class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1 px-2 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white">
+                <option value="0" selected>Off</option>
+                <option value="3">3 seconds</option>
+                <option value="5">5 seconds</option>
+                <option value="10">10 seconds</option>
+              </select>
+            </div>
           </div>
           <!-- Updated Audio Controls -->
           <div>
@@ -145,7 +205,7 @@
         </div>
         <div id="error" class="mt-4 text-center text-red-500 font-medium hidden"></div>
 
-        <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <button id="shareBtn"
             class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2">
             <span id="shareBtnStart" class="flex items-center gap-2">
@@ -177,17 +237,44 @@
             </svg>
             Stop Recording
           </button>
-        </div>
-        <div class="mt-4 flex justify-center">
-          <a id="downloadLink"
-            class="w-full sm:w-auto bg-green-600 text-white text-center font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 pointer-events-none opacity-50"
-            href="#">
+          <button id="screenshotBtn" title="Capture the current frame as a PNG (Shift+S)"
+            class="w-full bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-teal-400 dark:disabled:bg-teal-800"
+            disabled>
             <svg class="w-5 h-5">
-              <use href="./icons.svg#icon-download"></use>
+              <use href="./icons.svg#icon-screenshot"></use>
             </svg>
-            Download
-          </a>
+            Screenshot
+          </button>
         </div>
+        <!-- Every recording and screenshot lands here, so a take is never
+             lost by making the next one. -->
+        <section class="mt-6">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Takes <span id="takeCount"
+                class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400"></span>
+            </h2>
+            <div class="flex items-center gap-2">
+              <button id="downloadAllBtn" type="button" disabled
+                title="Download every take"
+                class="text-sm bg-green-600 text-white font-semibold py-1.5 px-3 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-green-400 dark:disabled:bg-green-900 transition-colors">
+                Download all
+              </button>
+              <button id="clearTakesBtn" type="button" disabled
+                title="Remove every take from the gallery"
+                class="text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 py-1.5 px-2 transition-colors">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div id="takeList" class="mt-2"></div>
+
+          <p id="takesEmpty"
+            class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            No takes yet. Recordings and screenshots will show up here.
+          </p>
+        </section>
       </main>
     </div>
   </div>

@@ -29,6 +29,14 @@
       d="M10 18a8 8 0 100-16 8 8 0 000 16zM7.25 6.75h2.25v6.5H7.25zM10.5 6.75h2.25v6.5H10.5z"
       clip-rule="evenodd"></path>
   </symbol>
+  <symbol id="icon-pip" viewBox="0 0 20 20" fill="currentColor">
+    <!-- A window with a smaller window inset: "float this on top". -->
+    <path d="M2 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4Zm2 0v12h12V4H4Zm5 5h6a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Z" />
+  </symbol>
+  <symbol id="icon-screenshot" viewBox="0 0 20 20" fill="currentColor">
+    <!-- A frame with a viewfinder mark: "capture what is on screen right now". -->
+    <path d="M3 5a2 2 0 0 1 2-2h2.2a1 1 0 0 0 .9-.55l.4-.8A1 1 0 0 1 9.4 1h2.2a1 1 0 0 1 .9.65l.4.8a1 1 0 0 0 .9.55H15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm2 0v10h10V5h-2.2a3 3 0 0 1-2.72-1.72h-.16A3 3 0 0 1 7.2 5H5Zm5 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
+  </symbol>
   <symbol id="icon-download" viewBox="0 0 20 20" fill="currentColor">
     <path fill-rule="evenodd"
       d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
