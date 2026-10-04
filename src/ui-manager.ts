@@ -53,6 +53,8 @@ export class UIManager {
   private countdownNumber = document.getElementById(
     'countdownNumber'
   ) as HTMLSpanElement;
+  private pipBtn = document.getElementById('pipBtn') as HTMLButtonElement;
+  private pipBtnText = document.getElementById('pipBtnText') as HTMLSpanElement;
   private errorDiv = document.getElementById('error') as HTMLDivElement;
   public cropCheckbox = document.getElementById(
     'cropCheckbox'
@@ -74,6 +76,7 @@ export class UIManager {
     onCropToggle: () => void;
     onPause: () => void;
     onScreenshot: () => void;
+    onPip: () => void;
   }) {
     this.shareBtn.addEventListener('click', callbacks.onShare);
     this.recordBtn.addEventListener('click', callbacks.onRecord);
@@ -81,6 +84,25 @@ export class UIManager {
     this.cropCheckbox.addEventListener('change', callbacks.onCropToggle);
     this.pauseBtn.addEventListener('click', callbacks.onPause);
     this.screenshotBtn.addEventListener('click', callbacks.onScreenshot);
+    this.pipBtn.addEventListener('click', callbacks.onPip);
+  }
+
+  /**
+   * Reflect whether the preview is currently floating. The label changes
+   * rather than the button disappearing, so the control stays put and its
+   * state is readable at a glance.
+   */
+  setPipState(active: boolean) {
+    this.pipBtnText.textContent = active ? 'Close' : 'Pop out';
+    this.pipBtn.title = active
+      ? 'Close the floating preview'
+      : 'Show the preview in a floating window';
+    this.pipBtn.classList.toggle('bg-teal-600', active);
+  }
+
+  /** Whether the browser can do PiP at all; hides the control if not. */
+  setPipSupported(supported: boolean) {
+    this.pipBtn.dataset.supported = supported ? 'true' : 'false';
   }
 
   /**
@@ -153,6 +175,9 @@ export class UIManager {
 
       this.recordBtn.disabled = false;
       this.screenshotBtn.disabled = false;
+      this.pipBtn.disabled = false;
+      this.pipBtn.classList.remove('hidden');
+      this.pipBtn.classList.add('flex');
       this.cropCheckbox.disabled = false;
     } else {
       this.videoPreview.srcObject = null;
@@ -163,6 +188,9 @@ export class UIManager {
 
       this.recordBtn.disabled = true;
       this.screenshotBtn.disabled = true;
+      this.pipBtn.disabled = true;
+      this.pipBtn.classList.add('hidden');
+      this.pipBtn.classList.remove('flex');
       this.stopBtn.disabled = true;
       this.cropCheckbox.checked = false;
       this.cropCheckbox.disabled = true;

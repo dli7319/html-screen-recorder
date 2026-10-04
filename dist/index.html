@@ -28,6 +28,17 @@
           <video id="videoPreview" class="w-full h-full object-contain" autoplay muted playsinline></video>
           <!-- The 3-2-1, sitting over the preview so the count is where the
                capture is about to happen. -->
+          <!-- Pop the preview out so it stays visible while you work
+               elsewhere. Lives on the preview because that is the thing it
+               acts on. -->
+          <button id="pipBtn" type="button" disabled
+            title="Picture-in-picture"
+            class="absolute top-2 right-2 hidden items-center gap-1.5 rounded-md bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-black/75 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:opacity-50 transition-colors">
+            <svg class="w-4 h-4">
+              <use href="./icons.svg#icon-pip"></use>
+            </svg>
+            <span id="pipBtnText">Pop out</span>
+          </button>
           <div id="countdownOverlay"
             class="absolute inset-0 hidden flex items-center justify-center bg-black/50">
             <span id="countdownNumber"

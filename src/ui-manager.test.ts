@@ -26,6 +26,9 @@ function renderUI(): UIManager {
     <button id="recordBtn"><span id="recordBtnText">Start Recording</span></button>
     <button id="stopBtn"></button>
     <button id="screenshotBtn" disabled></button>
+    <button id="pipBtn" disabled class="hidden">
+      <span id="pipBtnText">Pop out</span>
+    </button>
     <div id="status" class="hidden">
       <div id="statusDot" class="status-dot"></div>
       <span id="statusText">Recording...</span>
@@ -326,6 +329,50 @@ describe('UIManager screenshot button', () => {
   });
 });
 
+describe('UIManager picture-in-picture button', () => {
+  it('appears only once there is a preview to pop out', () => {
+    const ui = renderUI();
+    expect($('pipBtn').classList.contains('hidden')).toBe(true);
+
+    ui.setSharingState(true);
+    expect($('pipBtn').classList.contains('hidden')).toBe(false);
+  });
+
+  it('reads "Pop out" when nothing is floating', () => {
+    const ui = renderUI();
+    ui.setPipState(false);
+
+    expect($('pipBtnText').textContent).toBe('Pop out');
+    expect($('pipBtn').title).toContain('floating window');
+  });
+
+  it('reads "Close" while the preview is floating', () => {
+    const ui = renderUI();
+    ui.setPipState(true);
+
+    expect($('pipBtnText').textContent).toBe('Close');
+    expect($('pipBtn').title).toContain('Close');
+  });
+
+  it('goes away when sharing stops', () => {
+    const ui = renderUI();
+    ui.setSharingState(true);
+    ui.setSharingState(false);
+
+    expect($('pipBtn').classList.contains('hidden')).toBe(true);
+    expect(($('pipBtn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('records whether the browser supports it', () => {
+    const ui = renderUI();
+    ui.setPipSupported(false);
+
+    expect($('pipBtn').dataset.supported).toBe('false');
+    ui.setPipSupported(true);
+    expect($('pipBtn').dataset.supported).toBe('true');
+  });
+});
+
 describe('UIManager countdown presentation', () => {
   it('shows the overlay and offers a way out', () => {
     const ui = renderUI();
@@ -371,6 +418,7 @@ describe('UIManager.bindEvents', () => {
     const onCropToggle = vi.fn();
     const onPause = vi.fn();
     const onScreenshot = vi.fn();
+    const onPip = vi.fn();
     ui.bindEvents({
       onShare,
       onRecord,
@@ -378,16 +426,19 @@ describe('UIManager.bindEvents', () => {
       onCropToggle,
       onPause,
       onScreenshot,
+      onPip,
     });
 
     // Disabled buttons do not fire click in jsdom, matching real browsers.
     ($('screenshotBtn') as HTMLButtonElement).disabled = false;
+    ($('pipBtn') as HTMLButtonElement).disabled = false;
 
     $('shareBtn').click();
     $('recordBtn').click();
     $('stopBtn').click();
     $('pauseBtn').click();
     $('screenshotBtn').click();
+    $('pipBtn').click();
     $('cropCheckbox').dispatchEvent(new Event('change'));
 
     expect(onShare).toHaveBeenCalledOnce();
@@ -396,5 +447,6 @@ describe('UIManager.bindEvents', () => {
     expect(onCropToggle).toHaveBeenCalledOnce();
     expect(onPause).toHaveBeenCalledOnce();
     expect(onScreenshot).toHaveBeenCalledOnce();
+    expect(onPip).toHaveBeenCalledOnce();
   });
 });
