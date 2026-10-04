@@ -25,6 +25,7 @@ function renderUI(): UIManager {
     </button>
     <button id="recordBtn"><span id="recordBtnText">Start Recording</span></button>
     <button id="stopBtn"></button>
+    <button id="screenshotBtn" disabled></button>
     <div id="status" class="hidden">
       <div id="statusDot" class="status-dot"></div>
       <span id="statusText">Recording...</span>
@@ -294,6 +295,37 @@ describe('UIManager.toggleCropping', () => {
   });
 });
 
+describe('UIManager screenshot button', () => {
+  it('stays disabled until something is shared', () => {
+    renderUI();
+    expect(($('screenshotBtn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('arms once there is a frame to capture', () => {
+    const ui = renderUI();
+    ui.setSharingState(true);
+
+    expect(($('screenshotBtn') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('disarms again when sharing stops', () => {
+    const ui = renderUI();
+    ui.setSharingState(true);
+    ui.setSharingState(false);
+
+    expect(($('screenshotBtn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('stays available while recording', () => {
+    // Grabbing a still mid-take is exactly when you want it.
+    const ui = renderUI();
+    ui.setSharingState(true);
+    ui.setRecordingState(true);
+
+    expect(($('screenshotBtn') as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
 describe('UIManager countdown presentation', () => {
   it('shows the overlay and offers a way out', () => {
     const ui = renderUI();
@@ -338,12 +370,24 @@ describe('UIManager.bindEvents', () => {
     const onStop = vi.fn();
     const onCropToggle = vi.fn();
     const onPause = vi.fn();
-    ui.bindEvents({ onShare, onRecord, onStop, onCropToggle, onPause });
+    const onScreenshot = vi.fn();
+    ui.bindEvents({
+      onShare,
+      onRecord,
+      onStop,
+      onCropToggle,
+      onPause,
+      onScreenshot,
+    });
+
+    // Disabled buttons do not fire click in jsdom, matching real browsers.
+    ($('screenshotBtn') as HTMLButtonElement).disabled = false;
 
     $('shareBtn').click();
     $('recordBtn').click();
     $('stopBtn').click();
     $('pauseBtn').click();
+    $('screenshotBtn').click();
     $('cropCheckbox').dispatchEvent(new Event('change'));
 
     expect(onShare).toHaveBeenCalledOnce();
@@ -351,5 +395,6 @@ describe('UIManager.bindEvents', () => {
     expect(onStop).toHaveBeenCalledOnce();
     expect(onCropToggle).toHaveBeenCalledOnce();
     expect(onPause).toHaveBeenCalledOnce();
+    expect(onScreenshot).toHaveBeenCalledOnce();
   });
 });

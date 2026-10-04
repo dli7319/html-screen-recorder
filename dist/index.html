@@ -194,7 +194,7 @@
         </div>
         <div id="error" class="mt-4 text-center text-red-500 font-medium hidden"></div>
 
-        <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <button id="shareBtn"
             class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2">
             <span id="shareBtnStart" class="flex items-center gap-2">
@@ -225,6 +225,14 @@
               <use href="./icons.svg#icon-stop-record"></use>
             </svg>
             Stop Recording
+          </button>
+          <button id="screenshotBtn" title="Capture the current frame as a PNG (Shift+S)"
+            class="w-full bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-teal-400 dark:disabled:bg-teal-800"
+            disabled>
+            <svg class="w-5 h-5">
+              <use href="./icons.svg#icon-screenshot"></use>
+            </svg>
+            Screenshot
           </button>
         </div>
         <!-- Every recording and screenshot lands here, so a take is never

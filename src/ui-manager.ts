@@ -30,6 +30,9 @@ export class UIManager {
     'recordBtnText'
   ) as HTMLSpanElement;
   private stopBtn = document.getElementById('stopBtn') as HTMLButtonElement;
+  private screenshotBtn = document.getElementById(
+    'screenshotBtn'
+  ) as HTMLButtonElement;
   private placeholder = document.getElementById(
     'placeholder'
   ) as HTMLDivElement;
@@ -70,12 +73,14 @@ export class UIManager {
     onStop: () => void;
     onCropToggle: () => void;
     onPause: () => void;
+    onScreenshot: () => void;
   }) {
     this.shareBtn.addEventListener('click', callbacks.onShare);
     this.recordBtn.addEventListener('click', callbacks.onRecord);
     this.stopBtn.addEventListener('click', callbacks.onStop);
     this.cropCheckbox.addEventListener('change', callbacks.onCropToggle);
     this.pauseBtn.addEventListener('click', callbacks.onPause);
+    this.screenshotBtn.addEventListener('click', callbacks.onScreenshot);
   }
 
   /**
@@ -147,6 +152,7 @@ export class UIManager {
       toggle(this.shareBtnStop, true);
 
       this.recordBtn.disabled = false;
+      this.screenshotBtn.disabled = false;
       this.cropCheckbox.disabled = false;
     } else {
       this.videoPreview.srcObject = null;
@@ -156,6 +162,7 @@ export class UIManager {
       toggle(this.shareBtnStop, false);
 
       this.recordBtn.disabled = true;
+      this.screenshotBtn.disabled = true;
       this.stopBtn.disabled = true;
       this.cropCheckbox.checked = false;
       this.cropCheckbox.disabled = true;
