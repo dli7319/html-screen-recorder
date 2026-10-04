@@ -34,6 +34,9 @@ export class SettingsPanel {
   private qualitySummary = document.getElementById(
     'qualitySummary'
   ) as HTMLParagraphElement;
+  private countdownSelect = document.getElementById(
+    'countdownSelect'
+  ) as HTMLSelectElement;
   private systemAudioToggle = document.getElementById(
     'systemAudioToggle'
   ) as HTMLInputElement;
@@ -146,6 +149,15 @@ export class SettingsPanel {
     this.qualitySummary.textContent = describeQuality(q, q);
   }
 
+  /**
+   * Seconds to count down before capturing. Zero means start straight away -
+   * the off setting is a value, not an absence.
+   */
+  getCountdownSeconds(): number {
+    const value = Number(this.countdownSelect.value);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
   getAudioConfig() {
     return {
       systemAudio: this.systemAudioToggle.checked,
@@ -203,6 +215,8 @@ export class SettingsPanel {
    * re-sharing - graying it out would imply the opposite.
    */
   setLocked(locked: boolean) {
+    // The countdown select is not here on purpose: it governs the next take,
+    // not the shared stream, so it stays live exactly like the bitrate.
     this.formatSelect.disabled = locked;
     this.resolutionSelect.disabled = locked;
     this.frameRateSelect.disabled = locked;

@@ -26,6 +26,13 @@
         <div id="videoContainer"
           class="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden aspect-video relative flex items-center justify-center">
           <video id="videoPreview" class="w-full h-full object-contain" autoplay muted playsinline></video>
+          <!-- The 3-2-1, sitting over the preview so the count is where the
+               capture is about to happen. -->
+          <div id="countdownOverlay"
+            class="absolute inset-0 hidden flex items-center justify-center bg-black/50">
+            <span id="countdownNumber"
+              class="font-bold text-white tabular-nums text-7xl sm:text-8xl"></span>
+          </div>
           <div id="placeholder" class="absolute text-center text-gray-500 dark:text-gray-400 p-4">
             <svg class="w-16 h-16 mx-auto mb-2">
               <use href="./icons.svg#icon-placeholder"></use>
@@ -83,6 +90,19 @@
             </div>
             <p id="qualitySummary"
               class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"></p>
+
+            <div class="mt-2 flex items-center gap-2">
+              <label for="countdownSelect"
+                class="text-xs font-medium text-gray-600 dark:text-gray-400">Countdown</label>
+              <select id="countdownSelect"
+                title="Count down before capturing starts. Press Escape or Record again to cancel."
+                class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1 px-2 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white">
+                <option value="0" selected>Off</option>
+                <option value="3">3 seconds</option>
+                <option value="5">5 seconds</option>
+                <option value="10">10 seconds</option>
+              </select>
+            </div>
           </div>
           <!-- Updated Audio Controls -->
           <div>

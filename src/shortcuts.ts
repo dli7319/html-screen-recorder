@@ -12,7 +12,8 @@
  * working - and nothing fires while the user is typing in a form control.
  */
 
-export type ShortcutAction = 'record' | 'pause' | 'stop' | 'screenshot';
+export type ShortcutAction =
+  'record' | 'pause' | 'stop' | 'screenshot' | 'cancel';
 
 /** Targets where a bare letter must stay a letter, not a command. */
 export function isTypingTarget(target: unknown): boolean {
@@ -46,6 +47,12 @@ interface ShortcutEvent {
  */
 export function matchShortcut(event: ShortcutEvent): ShortcutAction | null {
   if (event.metaKey || event.ctrlKey || event.altKey) return null;
+
+  // Escape is how you abort something already in progress, so unlike the
+  // others it has to work even from inside a field. It is still gated behind
+  // the modifier check above: Cmd/Ctrl/Escape belongs to the platform.
+  if (event.key === 'Escape') return 'cancel';
+
   if (isTypingTarget(event.target)) return null;
 
   switch (event.key.toLowerCase()) {
@@ -66,6 +73,8 @@ export interface ShortcutHandlers {
   onPause?: () => void;
   onStop?: () => void;
   onScreenshot?: () => void;
+  /** Abort whatever is pending, e.g. a countdown. */
+  onCancel?: () => void;
 }
 
 /** Bind the shortcuts and return an unsubscribe function. */
@@ -89,6 +98,9 @@ export function bindShortcuts(handlers: ShortcutHandlers): () => void {
         break;
       case 'screenshot':
         handlers.onScreenshot?.();
+        break;
+      case 'cancel':
+        handlers.onCancel?.();
         break;
     }
   };
