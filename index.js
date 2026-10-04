@@ -1533,6 +1533,13 @@
 	* `waiting`; that is the only moment an update is actionable. An installing
 	* worker with no existing controller is the *first* install, which is not an
 	* update and must not trigger a prompt.
+	*
+	* `isControlled` is a predicate, not a boolean, and is evaluated when the
+	* worker reaches `installed`. Sampling it at registration time was a bug: on a
+	* first visit the worker has not claimed the page yet, so `controller` is null,
+	* and the captured `false` stayed false for the life of the tab. Every later
+	* update was then discarded and the Refresh control had nothing to apply - the
+	* app looked up to date while sitting on a stale build.
 	*/
 	function observeUpdates(container, registration, onUpdate, onceControlled, isControlled) {
 		registration.addEventListener("updatefound", () => {
@@ -1540,7 +1547,7 @@
 			if (!installing) return;
 			installing.addEventListener("statechange", () => {
 				if (installing.state !== "installed") return;
-				if (!isControlled) return;
+				if (!isControlled()) return;
 				armUpdate(container, installing, onUpdate, onceControlled);
 			});
 		});
@@ -1556,9 +1563,8 @@
 				scope,
 				updateViaCache: "none"
 			});
-			const controlled = Boolean(container.controller);
 			armUpdate(container, registration.waiting, onUpdate, onceControlled);
-			observeUpdates(container, registration, onUpdate, onceControlled, controlled);
+			observeUpdates(container, registration, onUpdate, onceControlled, () => Boolean(container.controller));
 			if (checkOnFocus && typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
 				if (document.visibilityState === "visible") registration.update().catch(() => {});
 			});
@@ -1647,7 +1653,6 @@
 	updateReloadBtn?.addEventListener("click", () => applyPendingUpdate?.());
 	updateDismissBtn?.addEventListener("click", () => {
 		if (updateBanner) updateBanner.hidden = true;
-		applyPendingUpdate = null;
 	});
 	/**
 	* The Record button does two jobs: it starts a take, and it aborts a countdown

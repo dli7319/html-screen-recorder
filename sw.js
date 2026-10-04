@@ -74,11 +74,14 @@
 	* instead and the user picks the moment.
 	*/
 	const PRECACHE_MANIFEST = ["./index.html","./index.js","./styles.css","./tailwind.css","./icons.svg","./manifest.json","./fonts/roboto-latin.woff2","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-512-maskable.png","./icons/apple-touch-icon.png"];
-	const CACHE_VERSION = "9c6934e2b96b";
+	const CACHE_VERSION = "a013f14e475e";
 	const PRECACHE = parsePrecache(PRECACHE_MANIFEST);
 	const CACHE = cacheName(CACHE_VERSION);
+	self.addEventListener("message", (event) => {
+		if (event.data?.type === "SKIP_WAITING") event.waitUntil(self.skipWaiting());
+	});
 	self.addEventListener("install", (event) => {
-		event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()));
+		event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
 	});
 	self.addEventListener("activate", (event) => {
 		event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => isStaleCache(key, CACHE)).map((key) => caches.delete(key)))).then(() => self.clients.claim()));
