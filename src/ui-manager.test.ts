@@ -13,7 +13,9 @@ function renderUI(): UIManager {
   document.body.innerHTML = `
     <div id="videoContainer">
       <video id="videoPreview"></video>
-      <div id="placeholder"></div>
+      <div id="placeholder">
+        <button id="emptyShareBtn">Share screen</button>
+      </div>
     </div>
     <div id="cropBox"></div>
     <div id="cropTargetElement"></div>

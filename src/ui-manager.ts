@@ -19,6 +19,14 @@ export class UIManager {
   ) as HTMLDivElement;
 
   private shareBtn = document.getElementById('shareBtn') as HTMLButtonElement;
+  /**
+   * The Share action inside the empty preview state. It calls the same handler
+   * as {@link shareBtn} rather than synthesising a click on it, so the two can
+   * never drift apart.
+   */
+  private emptyShareBtn = document.getElementById(
+    'emptyShareBtn'
+  ) as HTMLButtonElement;
   private shareBtnStart = document.getElementById(
     'shareBtnStart'
   ) as HTMLSpanElement;
@@ -101,6 +109,7 @@ export class UIManager {
     onPip: () => void;
   }) {
     this.shareBtn.addEventListener('click', callbacks.onShare);
+    this.emptyShareBtn.addEventListener('click', callbacks.onShare);
     this.recordBtn.addEventListener('click', callbacks.onRecord);
     this.stopBtn.addEventListener('click', callbacks.onStop);
     this.cropCheckbox.addEventListener('change', callbacks.onCropToggle);
