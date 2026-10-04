@@ -156,9 +156,10 @@ describe('presets', () => {
 
 describe('describeQuality', () => {
   it('names the Auto behaviour explicitly rather than showing blanks', () => {
-    expect(describeQuality({}, {})).toBe(
-      'source res · source fps · auto bitrate'
-    );
+    // Two words, not three. The chip this feeds shares a single line with the
+    // transport, so the default case has to be short enough to fit and has to
+    // read as the setting rather than describing each preset.
+    expect(describeQuality({}, {})).toBe('Source · Auto');
   });
 
   it('reports each setting once set', () => {
@@ -167,15 +168,13 @@ describe('describeQuality', () => {
         { width: 1280, frameRate: 30 },
         { videoBitsPerSecond: 6_000_000 }
       )
-    ).toBe('1280w · 30fps · 6.0 Mbps');
+    ).toBe('1280w 30fps · 6.0 Mbps');
   });
 
   it('mixes set and unset settings', () => {
-    expect(describeQuality({ width: 854 }, {})).toBe(
-      '854w · source fps · auto bitrate'
-    );
+    expect(describeQuality({ width: 854 }, {})).toBe('854w · Auto');
     expect(
       describeQuality({ frameRate: 60 }, { videoBitsPerSecond: 2_500_000 })
-    ).toBe('source res · 60fps · 2.5 Mbps');
+    ).toBe('60fps · 2.5 Mbps');
   });
 });

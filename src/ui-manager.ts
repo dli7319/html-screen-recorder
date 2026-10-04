@@ -19,6 +19,14 @@ export class UIManager {
   ) as HTMLDivElement;
 
   private shareBtn = document.getElementById('shareBtn') as HTMLButtonElement;
+  /**
+   * The Share action inside the empty preview state. It calls the same handler
+   * as {@link shareBtn} rather than synthesising a click on it, so the two can
+   * never drift apart.
+   */
+  private emptyShareBtn = document.getElementById(
+    'emptyShareBtn'
+  ) as HTMLButtonElement;
   private shareBtnStart = document.getElementById(
     'shareBtnStart'
   ) as HTMLSpanElement;
@@ -68,6 +76,28 @@ export class UIManager {
   private micAudioVisualizer = document.getElementById(
     'micAudioVisualizer'
   ) as HTMLDivElement;
+  private transport = document.getElementById('transport') as HTMLDivElement;
+
+  /**
+   * Drive the presentation state.
+   *
+   * `data-phase` on the transport container decides which of the four buttons
+   * is currently the obvious next step, and `data-state` on the status pill
+   * decides its colour. Neither touches the buttons' ids, their listeners or
+   * their enabled flags - those are the state machine, and this is only how it
+   * looks. Keeping the two apart is what let the UI go from four equally loud
+   * buttons to one without destabilising the recording logic underneath.
+   */
+  private setPhase(phase: 'idle' | 'sharing' | 'recording') {
+    this.transport.dataset.phase = phase;
+    this.statusDiv.dataset.state = phase;
+    // The pill is always visible now: it answers "what is the app doing" even
+    // when nothing is happening, which is exactly when that is unclear.
+    this.statusDiv.classList.remove('hidden');
+    if (phase === 'idle') this.statusText.textContent = 'Ready';
+    if (phase === 'sharing') this.statusText.textContent = 'Sharing';
+    if (phase === 'recording') this.statusText.textContent = 'Recording';
+  }
 
   bindEvents(callbacks: {
     onShare: () => void;
@@ -79,12 +109,53 @@ export class UIManager {
     onPip: () => void;
   }) {
     this.shareBtn.addEventListener('click', callbacks.onShare);
+    this.emptyShareBtn.addEventListener('click', callbacks.onShare);
     this.recordBtn.addEventListener('click', callbacks.onRecord);
     this.stopBtn.addEventListener('click', callbacks.onStop);
     this.cropCheckbox.addEventListener('change', callbacks.onCropToggle);
     this.pauseBtn.addEventListener('click', callbacks.onPause);
     this.screenshotBtn.addEventListener('click', callbacks.onScreenshot);
     this.pipBtn.addEventListener('click', callbacks.onPip);
+
+    // Settings drawer + the microphone-processing disclosure. Pure presentation:
+    // state lives on <body> so the CSS in styles.css can react to it.
+    const shell = document.body;
+    const drawer = document.getElementById('settingsDrawer') as HTMLElement;
+    const scrim = document.getElementById('settingsScrim') as HTMLElement;
+    const openBtn = document.getElementById(
+      'openSettings'
+    ) as HTMLButtonElement;
+    const chip = document.getElementById('settingsChip') as HTMLButtonElement;
+    const closeBtn = document.getElementById(
+      'closeSettings'
+    ) as HTMLButtonElement;
+    const advBtn = document.getElementById('advToggle') as HTMLButtonElement;
+
+    const setPanel = (open: boolean) => {
+      shell.dataset.panel = open ? 'open' : 'closed';
+      drawer.setAttribute('aria-hidden', String(!open));
+      openBtn.setAttribute('aria-expanded', String(open));
+      if (open) closeBtn.focus();
+      else openBtn.focus();
+    };
+
+    openBtn.addEventListener('click', () =>
+      setPanel(shell.dataset.panel !== 'open')
+    );
+    chip.addEventListener('click', () => setPanel(true));
+    closeBtn.addEventListener('click', () => setPanel(false));
+    scrim.addEventListener('click', () => setPanel(false));
+    document.addEventListener('keydown', (e) => {
+      // Escape is already used to cancel a countdown; only close when one is
+      // not running and the drawer is open.
+      if (e.key === 'Escape' && shell.dataset.panel === 'open') setPanel(false);
+    });
+
+    advBtn.addEventListener('click', () => {
+      const open = shell.dataset.adv !== 'open';
+      shell.dataset.adv = open ? 'open' : 'closed';
+      advBtn.setAttribute('aria-expanded', String(open));
+    });
   }
 
   /**
@@ -196,14 +267,16 @@ export class UIManager {
       this.cropCheckbox.disabled = true;
       toggle(this.cropContainer, false);
       this.cropBox.classList.remove('is-recording');
+      this.setPhase('idle');
     }
+    if (isSharing) this.setPhase('sharing');
   }
 
   setRecordingState(isRecording: boolean) {
     const icon = this.recordBtn.querySelector('svg') as unknown as HTMLElement;
 
     if (isRecording) {
-      this.statusDiv.classList.remove('hidden');
+      this.setPhase('recording');
       this.setPausedState(false);
       this.stopBtn.disabled = false;
       this.recordBtn.disabled = true;
@@ -212,7 +285,8 @@ export class UIManager {
       if (this.cropCheckbox.checked) this.cropBox.classList.add('is-recording');
       if (icon) icon.style.display = 'none';
     } else {
-      this.statusDiv.classList.add('hidden');
+      // Still sharing - the pill and the primary action go back to that phase.
+      this.setPhase('sharing');
       this.setPausedState(false);
       this.clearStats();
       this.stopBtn.disabled = true;

@@ -1,74 +1,113 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Screen Recorder</title>
+    <!-- Roboto is self-hosted - see the @font-face in styles.css. A third-party
+         font would both block first paint on a network round trip and break
+         offline mode outright. -->
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./tailwind.css" />
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Screen Recorder</title>
-  <!-- Roboto is self-hosted - see the @font-face in styles.css. A third-party
-       font would both block first paint on a network round trip and break
-       offline mode outright. -->
-  <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./tailwind.css">
+    <!-- PWA. Everything is relative because this app is served from a subpath
+         (/html-screen-recorder/), not the origin root: start_url, scope and the
+         service-worker registration all resolve against that directory, and an
+         absolute path here would give the worker a scope it cannot hold.
+         Named .json rather than .webmanifest so the Content-Type is correct on
+         any static host; browsers do not care what the file is called. -->
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Recorder" />
+    <!-- theme-color is per scheme because the body switches between them. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1e1f20" />
+  </head>
 
-  <!-- PWA. Everything is relative because this app is served from a subpath
-       (/html-screen-recorder/), not the origin root: start_url, scope and the
-       service-worker registration all resolve against that directory, and an
-       absolute path here would give the worker a scope it cannot hold.
-       Named .json rather than .webmanifest so the Content-Type is correct on
-       any static host; browsers do not care what the file is called. -->
-  <link rel="manifest" href="./manifest.json" />
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Recorder" />
-  <!-- theme-color is per scheme because the body switches between them. -->
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f4f6" />
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101828" />
-</head>
+  <!--
+    Layout note.
 
-<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen transition-colors duration-300">
-  <div class="w-full max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
-      <header class="p-6 border-b border-gray-200 dark:border-gray-700">
-        <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white">
-          Screen Recorder
-        </h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Record your screen, download, and share. It's that simple.
-        </p>
+    The app is an *Operate* surface: you drive a capture session. So the preview
+    is the dominant region and exactly one action is ever the obvious next step.
+    Everything set-once lives behind the settings drawer, with its current value
+    summarised on the chip so it is visible without being opened.
+
+    The four transport buttons keep their existing ids and state machine. Only
+    one is visually prominent at a time, chosen by `data-phase` on the transport
+    container - see the "transport phases" block in styles.css.
+  -->
+  <body class="shell">
+    <div class="app">
+      <header class="appbar">
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="6" width="13" height="12" rx="2.5" />
+            <path d="m15 11 6-3.5v9L15 13z" />
+          </svg>
+        </div>
+        <h1>Screen Recorder</h1>
+        <div class="spacer"></div>
+
+        <div id="status" class="status-pill" data-state="idle">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">Ready</span>
+          <span id="statsText" class="stats"></span>
+        </div>
+
+        <button id="pauseBtn" type="button" title="Pause recording (P)" class="icon-btn" disabled>
+          <svg class="h-5 w-5"><use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use></svg>
+          <span id="pauseBtnText" class="sr-only">Pause</span>
+        </button>
+
+        <button id="openSettings" type="button" title="Recording settings" class="icon-btn"
+          aria-label="Recording settings" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" />
+          </svg>
+        </button>
       </header>
 
-      <main class="p-6">
-        <div id="videoContainer"
-          class="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden aspect-video relative flex items-center justify-center">
-          <video id="videoPreview" class="w-full h-full object-contain" autoplay muted playsinline></video>
-          <!-- The 3-2-1, sitting over the preview so the count is where the
-               capture is about to happen. -->
-          <!-- Pop the preview out so it stays visible while you work
-               elsewhere. Lives on the preview because that is the thing it
-               acts on. -->
-          <button id="pipBtn" type="button" disabled
-            title="Picture-in-picture"
-            class="absolute top-2 right-2 hidden items-center gap-1.5 rounded-md bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-black/75 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:opacity-50 transition-colors">
-            <svg class="w-4 h-4">
-              <use href="./icons.svg#icon-pip"></use>
-            </svg>
+      <div class="stage">
+        <div id="videoContainer" class="stage-inner">
+          <video id="videoPreview" class="preview-video" autoplay muted playsinline></video>
+
+          <!-- Pop the preview out so it stays visible while you work elsewhere.
+               Lives on the preview because that is the thing it acts on. -->
+          <button id="pipBtn" type="button" disabled title="Picture-in-picture"
+            class="pip-btn hidden items-center">
+            <svg class="h-4 w-4"><use href="./icons.svg#icon-pip"></use></svg>
             <span id="pipBtnText">Pop out</span>
           </button>
-          <div id="countdownOverlay"
-            class="absolute inset-0 hidden flex items-center justify-center bg-black/50">
-            <span id="countdownNumber"
-              class="font-bold text-white tabular-nums text-7xl sm:text-8xl"></span>
+
+          <!-- The 3-2-1, sitting over the preview so the count is where the
+               capture is about to happen. -->
+          <div id="countdownOverlay" class="countdown hidden">
+            <span id="countdownNumber"></span>
           </div>
-          <div id="placeholder" class="absolute text-center text-gray-500 dark:text-gray-400 p-4">
-            <svg class="w-16 h-16 mx-auto mb-2">
-              <use href="./icons.svg#icon-placeholder"></use>
+
+          <!-- The empty state is deliberately quiet. It is the first thing
+               anyone sees, and a big illustrated placeholder makes an app feel
+               busier than it is. It carries the one action that makes sense
+               here instead of pointing at a button elsewhere on the page. -->
+          <div id="placeholder" class="placeholder">
+            <svg class="glyph" aria-hidden="true" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="2" y="6" width="13" height="12" rx="2.5" />
+              <path d="m15 11 6-3.5v9L15 13z" />
             </svg>
-            <p class="font-medium">Your screen preview will appear here.</p>
-            <p class="text-xs">Click "Share Screen" to begin.</p>
+            <p class="hint-title">Share a screen to preview it here</p>
+            <p class="hint-sub">Nothing is recorded until you press Record.</p>
+            <button id="emptyShareBtn" type="button" class="btn btn--primary">
+              <svg class="h-5 w-5"><use href="./icons.svg#icon-share"></use></svg>
+              <span>Share screen</span>
+            </button>
           </div>
-          <div id="cropTargetElement" class="absolute hidden bg-transparent pointer-events-none"></div>
-          <div id="cropContainer" class="absolute inset-0 hidden">
+
+          <div id="cropTargetElement" class="crop-target"></div>
+          <div id="cropContainer" class="crop-container hidden">
             <div id="cropBox">
               <div class="resize-handle top-left"></div>
               <div class="resize-handle top-right"></div>
@@ -81,241 +120,223 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-          <div>
-            <label for="formatSelect"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
-            <select id="formatSelect"
-              class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
+      <!-- The only always-visible controls, on one line.
 
-            <!-- Capture quality. Resolution and frame rate live in the track,
-                 so they can only change at share time; the bitrate is an
-                 encoder setting and stays live between takes. -->
-            <div class="mt-3 grid grid-cols-3 gap-2">
-              <div>
-                <label for="resolutionSelect"
-                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Resolution</label>
-                <select id="resolutionSelect"
-                  title="Capture resolution. Source keeps the window at its own size."
-                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
-              </div>
-              <div>
-                <label for="frameRateSelect"
-                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Frame rate</label>
-                <select id="frameRateSelect"
-                  title="Capture frame rate. Source keeps the window's own rate."
-                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
-              </div>
-              <div>
-                <label for="bitrateSelect"
-                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Bitrate</label>
-                <select id="bitrateSelect"
-                  title="Video bitrate. Applies to the next take without re-sharing."
-                  class="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1.5 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"></select>
-              </div>
-            </div>
-            <p id="qualitySummary"
-              class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"></p>
-
-            <div class="mt-2 flex items-center gap-2">
-              <label for="countdownSelect"
-                class="text-xs font-medium text-gray-600 dark:text-gray-400">Countdown</label>
-              <select id="countdownSelect"
-                title="Count down before capturing starts. Press Escape or Record again to cancel."
-                class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1 px-2 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white">
-                <option value="0" selected>Off</option>
-                <option value="3">3 seconds</option>
-                <option value="5">5 seconds</option>
-                <option value="10">10 seconds</option>
-              </select>
-            </div>
+           Each audio source is a single channel: its mute state, its level and
+           its live activity are one control, not three. They were previously a
+           toggle pill plus a separate fader row, which read as two unrelated
+           things belonging to the same source. -->
+      <div class="sessionbar">
+        <div class="channels">
+          <div class="source">
+            <label class="source-toggle" for="systemAudioToggle">
+              <input id="systemAudioToggle" type="checkbox" checked />
+              <span class="sw" aria-hidden="true"></span>
+              <span class="name">System audio</span>
+            </label>
+            <input id="systemVolume" type="range" class="level" min="0" max="100" value="100"
+              aria-label="System audio level in the recording" />
+            <span id="systemVolumeValue" class="pct">100%</span>
+            <span class="meter"><i id="systemAudioVisualizer"></i></span>
           </div>
-          <!-- Updated Audio Controls -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Audio Sources</label>
-            <div class="space-y-3">
-              <!-- System Audio Row -->
-              <div class="flex flex-col space-y-1">
-                <div class="flex items-center gap-2">
-                  <input id="systemAudioToggle" type="checkbox"
-                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
-                  <label for="systemAudioToggle" class="block text-sm text-gray-900 dark:text-gray-300">System Audio</label>
-                  <input id="systemVolume" type="range" min="0" max="100" value="100"
-                    title="System audio level in the recording"
-                    class="flex-1 min-w-0 h-1.5 accent-indigo-600" />
-                  <span id="systemVolumeValue"
-                    class="w-9 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">100%</span>
-                </div>
-                <!-- Visualizer -->
-                <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
-                  <div id="systemAudioVisualizer" class="bg-indigo-500 h-full w-0 transition-all duration-75 ease-out"></div>
-                </div>
-              </div>
 
-              <!-- Microphone Row -->
-              <div class="flex flex-col space-y-1">
-                <div class="flex items-center gap-2">
-                  <input id="micAudioToggle" type="checkbox"
-                    class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                  <label for="micAudioToggle" class="block text-sm text-gray-900 dark:text-gray-300">Microphone</label>
-                  <input id="micVolume" type="range" min="0" max="100" value="100"
-                    title="Microphone level in the recording"
-                    class="flex-1 min-w-0 h-1.5 accent-indigo-600" />
-                  <span id="micVolumeValue"
-                    class="w-9 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">100%</span>
-                </div>
-                <!-- Visualizer -->
-                <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
-                  <div id="micAudioVisualizer" class="bg-indigo-500 h-full w-0 transition-all duration-75 ease-out"></div>
-                </div>
-                <!-- Microphone conditioning. All on by default: they suit a
-                     typical room, and a browser with them off tends to record
-                     keyboard noise and room echo. -->
-                <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
-                    <input id="micNoiseSuppression" type="checkbox"
-                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
-                    <span class="ml-1">Noise suppression</span>
-                  </label>
-                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
-                    <input id="micEchoCancellation" type="checkbox"
-                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
-                    <span class="ml-1">Echo cancellation</span>
-                  </label>
-                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
-                    <input id="micAutoGain" type="checkbox"
-                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
-                    <span class="ml-1">Auto gain</span>
-                  </label>
-                </div>
-              </div>
-            </div>
+          <div class="source">
+            <label class="source-toggle" for="micAudioToggle">
+              <input id="micAudioToggle" type="checkbox" />
+              <span class="sw" aria-hidden="true"></span>
+              <span class="name">Microphone</span>
+            </label>
+            <input id="micVolume" type="range" class="level" min="0" max="100" value="100"
+              aria-label="Microphone level in the recording" />
+            <span id="micVolumeValue" class="pct">100%</span>
+            <span class="meter"><i id="micAudioVisualizer"></i></span>
           </div>
-          <!-- End Updated Audio Controls -->
-        </div>
-        <p class="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
-          Shortcuts:
-          <kbd>R</kbd> record &middot; <kbd>P</kbd> pause &middot;
-          <kbd>S</kbd> stop &middot; <kbd>&#8679;S</kbd> screenshot
-        </p>
-
-        <div class="mt-4 flex items-center justify-center">
-          <input type="checkbox" id="cropCheckbox"
-            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" disabled />
-          <label for="cropCheckbox" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Enable Cropping</label>
         </div>
 
-        <div id="status" class="mt-4 flex items-center justify-center gap-3 text-gray-600 dark:text-gray-300 hidden">
-          <div id="statusDot" class="status-dot"></div>
-          <span id="statusText" class="font-medium text-sm">Recording...</span>
-          <span id="statsText"
-            class="text-sm tabular-nums text-gray-500 dark:text-gray-400"></span>
-          <button id="pauseBtn" title="Pause recording (P)"
-            class="bg-amber-500 text-white text-sm font-semibold py-1.5 px-4 rounded-md shadow-sm hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-400 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center gap-1.5">
-            <svg class="w-4 h-4">
-              <use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use>
-            </svg>
-            <span id="pauseBtnText">Pause</span>
-          </button>
-        </div>
-        <div id="error" class="mt-4 text-center text-red-500 font-medium hidden"></div>
+        <div class="spacer"></div>
 
-        <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <button id="shareBtn"
-            class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2">
+        <button id="settingsChip" type="button" class="settings-chip" title="Recording settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v2M12 20v2M2 12h2M20 12h2" />
+          </svg>
+          <span id="qualitySummary" class="summary"></span>
+        </button>
+
+        <div id="transport" class="transport" data-phase="idle">
+          <button id="shareBtn" type="button" class="btn btn--primary">
             <span id="shareBtnStart" class="flex items-center gap-2">
-              <svg class="w-5 h-5">
-                <use href="./icons.svg#icon-share"></use>
-              </svg>
-              Share Screen
+              <svg class="h-5 w-5"><use href="./icons.svg#icon-share"></use></svg>
+              Share screen
             </span>
             <span id="shareBtnStop" class="hidden flex items-center gap-2">
-              <svg class="w-5 h-5">
-                <use href="./icons.svg#icon-stop-share"></use>
-              </svg>
-              Stop Sharing
+              <svg class="h-5 w-5"><use href="./icons.svg#icon-stop-share"></use></svg>
+              Stop sharing
             </span>
           </button>
-          <button id="recordBtn" title="Start recording (R)"
-            class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-blue-400 dark:disabled:bg-blue-800"
-            disabled>
-            <svg class="w-5 h-5">
-              <use href="./icons.svg#icon-record"></use>
-            </svg>
-            <span id="recordBtnText">Start Recording</span>
+
+          <button id="recordBtn" type="button" title="Start recording (R)" class="btn btn--primary" disabled>
+            <svg class="h-5 w-5"><use href="./icons.svg#icon-record"></use></svg>
+            <span id="recordBtnText">Record</span>
           </button>
-          <button id="stopBtn" title="Stop recording (S)"
-            class="w-full bg-red-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-red-400 dark:disabled:bg-red-800"
-            disabled>
-            <svg class="w-5 h-5">
-              <use href="./icons.svg#icon-stop-record"></use>
-            </svg>
-            Stop Recording
+
+          <button id="stopBtn" type="button" title="Stop recording (S)" class="btn btn--live" disabled>
+            <svg class="h-5 w-5"><use href="./icons.svg#icon-stop-record"></use></svg>
+            Stop
           </button>
-          <button id="screenshotBtn" title="Capture the current frame as a PNG (Shift+S)"
-            class="w-full bg-teal-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-teal-400 dark:disabled:bg-teal-800"
-            disabled>
-            <svg class="w-5 h-5">
-              <use href="./icons.svg#icon-screenshot"></use>
-            </svg>
+
+          <button id="screenshotBtn" type="button" title="Capture the current frame as a PNG (Shift+S)"
+            class="btn btn--outline" disabled>
+            <svg class="h-5 w-5"><use href="./icons.svg#icon-screenshot"></use></svg>
             Screenshot
           </button>
         </div>
-        <!-- Every recording and screenshot lands here, so a take is never
-             lost by making the next one. -->
-        <section class="mt-6">
-          <div class="flex items-center justify-between gap-3">
-            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Takes <span id="takeCount"
-                class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400"></span>
-            </h2>
-            <div class="flex items-center gap-2">
-              <button id="downloadAllBtn" type="button" disabled
-                title="Download every take"
-                class="text-sm bg-green-600 text-white font-semibold py-1.5 px-3 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-green-400 dark:disabled:bg-green-900 transition-colors">
-                Download all
-              </button>
-              <button id="clearTakesBtn" type="button" disabled
-                title="Remove every take from the gallery"
-                class="text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 py-1.5 px-2 transition-colors">
-                Clear
-              </button>
-            </div>
-          </div>
+      </div>
 
-          <div id="takeList" class="mt-2"></div>
+      <div id="error" class="error hidden"></div>
 
-          <p id="takesEmpty"
-            class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            No takes yet. Recordings and screenshots will show up here.
-          </p>
-        </section>
-      </main>
+      <!-- Every recording and screenshot lands here, so a take is never lost by
+           making the next one. -->
+      <section id="takesRoot" class="takes">
+        <div class="takes-head">
+          <h2>Takes</h2>
+          <span id="takeCount" class="count"></span>
+          <div class="spacer"></div>
+          <button id="downloadAllBtn" type="button" disabled title="Download every take" class="btn btn--quiet">
+            Download all
+          </button>
+          <button id="clearTakesBtn" type="button" disabled title="Remove every take from the gallery" class="btn btn--quiet">
+            Clear
+          </button>
+        </div>
+
+        <div id="takeList"></div>
+
+        <p id="takesEmpty" class="takes-empty">
+          No takes yet. Recordings and screenshots will show up here.
+        </p>
+      </section>
     </div>
-  </div>
 
-  <!--
-    Update banner. Hidden until a service worker is sitting in `waiting`.
+    <!-- Settings drawer. Everything set-once lives here; the chip on the session
+         bar shows the current values so nothing is hidden that is needed at a
+         glance. -->
+    <div id="settingsScrim" class="scrim"></div>
+    <aside id="settingsDrawer" class="drawer" role="dialog" aria-label="Recording settings" aria-hidden="true">
+      <div class="drawer-head">
+        <strong>Recording settings</strong>
+        <button id="closeSettings" type="button" class="icon-btn" aria-label="Close settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
 
-    This never reloads by itself. Takes live in memory as blob URLs, so a
-    reload destroys an in-flight recording and any take not yet downloaded -
-    the one thing an update must not do. The user picks the moment.
-  -->
-  <div id="updateBanner" hidden
-    class="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-white shadow-2xl">
-    <span class="text-sm font-medium">A new version is ready.</span>
-    <button id="updateReloadBtn" type="button"
-      class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-indigo-700">
-      Refresh
-    </button>
-    <button id="updateDismissBtn" type="button"
-      class="px-1 text-sm text-gray-300 transition-colors hover:text-white">
-      Later
-    </button>
-  </div>
+      <div class="group">
+        <h2>Video</h2>
+        <div class="field">
+          <label for="formatSelect">Video &amp; audio codec</label>
+          <select id="formatSelect"></select>
+          <p class="hint">
+            The container follows from the codec. AV1 is smallest; H.264 plays everywhere.
+          </p>
+        </div>
 
-  <script src="./index.js"></script>
-</body>
+        <!-- Capture quality. Resolution and frame rate live in the track, so
+             they can only change at share time; the bitrate is an encoder
+             setting and stays live between takes. -->
+        <div class="row3">
+          <div class="field">
+            <label for="resolutionSelect">Resolution</label>
+            <select id="resolutionSelect" title="Capture resolution. Source keeps the window at its own size."></select>
+          </div>
+          <div class="field">
+            <label for="frameRateSelect">Frame rate</label>
+            <select id="frameRateSelect" title="Capture frame rate. Source keeps the window's own rate."></select>
+          </div>
+          <div class="field">
+            <label for="bitrateSelect">Bitrate</label>
+            <select id="bitrateSelect" title="Video bitrate. Applies to the next take without re-sharing."></select>
+          </div>
+        </div>
+      </div>
 
+      <div class="group">
+        <h2>Capture</h2>
+        <div class="field">
+          <label for="countdownSelect">Countdown</label>
+          <select id="countdownSelect" class="short"
+            title="Count down before capturing starts. Press Escape or Record again to cancel.">
+            <option value="0" selected>Off</option>
+            <option value="3">3 seconds</option>
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+          </select>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="lab">Crop to a region</div>
+            <div class="sub">Drag a box over the preview</div>
+          </div>
+          <div class="spacer"></div>
+          <input type="checkbox" id="cropCheckbox" class="switch" disabled />
+        </div>
+      </div>
+
+      <!-- Microphone conditioning. Collapsed by default: the three defaults suit
+           a typical room, and almost nobody changes them. -->
+      <button id="advToggle" type="button" class="adv-toggle" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+        Microphone processing
+      </button>
+      <div class="adv-body">
+        <div class="note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v5M12 16h.01" />
+          </svg>
+          <span>
+            These apply to the <strong>microphone track only</strong>. System audio
+            is captured as-is and is never processed.
+          </span>
+        </div>
+
+        <div class="toggle-row">
+          <div class="lab">Noise suppression</div>
+          <div class="spacer"></div>
+          <input id="micNoiseSuppression" type="checkbox" class="switch" checked />
+        </div>
+        <div class="toggle-row">
+          <div class="lab">Echo cancellation</div>
+          <div class="spacer"></div>
+          <input id="micEchoCancellation" type="checkbox" class="switch" checked />
+        </div>
+        <div class="toggle-row">
+          <div class="lab">Auto gain</div>
+          <div class="spacer"></div>
+          <input id="micAutoGain" type="checkbox" class="switch" checked />
+        </div>
+      </div>
+    </aside>
+
+    <!--
+      Update banner. Hidden until a service worker is sitting in `waiting`.
+
+      This never reloads by itself. Takes live in memory as blob URLs, so a
+      reload destroys an in-flight recording and any take not yet downloaded -
+      the one thing an update must not do. The user picks the moment.
+    -->
+    <div id="updateBanner" hidden class="update-banner">
+      <span>A new version is ready.</span>
+      <button id="updateReloadBtn" type="button" class="btn btn--primary btn--sm">Refresh</button>
+      <button id="updateDismissBtn" type="button" class="btn btn--quiet btn--sm">Later</button>
+    </div>
+
+    <script src="./index.js"></script>
+  </body>
 </html>
