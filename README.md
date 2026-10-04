@@ -118,7 +118,16 @@ A few things worth knowing if you are changing this code:
   `<link>` tags.
 - **The preview container starts at `aspect-video` (16:9)** purely as an
   empty-state placeholder. Once a stream is live, `syncPreviewAspect()` overrides
-  it with the track's real aspect ratio, and resets it when sharing stops.
+  it with the shared surface's real aspect ratio, and resets it when sharing
+  stops. It reads the `<video>` element's decoded frame size rather than
+  `MediaTrack.getSettings()`, because the two can disagree and the element is
+  what `object-contain` actually fits — matching it is what keeps the preview
+  free of letterbox bars. The sync runs off the element's `resize` event, so it
+  follows the recorded window as it is resized.
+- **The preview is height-capped** (`max-height: min(500px, 56vh)` in
+  `dist/styles.css`) so a tall shared surface shrinks in width instead of
+  pushing the controls below it down. CSS derives the width from the aspect
+  ratio and `margin-inline: auto` centres it.
 - **The cropper's `canvas` fallback** converts crop-box coordinates to source
   pixels by scaling against the rendered `<video>` box. That is only correct when
   the container matches the frame — which is why the aspect-ratio sync matters
