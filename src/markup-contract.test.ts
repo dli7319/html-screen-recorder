@@ -85,4 +85,37 @@ describe('markup contract', () => {
       'document-rooted tag selectors couple boot to the layout'
     ).toEqual([]);
   });
+
+  it('keeps .hidden authoritative over any display rule', () => {
+    // Tailwind defines `.hidden` inside `@layer utilities`, and a layered rule
+    // loses to any unlayered rule of equal specificity regardless of source
+    // order. Every `display` in styles.css therefore overrode it, and the 3-2-1
+    // countdown overlay stayed painted over the preview at 50% black while
+    // carrying `class="hidden"` - a permanent dark scrim before any capture.
+    //
+    // The unlayered `!important` rule in styles.css is what restores the
+    // contract. This asserts it survived the Tailwind 4 migration, which is
+    // exactly how it was lost once already.
+    const styles = readFileSync(join(ROOT, 'dist', 'styles.css'), 'utf8');
+    const hiddenRule = /(^|\n)\s*\.hidden\s*\{([^}]*)\}/.exec(styles);
+    expect(hiddenRule, 'styles.css must define a .hidden rule').toBeTruthy();
+    expect(
+      /display\s*:\s*none\s*!important/.test(hiddenRule?.[2] ?? ''),
+      '.hidden must be display:none !important, or unlayered display rules win'
+    ).toBe(true);
+    // styles.css must stay unlayered: a rule of ours inside an @layer would
+    // lose to Tailwind's unlayered reset, and the trap re-arms from the other
+    // direction.
+    //
+    // Comments are stripped before looking, because the explanation above this
+    // rule discusses the cascade layer by name. That has now happened three
+    // times - a guard matching the prose that documents the very bug it guards.
+    const stylesCode = styles
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|\s)\/\/.*$/gm, '$1');
+    expect(
+      /@layer/.test(stylesCode),
+      'styles.css must not declare @layer blocks'
+    ).toBe(false);
+  });
 });

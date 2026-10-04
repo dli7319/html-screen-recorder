@@ -504,7 +504,29 @@ kbd {
     outline-offset: 2px;
 }
 
-/* ---------- preview stage ---------- */
+/*
+   Restores the `.hidden` contract.
+
+   Tailwind's hidden utility lives in the utilities cascade layer and is
+   declared as `display: none` with no `!important`. A layered rule loses to ANY
+   unlayered rule of equal specificity - source order does not help, so this
+   file cannot rely on loading after the utility bundle. Every `display`
+   declared here therefore silently overrode it.
+
+   The 3-2-1 countdown overlay is what bit: it sets `display: flex`, so the
+   overlay stayed painted over the preview at 50% black while carrying the
+   hidden class - a permanent dark scrim over everything shown before a
+   capture.
+
+   Keeping this rule unlayered and `!important` means a `display` anywhere in
+   this file can never resurrect an element meant to be hidden. The Tailwind 4
+   migration is what dropped this once already.
+*/
+.hidden {
+    display: none !important;
+}
+
+/* ---------- stage: preview, overlays, takes ---------- */
 
 .stage {
     flex: 1;
