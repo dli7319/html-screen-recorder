@@ -61,10 +61,15 @@
             <div class="space-y-3">
               <!-- System Audio Row -->
               <div class="flex flex-col space-y-1">
-                <div class="flex items-center">
+                <div class="flex items-center gap-2">
                   <input id="systemAudioToggle" type="checkbox"
                     class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
-                  <label for="systemAudioToggle" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">System Audio</label>
+                  <label for="systemAudioToggle" class="block text-sm text-gray-900 dark:text-gray-300">System Audio</label>
+                  <input id="systemVolume" type="range" min="0" max="100" value="100"
+                    title="System audio level in the recording"
+                    class="flex-1 min-w-0 h-1.5 accent-indigo-600" />
+                  <span id="systemVolumeValue"
+                    class="w-9 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">100%</span>
                 </div>
                 <!-- Visualizer -->
                 <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
@@ -74,29 +79,69 @@
 
               <!-- Microphone Row -->
               <div class="flex flex-col space-y-1">
-                <div class="flex items-center">
+                <div class="flex items-center gap-2">
                   <input id="micAudioToggle" type="checkbox"
                     class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                  <label for="micAudioToggle" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Microphone</label>
+                  <label for="micAudioToggle" class="block text-sm text-gray-900 dark:text-gray-300">Microphone</label>
+                  <input id="micVolume" type="range" min="0" max="100" value="100"
+                    title="Microphone level in the recording"
+                    class="flex-1 min-w-0 h-1.5 accent-indigo-600" />
+                  <span id="micVolumeValue"
+                    class="w-9 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">100%</span>
                 </div>
                 <!-- Visualizer -->
                 <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
                   <div id="micAudioVisualizer" class="bg-indigo-500 h-full w-0 transition-all duration-75 ease-out"></div>
+                </div>
+                <!-- Microphone conditioning. All on by default: they suit a
+                     typical room, and a browser with them off tends to record
+                     keyboard noise and room echo. -->
+                <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                    <input id="micNoiseSuppression" type="checkbox"
+                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
+                    <span class="ml-1">Noise suppression</span>
+                  </label>
+                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                    <input id="micEchoCancellation" type="checkbox"
+                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
+                    <span class="ml-1">Echo cancellation</span>
+                  </label>
+                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                    <input id="micAutoGain" type="checkbox"
+                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
+                    <span class="ml-1">Auto gain</span>
+                  </label>
                 </div>
               </div>
             </div>
           </div>
           <!-- End Updated Audio Controls -->
         </div>
+        <p class="mt-4 text-center text-xs text-gray-500 dark:text-gray-400">
+          Shortcuts:
+          <kbd>R</kbd> record &middot; <kbd>P</kbd> pause &middot;
+          <kbd>S</kbd> stop &middot; <kbd>&#8679;S</kbd> screenshot
+        </p>
+
         <div class="mt-4 flex items-center justify-center">
           <input type="checkbox" id="cropCheckbox"
             class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" disabled />
           <label for="cropCheckbox" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Enable Cropping</label>
         </div>
 
-        <div id="status" class="mt-4 flex items-center justify-center gap-2 text-gray-600 dark:text-gray-300 hidden">
-          <div class="status-dot"></div>
+        <div id="status" class="mt-4 flex items-center justify-center gap-3 text-gray-600 dark:text-gray-300 hidden">
+          <div id="statusDot" class="status-dot"></div>
           <span id="statusText" class="font-medium text-sm">Recording...</span>
+          <span id="statsText"
+            class="text-sm tabular-nums text-gray-500 dark:text-gray-400"></span>
+          <button id="pauseBtn" title="Pause recording (P)"
+            class="bg-amber-500 text-white text-sm font-semibold py-1.5 px-4 rounded-md shadow-sm hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-400 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center gap-1.5">
+            <svg class="w-4 h-4">
+              <use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use>
+            </svg>
+            <span id="pauseBtnText">Pause</span>
+          </button>
         </div>
         <div id="error" class="mt-4 text-center text-red-500 font-medium hidden"></div>
 
@@ -116,7 +161,7 @@
               Stop Sharing
             </span>
           </button>
-          <button id="recordBtn"
+          <button id="recordBtn" title="Start recording (R)"
             class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-blue-400 dark:disabled:bg-blue-800"
             disabled>
             <svg class="w-5 h-5">
@@ -124,7 +169,7 @@
             </svg>
             <span id="recordBtnText">Start Recording</span>
           </button>
-          <button id="stopBtn"
+          <button id="stopBtn" title="Stop recording (S)"
             class="w-full bg-red-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center justify-center gap-2 disabled:bg-red-400 dark:disabled:bg-red-800"
             disabled>
             <svg class="w-5 h-5">
