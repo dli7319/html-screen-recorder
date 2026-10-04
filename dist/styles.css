@@ -526,6 +526,19 @@ kbd {
     margin-inline: auto;
 }
 
+/*
+   Neutral when empty. A filled, framed box with nothing in it is the heaviest
+   object on the page for no reason - it announces "content here" before any
+   content exists. Dropping the fill and switching to a dashed hairline keeps
+   the area legible as a preview target while matching the empty Takes state,
+   which is dashed for the same reason. The solid frame returns the moment
+   there is something to frame.
+*/
+.stage-inner:has(> .placeholder:not(.hidden)) {
+    background: transparent;
+    border-style: dashed;
+}
+
 /* Height cap is load-bearing: a tall shared surface must not push the controls
    below it off screen. The aspect ratio is set inline from the shared surface
    and the width shrinks to match, so the preview never distorts. */
@@ -539,6 +552,16 @@ kbd {
     object-fit: contain;
 }
 
+/*
+   Neutral by design: no card, no border, no shadow, no filled glyph tile. The
+   empty state is the most-looked-at surface in the app before anything happens
+   and it must not add visual weight.
+
+   Contrast is load-bearing here. --ink-disabled is only ~3.8:1 against the
+   dark surface, and these two lines are instructions, not decoration - so they
+   use --ink-muted (~6:1 dark, ~7:1 light). Hierarchy comes from size and
+   weight instead of from making the text harder to read.
+*/
 .placeholder {
     position: absolute;
     inset: 0;
@@ -548,38 +571,51 @@ kbd {
     justify-content: center;
     text-align: center;
     padding: 24px;
+    gap: 6px;
     color: var(--ink-muted);
 }
 
 .placeholder .glyph {
-    width: 52px;
-    height: 52px;
-    border-radius: 13px;
-    display: grid;
-    place-items: center;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--border-strong);
-    margin-bottom: 15px;
-    box-shadow: var(--elev-1);
-}
-
-.placeholder .glyph svg {
-    width: 22px;
-    height: 22px;
+    width: 40px;
+    height: 40px;
+    color: var(--ink-muted);
+    margin-bottom: 10px;
+    flex: none;
 }
 
 .placeholder .hint-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--ink);
-    margin: 0 0 5px;
+    margin: 0;
 }
 
 .placeholder .hint-sub {
-    font-size: 13px;
-    margin: 0;
+    font-size: 12.5px;
+    margin: 0 0 14px;
     color: var(--ink-muted);
+    max-width: 42ch;
+}
+
+.placeholder .btn {
+    flex: none;
+}
+
+/* Shrinks rather than overflowing on narrow and short viewports. */
+@media (max-width: 560px), (max-height: 520px) {
+    .placeholder .glyph {
+        width: 30px;
+        height: 30px;
+        margin-bottom: 6px;
+    }
+
+    .placeholder .hint-title {
+        font-size: 13px;
+    }
+
+    .placeholder .hint-sub {
+        margin-bottom: 10px;
+    }
 }
 
 .pip-btn {
