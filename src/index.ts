@@ -2,6 +2,9 @@ import { ShareResult, shareScreen } from './screen-share';
 import { Recorder } from './recorder';
 import { Cropper } from './cropper';
 import { FORMATS_TO_CHECK } from './constants';
+import { timestampFilename } from './filename';
+import { bindShortcuts } from './shortcuts';
+import { captureFrame, downloadBlob } from './screenshot';
 import { Stopwatch } from './stopwatch';
 import { fixWebmDuration } from './webm-duration';
 import { UIManager } from './ui-manager';
@@ -46,6 +49,28 @@ ui.bindEvents({
   onCropToggle: toggleCropping,
   onPause: togglePause,
 });
+
+// R / P / S / Shift+S drive the same actions as the buttons.
+bindShortcuts({
+  onRecord: () => {
+    if (!recorder.isActive()) startRecording();
+  },
+  onPause: togglePause,
+  onStop: () => {
+    if (recorder.isActive()) stopRecording();
+  },
+  onScreenshot: captureScreenshot,
+});
+
+/**
+ * Save the preview's current frame as a PNG. Silent when there is nothing to
+ * capture - a shortcut should never throw up an error banner mid-take.
+ */
+async function captureScreenshot() {
+  const blob = await captureFrame(ui.videoPreview);
+  if (!blob) return;
+  downloadBlob(blob, timestampFilename('png'));
+}
 
 /**
  * Pause/resume the in-flight capture. The stopwatch is paused alongside the
@@ -163,12 +188,7 @@ async function onRecordingStop(blob: Blob, ext: string) {
 
   const fixedBlob = await fixWebmDuration(blob, durationMs);
 
-  const now = new Date();
-  const timestamp = now
-    .toISOString()
-    .replace(/[-:T.]/g, '')
-    .slice(0, 14);
-  const filename = `${timestamp}.${ext}`;
+  const filename = timestampFilename(ext);
   const url = URL.createObjectURL(fixedBlob);
 
   ui.setDownloadLink(url, filename);
