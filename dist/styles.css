@@ -759,10 +759,18 @@ kbd {
     height: 1px;
 }
 
+/*
+   Square with rounded corners and a checkmark, NOT a filled dot in a circle.
+
+   A dot inside a ring is a radio button, and radio buttons mean "pick exactly
+   one of these". These are independent: system audio and microphone can both
+   be on, or either alone. The shape has to say "independent on/off", so this
+   is a checkbox.
+*/
 .source .sw {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
     border: 1.5px solid var(--border-strong);
     display: grid;
     place-items: center;
@@ -776,10 +784,11 @@ kbd {
 
 .source:has(input:checked) .sw::after {
     content: '';
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #fff;
+    width: 8px;
+    height: 4.5px;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: rotate(-45deg) translate(1px, -1px);
 }
 
 .source .level {
@@ -805,25 +814,33 @@ kbd {
 }
 
 /*
-   Live activity, as a hairline along the bottom of the channel. The slider is
-   the level you set; this is the level the source is actually producing, so
-   the two answer different questions and can share the same control.
+   Level meter. It was briefly a 2px hairline along the bottom of the pill,
+   which was a mistake: it looked like decoration and answered nothing. The
+   meter is the difference between "the mic is muted" and "the mic is broken",
+   so it sits directly under the fader as a readable bar - set level above,
+   actual level below, the way a mixer channel shows them.
 */
+.strip {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: none;
+}
+
 .meter {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 3px;
-    height: 2px;
+    width: 100%;
+    height: 4px;
     border-radius: 2px;
-    background: rgba(0, 0, 0, 0.08);
+    /* The track has to be visible at zero level, otherwise the meter reads as
+       absent exactly when it is telling you the source is silent. */
+    background: var(--border-strong);
     overflow: hidden;
     pointer-events: none;
     transition: opacity 0.15s ease;
 }
 
 .source:not(:has(input:checked)) .meter {
-    opacity: 0;
+    opacity: 0.35;
 }
 
 .meter i {
@@ -929,6 +946,12 @@ kbd {
     color: var(--ink);
 }
 
+/* An empty count is not a count of zero - it is the badge before anything
+   exists. It rendered as a small empty rectangle beside "Takes". */
+.takes-head .count:empty {
+    display: none;
+}
+
 .takes-head .count {
     font-size: 11px;
     font-weight: 500;
@@ -1013,6 +1036,20 @@ kbd {
     margin-bottom: 24px;
 }
 
+/* The last field's own spacing stacked on the group's, opening a wide gap
+   above the next section title. */
+.group .field:last-child,
+.group .row3:last-child {
+    margin-bottom: 0;
+}
+
+/* Pause is a recording-time control. At rest it is disabled, and a disabled
+   circle sitting in the header reads as a broken button. Hiding it is clearer
+   than dimming it - the control appears when it can actually be used. */
+.icon-btn[disabled] {
+    display: none;
+}
+
 .field {
     display: flex;
     flex-direction: column;
@@ -1033,9 +1070,13 @@ kbd {
     line-height: 1.5;
 }
 
+/*
+   The chevron is the browser's, drawn inside the right padding. At 32px it
+   sat hard against the control's edge and read as clipped.
+*/
 .drawer select {
     height: 36px;
-    padding: 0 32px 0 11px;
+    padding: 0 38px 0 12px;
     font: 500 13.5px var(--font);
     color: var(--ink);
     background: var(--surface);
@@ -1059,7 +1100,7 @@ kbd {
    preset text ("Source") clips. The values are short and never wrap, so give
    the arrow less room and step the type down slightly. */
 .row3 .field select {
-    padding: 0 22px 0 9px;
+    padding: 0 28px 0 9px;
     font-size: 12.5px;
 }
 
