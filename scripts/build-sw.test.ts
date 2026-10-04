@@ -152,7 +152,7 @@ describe('SHELL', () => {
       'styles.css',
       'tailwind.css',
       'manifest.json',
-      'fonts/inter-latin.woff2',
+      'fonts/roboto-latin.woff2',
       'icons/icon-512.png',
     ]) {
       expect(SHELL, required).toContain(required);
