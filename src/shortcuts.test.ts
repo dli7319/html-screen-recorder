@@ -44,11 +44,29 @@ describe('matchShortcut', () => {
 
   it('ignores keys that are not shortcuts', () => {
     expect(matchShortcut(key('a'))).toBeNull();
-    expect(matchShortcut(key('Escape'))).toBeNull();
     expect(matchShortcut(key('Enter'))).toBeNull();
     expect(matchShortcut(key('ArrowLeft'))).toBeNull();
     expect(matchShortcut(key('F5'))).toBeNull();
     expect(matchShortcut(key(''))).toBeNull();
+  });
+
+  it('maps Escape to cancel', () => {
+    expect(matchShortcut(key('Escape'))).toBe('cancel');
+    expect(matchShortcut(key('Escape', { shiftKey: true }))).toBe('cancel');
+  });
+
+  it('lets Escape cancel from inside a field, unlike the others', () => {
+    // Escape aborts something in progress, so it cannot be swallowed by a
+    // focused input the way a recording shortcut must be.
+    const input = document.createElement('input');
+
+    expect(matchShortcut(key('Escape', { target: input }))).toBe('cancel');
+    expect(matchShortcut(key('r', { target: input }))).toBeNull();
+  });
+
+  it('leaves modifier chords to the platform', () => {
+    expect(matchShortcut(key('Escape', { metaKey: true }))).toBeNull();
+    expect(matchShortcut(key('Escape', { ctrlKey: true }))).toBeNull();
   });
 
   it('never fires while the user is typing', () => {

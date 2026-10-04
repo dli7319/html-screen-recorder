@@ -6,6 +6,7 @@ import { timestampFilename } from './filename';
 import { formatBytes, formatDuration } from './format';
 import { bindShortcuts } from './shortcuts';
 import { captureFrame, downloadBlob } from './screenshot';
+import { CountdownHandle, runCountdown } from './countdown';
 import { Stopwatch } from './stopwatch';
 import { fixWebmDuration } from './webm-duration';
 import { UIManager } from './ui-manager';
@@ -40,6 +41,13 @@ let visualizationAnimationFrame: number | null = null;
  * builds a fresh audio graph.
  */
 let currentGains: { system?: GainNode; mic?: GainNode } = {};
+
+/**
+ * The countdown in flight, if any. Kept at module level so the button and the
+ * Escape key can both reach it and so a new capture cannot start underneath
+ * one that is still counting.
+ */
+let activeCountdown: CountdownHandle | null = null;
 
 function applyVolume(source: 'system' | 'mic') {
   const gain = source === 'system' ? currentGains.system : currentGains.mic;
@@ -79,7 +87,7 @@ ui.bindEvents({
     if (stream) stopSharing();
     else handleShareScreen();
   },
-  onRecord: startRecording,
+  onRecord: toggleRecord,
   onStop: stopRecording,
   onCropToggle: toggleCropping,
   onPause: togglePause,
@@ -87,15 +95,32 @@ ui.bindEvents({
 
 // R / P / S / Shift+S drive the same actions as the buttons.
 bindShortcuts({
-  onRecord: () => {
-    if (!recorder.isActive()) startRecording();
-  },
+  onRecord: toggleRecord,
   onPause: togglePause,
   onStop: () => {
     if (recorder.isActive()) stopRecording();
   },
   onScreenshot: captureScreenshot,
+  onCancel: cancelCountdown,
 });
+
+/**
+ * The Record button does two jobs: it starts a take, and it aborts a countdown
+ * that is already running. Having one control that reverses itself keeps there
+ * from being a second button that only exists for a few seconds.
+ */
+function toggleRecord() {
+  if (activeCountdown) {
+    cancelCountdown();
+    return;
+  }
+  if (recorder.isActive()) return;
+  startRecording();
+}
+
+function cancelCountdown() {
+  activeCountdown?.cancel();
+}
 
 /**
  * Save the preview's current frame as a PNG. Silent when there is nothing to
@@ -195,12 +220,50 @@ function syncPreviewAspect() {
   if (w && h) ui.setPreviewAspect(w, h);
 }
 
-async function startRecording() {
+/**
+ * Begin a take: count down first if one is configured, then capture.
+ *
+ * The countdown runs before any capture setup so nothing is recorded during
+ * it - the stopwatch in particular must not start until the take actually
+ * does, or the reported length would include the countdown.
+ */
+function startRecording() {
   if (!stream) {
     ui.showError('Please share your screen first.');
     return;
   }
   ui.hideError();
+
+  const seconds = settings.getCountdownSeconds();
+  if (seconds <= 0) {
+    startCapture();
+    return;
+  }
+
+  ui.setCountdownState(true);
+  activeCountdown = runCountdown({
+    seconds,
+    onTick: (remaining) => ui.showCountdown(remaining),
+    onDone: () => {
+      activeCountdown = null;
+      ui.setCountdownState(false);
+      ui.hideCountdown();
+      startCapture();
+    },
+    onCancel: () => {
+      activeCountdown = null;
+      ui.setCountdownState(false);
+      ui.hideCountdown();
+    },
+  });
+}
+
+/** Start capturing now. Called once the countdown has finished, or at once. */
+async function startCapture() {
+  // Re-checked rather than trusted from startRecording: sharing can be stopped
+  // while the countdown runs, and starting a capture on a dead stream would
+  // fail somewhere far less obvious than here.
+  if (!stream) return;
 
   const format = settings.getFormat();
   let streamToRecord = stream;
@@ -264,6 +327,7 @@ async function stopRecording() {
 }
 
 async function stopSharing() {
+  cancelCountdown();
   await cropper.stopCrop(stream);
   if (recorder.isActive()) {
     recorder.stop();

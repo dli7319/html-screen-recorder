@@ -44,6 +44,12 @@ export class UIManager {
     'pauseBtnIcon'
   ) as Element | null;
   private statsText = document.getElementById('statsText') as HTMLSpanElement;
+  private countdownOverlay = document.getElementById(
+    'countdownOverlay'
+  ) as HTMLDivElement;
+  private countdownNumber = document.getElementById(
+    'countdownNumber'
+  ) as HTMLSpanElement;
   private errorDiv = document.getElementById('error') as HTMLDivElement;
   public cropCheckbox = document.getElementById(
     'cropCheckbox'
@@ -188,6 +194,34 @@ export class UIManager {
 
   updateStopwatch(text: string) {
     this.recordBtnText.textContent = text;
+  }
+
+  /**
+   * Present the countdown.
+   *
+   * The Record button stays armed and reads "Cancel", so the countdown can be
+   * called off from the control that started it rather than hunting for an
+   * escape hatch.
+   */
+  setCountdownState(active: boolean) {
+    this.countdownOverlay.classList.toggle('hidden', !active);
+    if (active) {
+      this.recordBtn.disabled = false;
+      this.recordBtnText.textContent = 'Cancel';
+      this.recordBtn.title = 'Cancel the countdown (Esc)';
+    } else {
+      this.countdownNumber.textContent = '';
+      this.recordBtn.title = 'Start Recording (R)';
+    }
+  }
+
+  showCountdown(remaining: number) {
+    this.countdownNumber.textContent = String(remaining);
+  }
+
+  hideCountdown() {
+    this.countdownOverlay.classList.add('hidden');
+    this.countdownNumber.textContent = '';
   }
 
   toggleCropping(show: boolean) {

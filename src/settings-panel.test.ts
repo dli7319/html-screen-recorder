@@ -13,6 +13,11 @@ function renderSettings(): SettingsPanel {
     <select id="frameRateSelect"></select>
     <select id="bitrateSelect"></select>
     <p id="qualitySummary"></p>
+    <select id="countdownSelect">
+      <option value="0">Off</option>
+      <option value="3" selected>3 seconds</option>
+      <option value="5">5 seconds</option>
+    </select>
     <input type="checkbox" id="systemAudioToggle" />
     <input type="checkbox" id="micAudioToggle" />
     <input type="checkbox" id="micNoiseSuppression" checked />
@@ -162,6 +167,34 @@ describe('SettingsPanel quality settings', () => {
 
     const select = $('resolutionSelect') as HTMLSelectElement;
     expect(select.options.length).toBe(4);
+  });
+});
+
+describe('SettingsPanel countdown', () => {
+  it('defaults to three seconds', () => {
+    expect(renderSettings().getCountdownSeconds()).toBe(3);
+  });
+
+  it('reads the chosen length', () => {
+    const settings = renderSettings();
+    ($('countdownSelect') as HTMLSelectElement).value = '5';
+
+    expect(settings.getCountdownSeconds()).toBe(5);
+  });
+
+  it('reports zero for the Off setting', () => {
+    const settings = renderSettings();
+    ($('countdownSelect') as HTMLSelectElement).value = '0';
+
+    expect(settings.getCountdownSeconds()).toBe(0);
+  });
+
+  it('stays live while sharing', () => {
+    // It governs the next take, not the shared stream - exactly like bitrate.
+    const settings = renderSettings();
+    settings.setLocked(true);
+
+    expect(($('countdownSelect') as HTMLSelectElement).disabled).toBe(false);
   });
 });
 

@@ -35,6 +35,9 @@ function renderUI(): UIManager {
       </button>
     </div>
     <div id="error" class="hidden"></div>
+    <div id="countdownOverlay" class="hidden">
+      <span id="countdownNumber"></span>
+    </div>
     <div id="systemAudioVisualizer"></div>
     <div id="micAudioVisualizer"></div>
   `;
@@ -288,6 +291,42 @@ describe('UIManager.toggleCropping', () => {
     ui.toggleCropping(false);
     expect($('cropContainer').classList.contains('hidden')).toBe(true);
     expect($('cropTargetElement').classList.contains('hidden')).toBe(true);
+  });
+});
+
+describe('UIManager countdown presentation', () => {
+  it('shows the overlay and offers a way out', () => {
+    const ui = renderUI();
+    ui.setCountdownState(true);
+
+    expect($('countdownOverlay').classList.contains('hidden')).toBe(false);
+    expect($('recordBtnText').textContent).toBe('Cancel');
+    expect(($('recordBtn') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('renders the number being counted', () => {
+    const ui = renderUI();
+    ui.setCountdownState(true);
+    ui.showCountdown(3);
+
+    expect($('countdownNumber').textContent).toBe('3');
+  });
+
+  it('clears the overlay and restores the label when it ends', () => {
+    const ui = renderUI();
+    ui.setCountdownState(true);
+    ui.showCountdown(2);
+    ui.setCountdownState(false);
+    ui.hideCountdown();
+
+    expect($('countdownOverlay').classList.contains('hidden')).toBe(true);
+    expect($('countdownNumber').textContent).toBe('');
+    expect($('recordBtn').title).toContain('Start Recording');
+  });
+
+  it('is safe to hide when nothing is counting', () => {
+    const ui = renderUI();
+    expect(() => ui.hideCountdown()).not.toThrow();
   });
 });
 
