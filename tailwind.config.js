@@ -3,4 +3,4 @@ export default {
   content: ['./dist/index.html'],
   theme: { extend: {} },
   plugins: [],
-}
+};
