@@ -1,16 +1,17 @@
-name: Build
+name: CI
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
+  checks:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,15 +25,13 @@ jobs:
           cache: 'npm'
 
       - name: 📦 Install Dependencies
-        run: npm install
+        run: npm ci
+
+      - name: 🎨 Check Formatting
+        run: npm run format:check
+
+      - name: 🔍 Lint
+        run: npm run lint
 
       - name: 🛠️ Build
         run: npm run build
-
-      - name: 🚀 Deploy to dist branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          # Set the target branch to 'dist'
-          publish_branch: dist
