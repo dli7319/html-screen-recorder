@@ -10,6 +10,20 @@
        offline mode outright. -->
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./tailwind.css">
+
+  <!-- PWA. Everything is relative because this app is served from a subpath
+       (/html-screen-recorder/), not the origin root: start_url, scope and the
+       service-worker registration all resolve against that directory, and an
+       absolute path here would give the worker a scope it cannot hold.
+       Named .json rather than .webmanifest so the Content-Type is correct on
+       any static host; browsers do not care what the file is called. -->
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Recorder" />
+  <!-- theme-color is per scheme because the body switches between them. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f4f6" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101828" />
 </head>
 
 <body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen transition-colors duration-300">
