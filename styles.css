@@ -2,6 +2,18 @@ body {
     font-family: "Inter", sans-serif;
 }
 
+/* Preview sizing.
+ *
+ * Cap the preview's height so a tall shared surface cannot push the controls
+ * below it off screen. The aspect ratio is set inline from the shared surface,
+ * and CSS shrinks the width to match, so the preview stays centred and never
+ * distorts or letterboxes.
+ */
+#videoContainer {
+    max-height: min(500px, 56vh);
+    margin-inline: auto;
+}
+
 .status-dot {
     width: 12px;
     height: 12px;

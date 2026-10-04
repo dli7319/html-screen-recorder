@@ -457,6 +457,7 @@
 	let audioContext = null;
 	let analysers = null;
 	let visualizationAnimationFrame = null;
+	ui.videoPreview.addEventListener("resize", syncPreviewAspect);
 	window.addEventListener("load", () => {
 		ui.populateFormats(FORMATS_TO_CHECK);
 		if (!window.MediaRecorder) {
@@ -485,9 +486,8 @@
 			await ui.videoPreview.play();
 			ui.setSharingState(true);
 			const [videoTrack] = stream.getVideoTracks();
-			syncPreviewAspect(videoTrack);
+			syncPreviewAspect();
 			videoTrack.addEventListener("ended", stopSharing);
-			videoTrack.addEventListener("resize", () => syncPreviewAspect(videoTrack));
 			visualizeAudio();
 		} catch (err) {
 			console.error("Error sharing screen:", err);
@@ -501,15 +501,21 @@
 		}
 	}
 	/**
-	* Size the preview container to the shared screen's real aspect ratio. The
-	* markup defaults to `aspect-video` (16:9), which crops any screen that is not
-	* 16:9 - so prefer the track's own settings and fall back to the decoded
-	* frame size.
+	* Size the preview container to the shared screen's real aspect ratio.
+	*
+	* This reads the <video> element's own decoded frame size rather than
+	* MediaTrack.getSettings(), because the two can disagree: the element is what
+	* `object-contain` actually fits, so matching it is what keeps the preview
+	* letterbox-free. It is kept in sync from the element's `resize` event, which
+	* fires whenever the shared surface changes shape (e.g. the recorded window is
+	* resized).
+	*
+	* The markup defaults to `aspect-video` (16:9) purely as an empty-state
+	* placeholder.
 	*/
-	function syncPreviewAspect(videoTrack) {
-		const { width, height } = videoTrack.getSettings();
-		const w = width || ui.videoPreview.videoWidth;
-		const h = height || ui.videoPreview.videoHeight;
+	function syncPreviewAspect() {
+		const w = ui.videoPreview.videoWidth;
+		const h = ui.videoPreview.videoHeight;
 		if (w && h) ui.setPreviewAspect(w, h);
 	}
 	async function startRecording() {
