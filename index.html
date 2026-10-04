@@ -5,9 +5,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Simple Screen Recorder</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Inter is self-hosted - see the @font-face in styles.css. A third-party
+       font would both block first paint on a network round trip and break
+       offline mode outright. -->
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./tailwind.css">
+
+  <!-- PWA. Everything is relative because this app is served from a subpath
+       (/html-screen-recorder/), not the origin root: start_url, scope and the
+       service-worker registration all resolve against that directory, and an
+       absolute path here would give the worker a scope it cannot hold.
+       Named .json rather than .webmanifest so the Content-Type is correct on
+       any static host; browsers do not care what the file is called. -->
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Recorder" />
+  <!-- theme-color is per scheme because the body switches between them. -->
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f4f6" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101828" />
 </head>
 
 <body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen transition-colors duration-300">
@@ -277,6 +293,26 @@
         </section>
       </main>
     </div>
+  </div>
+
+  <!--
+    Update banner. Hidden until a service worker is sitting in `waiting`.
+
+    This never reloads by itself. Takes live in memory as blob URLs, so a
+    reload destroys an in-flight recording and any take not yet downloaded -
+    the one thing an update must not do. The user picks the moment.
+  -->
+  <div id="updateBanner" hidden
+    class="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-white shadow-2xl">
+    <span class="text-sm font-medium">A new version is ready.</span>
+    <button id="updateReloadBtn" type="button"
+      class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-indigo-700">
+      Refresh
+    </button>
+    <button id="updateDismissBtn" type="button"
+      class="px-1 text-sm text-gray-300 transition-colors hover:text-white">
+      Later
+    </button>
   </div>
 
   <script src="./index.js"></script>

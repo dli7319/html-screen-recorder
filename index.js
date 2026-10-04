@@ -1455,6 +1455,68 @@
 		return takes.length;
 	}
 	//#endregion
+	//#region src/pwa.ts
+	/**
+	* Activate a waiting worker and run `onceControlled` afterwards.
+	*
+	* The reload is bound to `controllerchange` rather than fired immediately:
+	* `postMessage` is asynchronous, so reloading right away would race the
+	* activation and could serve the old worker again.
+	*/
+	function applyUpdate(container, worker, onceControlled) {
+		container.addEventListener("controllerchange", () => onceControlled(), { once: true });
+		worker.postMessage({ type: "SKIP_WAITING" });
+	}
+	/**
+	* Report a waiting worker to the app, if there is one.
+	*
+	* Returns true when an update was handed over, so callers can distinguish
+	* "already up to date" from "update ready".
+	*/
+	function armUpdate(container, worker, onUpdate, onceControlled) {
+		if (!worker) return false;
+		onUpdate?.(() => applyUpdate(container, worker, onceControlled));
+		return true;
+	}
+	/**
+	* Watch a registration for updates arriving after load.
+	*
+	* A worker that installs while an older one is controlling the page lands in
+	* `waiting`; that is the only moment an update is actionable. An installing
+	* worker with no existing controller is the *first* install, which is not an
+	* update and must not trigger a prompt.
+	*/
+	function observeUpdates(container, registration, onUpdate, onceControlled, isControlled) {
+		registration.addEventListener("updatefound", () => {
+			const installing = registration.installing;
+			if (!installing) return;
+			installing.addEventListener("statechange", () => {
+				if (installing.state !== "installed") return;
+				if (!isControlled) return;
+				armUpdate(container, installing, onUpdate, onceControlled);
+			});
+		});
+	}
+	async function registerServiceWorker(options = {}) {
+		const { onUpdate, scriptUrl = "./sw.js", scope = "./", checkOnFocus = true } = options;
+		if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+		if (typeof window !== "undefined" && !window.isSecureContext) return;
+		const container = navigator.serviceWorker;
+		const onceControlled = () => window.location.reload();
+		try {
+			const registration = await container.register(scriptUrl, {
+				scope,
+				updateViaCache: "none"
+			});
+			const controlled = Boolean(container.controller);
+			armUpdate(container, registration.waiting, onUpdate, onceControlled);
+			observeUpdates(container, registration, onUpdate, onceControlled, controlled);
+			if (checkOnFocus && typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
+				if (document.visibilityState === "visible") registration.update().catch(() => {});
+			});
+		} catch {}
+	}
+	//#endregion
 	//#region src/index.ts
 	const ui = new UIManager();
 	const settings = new SettingsPanel();
@@ -1523,6 +1585,19 @@
 		},
 		onScreenshot: captureScreenshot,
 		onCancel: cancelCountdown
+	});
+	const updateBanner = document.getElementById("updateBanner");
+	const updateReloadBtn = document.getElementById("updateReloadBtn");
+	const updateDismissBtn = document.getElementById("updateDismissBtn");
+	let applyPendingUpdate = null;
+	registerServiceWorker({ onUpdate: (apply) => {
+		applyPendingUpdate = apply;
+		if (updateBanner) updateBanner.hidden = false;
+	} });
+	updateReloadBtn?.addEventListener("click", () => applyPendingUpdate?.());
+	updateDismissBtn?.addEventListener("click", () => {
+		if (updateBanner) updateBanner.hidden = true;
+		applyPendingUpdate = null;
 	});
 	/**
 	* The Record button does two jobs: it starts a take, and it aborts a countdown
