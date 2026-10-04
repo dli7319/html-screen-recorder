@@ -61,10 +61,15 @@
             <div class="space-y-3">
               <!-- System Audio Row -->
               <div class="flex flex-col space-y-1">
-                <div class="flex items-center">
+                <div class="flex items-center gap-2">
                   <input id="systemAudioToggle" type="checkbox"
                     class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
-                  <label for="systemAudioToggle" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">System Audio</label>
+                  <label for="systemAudioToggle" class="block text-sm text-gray-900 dark:text-gray-300">System Audio</label>
+                  <input id="systemVolume" type="range" min="0" max="100" value="100"
+                    title="System audio level in the recording"
+                    class="flex-1 min-w-0 h-1.5 accent-indigo-600" />
+                  <span id="systemVolumeValue"
+                    class="w-9 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">100%</span>
                 </div>
                 <!-- Visualizer -->
                 <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
@@ -74,10 +79,15 @@
 
               <!-- Microphone Row -->
               <div class="flex flex-col space-y-1">
-                <div class="flex items-center">
+                <div class="flex items-center gap-2">
                   <input id="micAudioToggle" type="checkbox"
                     class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                  <label for="micAudioToggle" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Microphone</label>
+                  <label for="micAudioToggle" class="block text-sm text-gray-900 dark:text-gray-300">Microphone</label>
+                  <input id="micVolume" type="range" min="0" max="100" value="100"
+                    title="Microphone level in the recording"
+                    class="flex-1 min-w-0 h-1.5 accent-indigo-600" />
+                  <span id="micVolumeValue"
+                    class="w-9 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">100%</span>
                 </div>
                 <!-- Visualizer -->
                 <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">

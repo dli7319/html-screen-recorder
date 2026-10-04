@@ -36,6 +36,48 @@ function fakeStream(video = true, audio = 0): MediaStream {
 let getUserMedia: ReturnType<typeof vi.fn>;
 let getDisplayMedia: ReturnType<typeof vi.fn>;
 
+/** Records how each node was wired, so the audio graph can be asserted. */
+function node(kind: string) {
+  return {
+    kind,
+    fftSize: 0,
+    gain: { value: 1 },
+    connections: [] as string[],
+    connect(target: { kind: string }) {
+      this.connections.push(target.kind);
+      return target;
+    },
+  };
+}
+
+function makeAudioContext() {
+  const created: ReturnType<typeof node>[] = [];
+  return {
+    created,
+    resume: vi.fn(async () => {}),
+    createMediaStreamDestination: () => {
+      const n = node('destination');
+      created.push(n);
+      return { ...n, stream: fakeStream(false, 1) };
+    },
+    createMediaStreamSource: () => {
+      const n = node('source');
+      created.push(n);
+      return n;
+    },
+    createAnalyser: () => {
+      const n = node('analyser');
+      created.push(n);
+      return n;
+    },
+    createGain: () => {
+      const n = node('gain');
+      created.push(n);
+      return n;
+    },
+  };
+}
+
 beforeEach(() => {
   // No audio tracks: this suite is about the constraints sent to getUserMedia,
   // and any real audio track would make shareScreen build an AudioContext,
@@ -135,6 +177,60 @@ describe('shareScreen display constraints', () => {
     await expect(shareScreen(false, mic({ enabled: true }))).rejects.toThrow(
       /Could not access microphone/
     );
+  });
+});
+
+describe('shareScreen gain graph', () => {
+  it('gives each source its own gain', async () => {
+    // Both a system track and a microphone, so both paths are built. The
+    // navigator stub captured the mocks in beforeEach, so they are retargeted
+    // through mockResolvedValue rather than reassigned.
+    getDisplayMedia.mockResolvedValue(fakeStream(true, 1));
+    getUserMedia.mockResolvedValue(fakeStream(false, 1));
+    const ctx = makeAudioContext();
+    vi.stubGlobal('AudioContext', function () {
+      return ctx;
+    });
+
+    const result = await shareScreen(true, mic({ enabled: true }));
+
+    expect(result.gains.system).toBeDefined();
+    expect(result.gains.mic).toBeDefined();
+  });
+
+  it('leaves the gains undefined when there is no audio at all', async () => {
+    const ctx = makeAudioContext();
+    vi.stubGlobal('AudioContext', function () {
+      return ctx;
+    });
+
+    const result = await shareScreen(false, mic());
+
+    expect(result.gains).toEqual({});
+    expect(result.audioContext).toBeUndefined();
+  });
+
+  it('meters the raw input but puts the gain only on the recorded path', async () => {
+    getDisplayMedia.mockResolvedValue(fakeStream(true, 1));
+    getUserMedia.mockResolvedValue(fakeStream(false, 1));
+    const ctx = makeAudioContext();
+    vi.stubGlobal('AudioContext', function () {
+      return ctx;
+    });
+
+    await shareScreen(true, mic({ enabled: true }));
+
+    // A fader pulled to zero must not blank the level meter, so the analyser
+    // taps the source directly and only the gain feeds the destination.
+    for (const source of ctx.created.filter((n) => n.kind === 'source')) {
+      expect(source.connections.sort()).toEqual(['analyser', 'gain']);
+    }
+    for (const gain of ctx.created.filter((n) => n.kind === 'gain')) {
+      expect(gain.connections).toEqual(['destination']);
+    }
+    for (const analyser of ctx.created.filter((n) => n.kind === 'analyser')) {
+      expect(analyser.connections).toEqual([]);
+    }
   });
 });
 

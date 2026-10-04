@@ -60,6 +60,16 @@ export class UIManager {
   private micAutoGain = document.getElementById(
     'micAutoGain'
   ) as HTMLInputElement;
+  private systemVolume = document.getElementById(
+    'systemVolume'
+  ) as HTMLInputElement;
+  private micVolume = document.getElementById('micVolume') as HTMLInputElement;
+  private systemVolumeValue = document.getElementById(
+    'systemVolumeValue'
+  ) as HTMLSpanElement;
+  private micVolumeValue = document.getElementById(
+    'micVolumeValue'
+  ) as HTMLSpanElement;
   public cropCheckbox = document.getElementById(
     'cropCheckbox'
   ) as HTMLInputElement;
@@ -267,6 +277,34 @@ export class UIManager {
       echoCancellation: this.micEchoCancellation.checked,
       autoGainControl: this.micAutoGain.checked,
     };
+  }
+
+  /**
+   * Level for one source, as a gain multiplier. The faders stay live while
+   * recording - balancing the two inputs is exactly the sort of thing you
+   * discover you need mid-take.
+   */
+  getVolume(source: 'system' | 'mic'): number {
+    const slider = source === 'system' ? this.systemVolume : this.micVolume;
+    return Number(slider.value) / 100;
+  }
+
+  /** Wire the faders to a callback and keep the percentage readout in step. */
+  bindVolumeControls(onChange: (source: 'system' | 'mic') => void) {
+    const wire = (
+      slider: HTMLInputElement,
+      readout: HTMLSpanElement,
+      source: 'system' | 'mic'
+    ) => {
+      const sync = () => {
+        readout.textContent = `${slider.value}%`;
+        onChange(source);
+      };
+      slider.addEventListener('input', sync);
+      sync();
+    };
+    wire(this.systemVolume, this.systemVolumeValue, 'system');
+    wire(this.micVolume, this.micVolumeValue, 'mic');
   }
 
   private setMicProcessingDisabled(disabled: boolean) {

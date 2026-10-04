@@ -39,6 +39,10 @@ function renderUI(): UIManager {
     <input type="checkbox" id="micNoiseSuppression" checked />
     <input type="checkbox" id="micEchoCancellation" checked />
     <input type="checkbox" id="micAutoGain" checked />
+    <input type="range" id="systemVolume" min="0" max="100" value="100" />
+    <input type="range" id="micVolume" min="0" max="100" value="100" />
+    <span id="systemVolumeValue"></span>
+    <span id="micVolumeValue"></span>
     <div id="systemAudioVisualizer"></div>
     <div id="micAudioVisualizer"></div>
   `;
@@ -386,6 +390,63 @@ describe('UIManager.setPausedState', () => {
 
     expect($('statusDot').classList.contains('is-paused')).toBe(false);
     expect($('statusText').textContent).toBe('Recording...');
+  });
+});
+
+describe('UIManager volume faders', () => {
+  it('reads each fader as a gain multiplier', () => {
+    const ui = renderUI();
+    ($('systemVolume') as HTMLInputElement).value = '50';
+    ($('micVolume') as HTMLInputElement).value = '25';
+
+    expect(ui.getVolume('system')).toBe(0.5);
+    expect(ui.getVolume('mic')).toBe(0.25);
+  });
+
+  it('treats a fader at full as unity gain', () => {
+    expect(renderUI().getVolume('system')).toBe(1);
+  });
+
+  it('exposes silence at the bottom of the travel', () => {
+    const ui = renderUI();
+    ($('systemVolume') as HTMLInputElement).value = '0';
+    expect(ui.getVolume('system')).toBe(0);
+  });
+
+  it('mirrors the fader value as a percentage', () => {
+    const ui = renderUI();
+    ui.bindVolumeControls(() => {});
+
+    expect($('systemVolumeValue').textContent).toBe('100%');
+    expect($('micVolumeValue').textContent).toBe('100%');
+
+    ($('systemVolume') as HTMLInputElement).value = '37';
+    $('systemVolume').dispatchEvent(new Event('input'));
+
+    expect($('systemVolumeValue').textContent).toBe('37%');
+  });
+
+  it('reports which source moved', () => {
+    const ui = renderUI();
+    const seen: string[] = [];
+    ui.bindVolumeControls((source) => seen.push(source));
+
+    // The initial sync fires once per source, then only the moved one.
+    expect(seen).toEqual(['system', 'mic']);
+
+    $('micVolume').dispatchEvent(new Event('input'));
+    expect(seen.at(-1)).toBe('mic');
+
+    $('systemVolume').dispatchEvent(new Event('input'));
+    expect(seen.at(-1)).toBe('system');
+  });
+
+  it('does not confuse the two faders', () => {
+    const ui = renderUI();
+    ($('micVolume') as HTMLInputElement).value = '10';
+
+    expect(ui.getVolume('system')).toBe(1);
+    expect(ui.getVolume('mic')).toBe(0.1);
   });
 });
 
