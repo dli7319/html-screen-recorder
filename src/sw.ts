@@ -58,18 +58,36 @@ declare const self: {
     type: 'install' | 'activate' | 'fetch',
     handler: (event: FetchEventLike) => void
   ): void;
+  addEventListener(
+    type: 'message',
+    handler: (event: {
+      data: unknown;
+      waitUntil(promise: Promise<unknown>): void;
+    }) => void
+  ): void;
 };
 
+/*
+ * `skipWaiting` is requested by the page, never taken here.
+ *
+ * Calling it in `install` made the new worker activate the moment it finished
+ * installing. `controllerchange` - the very event pwa.ts waits for before
+ * reloading - therefore fired *before* anyone was asked. Clicking Refresh then
+ * subscribed to a notification that had already been and gone, so the button
+ * did nothing at all.
+ *
+ * Leaving activation to a message means the new worker parks in `waiting`,
+ * which is also the only state `armUpdate` can act on. The page says
+ * SKIP_WAITING when the user chooses to take the update.
+ */
+self.addEventListener('message', (event) => {
+  if ((event.data as { type?: string } | null)?.type === 'SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+  }
+});
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
-      // Take over existing clients so an update is ready immediately rather
-      // than only after every tab is closed. pwa.ts decides when the page
-      // actually reloads - this only makes the new worker available.
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
 });
 
 self.addEventListener('activate', (event) => {

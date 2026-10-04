@@ -146,9 +146,10 @@ void registerServiceWorker({
 updateReloadBtn?.addEventListener('click', () => applyPendingUpdate?.());
 updateDismissBtn?.addEventListener('click', () => {
   if (updateBanner) updateBanner.hidden = true;
-  // Keep the update pending: "Later" means later, not "never". The next time
-  // a worker is ready the banner comes back.
-  applyPendingUpdate = null;
+  // "Later" means later, not "never": the apply function stays so the update
+  // can still be taken. Clearing it here silently retired the update - the
+  // banner came back on the next deploy but Refresh would then do nothing.
+  // It was cleared while the comment above it promised the opposite.
 });
 
 /**
