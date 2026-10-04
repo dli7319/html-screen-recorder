@@ -1,5 +1,16 @@
 import { RecordingFormat } from './types';
 
+/**
+ * How often MediaRecorder hands back a chunk.
+ *
+ * Without a timeslice `ondataavailable` fires exactly once, at stop - fine for
+ * assembling the file, useless for showing progress. Asking for a chunk every
+ * second keeps the live byte count honest. Both containers are built for this:
+ * WebM emits complete clusters per chunk and MP4 is fragmented, so
+ * concatenating the chunks is exactly what the single-chunk path already did.
+ */
+const TIMESLICE_MS = 1000;
+
 export class Recorder {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
@@ -29,7 +40,15 @@ export class Recorder {
       this.onStopCallback(blob, format.ext);
     };
 
-    this.mediaRecorder.start();
+    this.mediaRecorder.start(TIMESLICE_MS);
+  }
+
+  /**
+   * Bytes handed back so far. The total is an interim figure while recording
+   * and exact once the capture has stopped.
+   */
+  bytesCaptured(): number {
+    return this.recordedChunks.reduce((total, chunk) => total + chunk.size, 0);
   }
 
   stop() {

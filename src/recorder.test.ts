@@ -24,7 +24,10 @@ class FakeMediaRecorder {
 
   static failOnCreate = false;
 
-  start() {
+  timeslice: number | undefined;
+
+  start(timeslice?: number) {
+    this.timeslice = timeslice;
     this.state = 'recording';
   }
   stop() {
@@ -142,6 +145,44 @@ describe('Recorder.start', () => {
     const [blob, ext] = onStop.mock.calls[0];
     expect(blob.type).toBe('video/mp4');
     expect(ext).toBe('mp4');
+  });
+});
+
+describe('Recorder progress', () => {
+  it('asks MediaRecorder for a chunk periodically, so progress is observable', () => {
+    // Without a timeslice ondataavailable fires only at stop, and the live byte
+    // count would stay at zero for the whole take.
+    recorder.start(stream, FORMAT);
+    expect(FakeMediaRecorder.instances[0].timeslice).toBeGreaterThan(0);
+  });
+
+  it('reports bytes handed back so far', () => {
+    recorder.start(stream, FORMAT);
+    const mr = FakeMediaRecorder.instances[0];
+
+    expect(recorder.bytesCaptured()).toBe(0);
+    mr.emit(new Blob(['abc']));
+    expect(recorder.bytesCaptured()).toBe(3);
+    mr.emit(new Blob(['de']));
+    expect(recorder.bytesCaptured()).toBe(5);
+  });
+
+  it('ignores empty chunks when counting', () => {
+    recorder.start(stream, FORMAT);
+    const mr = FakeMediaRecorder.instances[0];
+    mr.emit(new Blob([]));
+    mr.emit(new Blob(['four']));
+
+    expect(recorder.bytesCaptured()).toBe(4);
+  });
+
+  it('starts a new take from zero bytes', () => {
+    recorder.start(stream, FORMAT);
+    FakeMediaRecorder.instances[0].emit(new Blob(['old']));
+    recorder.stop();
+
+    recorder.start(stream, FORMAT);
+    expect(recorder.bytesCaptured()).toBe(0);
   });
 });
 

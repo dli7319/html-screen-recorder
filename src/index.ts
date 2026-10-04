@@ -3,6 +3,7 @@ import { Recorder } from './recorder';
 import { Cropper } from './cropper';
 import { FORMATS_TO_CHECK } from './constants';
 import { timestampFilename } from './filename';
+import { formatBytes, formatDuration } from './format';
 import { bindShortcuts } from './shortcuts';
 import { captureFrame, downloadBlob } from './screenshot';
 import { Stopwatch } from './stopwatch';
@@ -177,7 +178,16 @@ async function startRecording() {
   }
 
   ui.setRecordingState(true);
-  stopwatch.start((time) => ui.updateStopwatch(time));
+  ui.clearStats();
+  stopwatch.start((time) => {
+    ui.updateStopwatch(time);
+    // Length and size are refreshed together so the readout never shows one
+    // figure from a moment the other does not correspond to.
+    ui.updateStats(
+      formatDuration(stopwatch.elapsed()),
+      formatBytes(recorder.bytesCaptured())
+    );
+  });
 }
 
 async function onRecordingStop(blob: Blob, ext: string) {

@@ -26,6 +26,7 @@ function renderUI(): UIManager {
     <div id="status" class="hidden">
       <div id="statusDot" class="status-dot"></div>
       <span id="statusText">Recording...</span>
+      <span id="statsText"></span>
       <button id="pauseBtn">
         <svg><use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use></svg>
         <span id="pauseBtnText">Pause</span>
@@ -382,6 +383,41 @@ describe('UIManager.setPausedState', () => {
 
     expect($('statusDot').classList.contains('is-paused')).toBe(false);
     expect($('statusText').textContent).toBe('Recording...');
+  });
+});
+
+describe('UIManager recording stats', () => {
+  it('shows the running length and size together', () => {
+    const ui = renderUI();
+    ui.updateStats('00:42', '12.5 MB');
+
+    expect($('statsText').textContent).toBe('00:42 · 12.5 MB');
+  });
+
+  it('clears the stats when recording stops', () => {
+    const ui = renderUI();
+    ui.updateStats('00:42', '12.5 MB');
+    ui.setRecordingState(false);
+
+    expect($('statsText').textContent).toBe('');
+  });
+
+  it('clears stale stats before a new take starts', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.updateStats('05:00', '900 MB');
+    ui.setRecordingState(false);
+    ui.setRecordingState(true);
+
+    expect($('statsText').textContent).toBe('');
+  });
+
+  it('overwrites rather than appends as the recording grows', () => {
+    const ui = renderUI();
+    ui.updateStats('00:01', '1.0 KB');
+    ui.updateStats('00:02', '2.0 KB');
+
+    expect($('statsText').textContent).toBe('00:02 · 2.0 KB');
   });
 });
 
