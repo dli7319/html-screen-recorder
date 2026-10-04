@@ -5,7 +5,7 @@ import { FORMATS_TO_CHECK } from './constants';
 import { timestampFilename } from './filename';
 import { formatBytes, formatDuration } from './format';
 import { bindShortcuts } from './shortcuts';
-import { captureFrame, downloadBlob } from './screenshot';
+import { captureFrame } from './screenshot';
 import { CountdownHandle, runCountdown } from './countdown';
 import { Stopwatch } from './stopwatch';
 import { fixWebmDuration } from './webm-duration';
@@ -91,6 +91,7 @@ ui.bindEvents({
   onStop: stopRecording,
   onCropToggle: toggleCropping,
   onPause: togglePause,
+  onScreenshot: captureScreenshot,
 });
 
 // R / P / S / Shift+S drive the same actions as the buttons.
@@ -123,13 +124,22 @@ function cancelCountdown() {
 }
 
 /**
- * Save the preview's current frame as a PNG. Silent when there is nothing to
- * capture - a shortcut should never throw up an error banner mid-take.
+ * Capture the preview's current frame as a PNG and file it as a take.
+ *
+ * Silent when there is nothing to capture - a shortcut should never throw up
+ * an error banner mid-take - but when it does land it goes to the gallery like
+ * a recording, so a screenshot cannot be lost by taking the next one.
  */
 async function captureScreenshot() {
   const blob = await captureFrame(ui.videoPreview);
   if (!blob) return;
-  downloadBlob(blob, timestampFilename('png'));
+
+  takes.add({
+    kind: 'screenshot',
+    blob,
+    filename: timestampFilename('png'),
+    formatName: 'PNG',
+  });
 }
 
 /**
