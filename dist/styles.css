@@ -1243,6 +1243,15 @@ kbd {
 
 /* ---------- update banner ---------- */
 
+/*
+   The banner follows the theme rather than inverting it.
+
+   It used to set `background: var(--ink); color: var(--surface)` - a slab of
+   inverted tokens. In dark mode `--ink` is near-white and `--surface`
+   near-black, so the banner rendered as a bright white bar over a dark app.
+   "Inverted" is only a sensible look while the two tokens happen to be
+   opposite ends of one grey ramp; it is not a dark-mode strategy.
+*/
 .update-banner {
     position: fixed;
     bottom: 18px;
@@ -1254,8 +1263,9 @@ kbd {
     gap: 12px;
     padding: 11px 14px;
     border-radius: var(--radius-card);
-    background: var(--ink);
-    color: var(--surface);
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
     font-size: 13px;
     box-shadow: var(--elev-2);
 }
@@ -1265,12 +1275,12 @@ kbd {
 }
 
 .update-banner .btn--quiet {
-    color: var(--border-strong);
+    color: var(--ink-muted);
 }
 
 .update-banner .btn--quiet:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: var(--surface);
+    background: var(--surface-sunken);
+    color: var(--ink);
 }
 
 /* ---------- narrow viewports ---------- */

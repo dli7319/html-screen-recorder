@@ -153,7 +153,7 @@ describe('observeUpdates', () => {
       registration as never,
       onUpdate,
       vi.fn(),
-      false // not yet controlled
+      () => false // not yet controlled at install time
     );
     fireUpdateFound();
     // Reached `installed` too, so this exercises the isControlled guard rather
@@ -173,11 +173,37 @@ describe('observeUpdates', () => {
       registration as never,
       onUpdate,
       vi.fn(),
-      true
+      () => true
     );
     fireUpdateFound();
     // The worker reaches `installed` and then announces it - order matters,
     // because the handler filters on state.
+    installing.state = 'installed';
+    installing.emit('statechange');
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads control state when the update lands, not when it registered', () => {
+    // The bug: `isControlled` was sampled once at registration time. On a first
+    // visit the worker has not claimed the page yet, so `controller` is null and
+    // the captured false stayed false for the whole life of the tab. Later
+    // updates were discarded and the user was never offered a refresh - the app
+    // reported up to date while serving a stale build.
+    const { installing, registration, fireUpdateFound } = registrationWith();
+    const onUpdate = vi.fn();
+    let controlled = false; // false at register time, true by the time it lands
+
+    observeUpdates(
+      fakeContainer() as never,
+      registration as never,
+      onUpdate,
+      vi.fn(),
+      () => controlled
+    );
+
+    fireUpdateFound();
+    controlled = true; // the worker claims the page while it installs
     installing.state = 'installed';
     installing.emit('statechange');
 
@@ -194,7 +220,7 @@ describe('observeUpdates', () => {
       registration as never,
       onUpdate,
       vi.fn(),
-      true
+      () => true
     );
     fireUpdateFound();
     installing.emit('statechange');

@@ -92,20 +92,27 @@ export function armUpdate(
  * `waiting`; that is the only moment an update is actionable. An installing
  * worker with no existing controller is the *first* install, which is not an
  * update and must not trigger a prompt.
+ *
+ * `isControlled` is a predicate, not a boolean, and is evaluated when the
+ * worker reaches `installed`. Sampling it at registration time was a bug: on a
+ * first visit the worker has not claimed the page yet, so `controller` is null,
+ * and the captured `false` stayed false for the life of the tab. Every later
+ * update was then discarded and the Refresh control had nothing to apply - the
+ * app looked up to date while sitting on a stale build.
  */
 export function observeUpdates(
   container: ServiceWorkerContainerLike,
   registration: RegistrationLike,
   onUpdate: ((apply: ApplyFn) => void) | undefined,
   onceControlled: () => void,
-  isControlled: boolean
+  isControlled: () => boolean
 ): void {
   registration.addEventListener('updatefound', () => {
     const installing = registration.installing;
     if (!installing) return;
     installing.addEventListener('statechange', () => {
       if (installing.state !== 'installed') return;
-      if (!isControlled) return;
+      if (!isControlled()) return;
       armUpdate(container, installing, onUpdate, onceControlled);
     });
   });
@@ -139,8 +146,6 @@ export async function registerServiceWorker(
       updateViaCache: 'none',
     });
 
-    const controlled = Boolean(container.controller);
-
     // An update may already be parked in `waiting` from a previous visit.
     armUpdate(container, registration.waiting, onUpdate, onceControlled);
     observeUpdates(
@@ -148,7 +153,8 @@ export async function registerServiceWorker(
       registration,
       onUpdate,
       onceControlled,
-      controlled
+      // Read at the moment the worker installs, not now. See observeUpdates.
+      () => Boolean(container.controller)
     );
 
     // An installed PWA window can stay open across a long recording session
