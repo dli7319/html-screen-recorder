@@ -63,7 +63,12 @@ async function handleShareScreen() {
 
     ui.setSharingState(true);
 
-    stream.getVideoTracks()[0].addEventListener('ended', stopSharing);
+    const [videoTrack] = stream.getVideoTracks();
+    syncPreviewAspect(videoTrack);
+
+    videoTrack.addEventListener('ended', stopSharing);
+    // Keep the preview matched if the shared surface changes resolution.
+    videoTrack.addEventListener('resize', () => syncPreviewAspect(videoTrack));
 
     visualizeAudio();
   } catch (err: unknown) {
@@ -83,6 +88,19 @@ async function handleShareScreen() {
     ui.showError(errorMsg);
     stopSharing();
   }
+}
+
+/**
+ * Size the preview container to the shared screen's real aspect ratio. The
+ * markup defaults to `aspect-video` (16:9), which crops any screen that is not
+ * 16:9 - so prefer the track's own settings and fall back to the decoded
+ * frame size.
+ */
+function syncPreviewAspect(videoTrack: MediaStreamTrack) {
+  const { width, height } = videoTrack.getSettings();
+  const w = width || ui.videoPreview.videoWidth;
+  const h = height || ui.videoPreview.videoHeight;
+  if (w && h) ui.setPreviewAspect(w, h);
 }
 
 async function startRecording() {
