@@ -14,6 +14,7 @@ import { UIManager } from './ui-manager';
 import { SettingsPanel } from './settings-panel';
 import { TakeStore } from './takes';
 import { GalleryView } from './gallery-view';
+import { registerServiceWorker } from './pwa';
 
 const ui = new UIManager();
 const settings = new SettingsPanel();
@@ -116,6 +117,34 @@ bindShortcuts({
   },
   onScreenshot: captureScreenshot,
   onCancel: cancelCountdown,
+});
+
+/*
+ * Offline support and installability.
+ *
+ * An update is surfaced, never applied. `apply` is only called when the user
+ * clicks Refresh, and even then the page reloads once the new worker has
+ * actually taken control - see pwa.ts. Takes are in-memory blob URLs, so
+ * reloading on our own would destroy whatever they had not downloaded yet.
+ */
+const updateBanner = document.getElementById('updateBanner');
+const updateReloadBtn = document.getElementById('updateReloadBtn');
+const updateDismissBtn = document.getElementById('updateDismissBtn');
+let applyPendingUpdate: (() => void) | null = null;
+
+void registerServiceWorker({
+  onUpdate: (apply) => {
+    applyPendingUpdate = apply;
+    if (updateBanner) updateBanner.hidden = false;
+  },
+});
+
+updateReloadBtn?.addEventListener('click', () => applyPendingUpdate?.());
+updateDismissBtn?.addEventListener('click', () => {
+  if (updateBanner) updateBanner.hidden = true;
+  // Keep the update pending: "Later" means later, not "never". The next time
+  // a worker is ready the banner comes back.
+  applyPendingUpdate = null;
 });
 
 /**
