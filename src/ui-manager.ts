@@ -51,6 +51,15 @@ export class UIManager {
   private micAudioToggle = document.getElementById(
     'micAudioToggle'
   ) as HTMLInputElement;
+  private micNoiseSuppression = document.getElementById(
+    'micNoiseSuppression'
+  ) as HTMLInputElement;
+  private micEchoCancellation = document.getElementById(
+    'micEchoCancellation'
+  ) as HTMLInputElement;
+  private micAutoGain = document.getElementById(
+    'micAutoGain'
+  ) as HTMLInputElement;
   public cropCheckbox = document.getElementById(
     'cropCheckbox'
   ) as HTMLInputElement;
@@ -168,6 +177,7 @@ export class UIManager {
       this.formatSelect.disabled = true;
       this.systemAudioToggle.disabled = true;
       this.micAudioToggle.disabled = true;
+      this.setMicProcessingDisabled(true);
 
       this.downloadLink.classList.add('pointer-events-none', 'opacity-50');
       this.downloadLink.removeAttribute('href');
@@ -187,6 +197,7 @@ export class UIManager {
       this.formatSelect.disabled = false;
       this.systemAudioToggle.disabled = false;
       this.micAudioToggle.disabled = false;
+      this.setMicProcessingDisabled(false);
     }
   }
 
@@ -242,6 +253,26 @@ export class UIManager {
       systemAudio: this.systemAudioToggle.checked,
       micAudio: this.micAudioToggle.checked,
     };
+  }
+
+  /**
+   * Microphone conditioning. These are hints the browser may ignore, but they
+   * must still be read at share time - once the stream exists the constraints
+   * are fixed.
+   */
+  getMicOptions() {
+    return {
+      enabled: this.micAudioToggle.checked,
+      noiseSuppression: this.micNoiseSuppression.checked,
+      echoCancellation: this.micEchoCancellation.checked,
+      autoGainControl: this.micAutoGain.checked,
+    };
+  }
+
+  private setMicProcessingDisabled(disabled: boolean) {
+    this.micNoiseSuppression.disabled = disabled;
+    this.micEchoCancellation.disabled = disabled;
+    this.micAutoGain.disabled = disabled;
   }
 
   toggleCropping(show: boolean) {

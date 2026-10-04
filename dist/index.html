@@ -83,6 +83,26 @@
                 <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 overflow-hidden">
                   <div id="micAudioVisualizer" class="bg-indigo-500 h-full w-0 transition-all duration-75 ease-out"></div>
                 </div>
+                <!-- Microphone conditioning. All on by default: they suit a
+                     typical room, and a browser with them off tends to record
+                     keyboard noise and room echo. -->
+                <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                    <input id="micNoiseSuppression" type="checkbox"
+                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
+                    <span class="ml-1">Noise suppression</span>
+                  </label>
+                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                    <input id="micEchoCancellation" type="checkbox"
+                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
+                    <span class="ml-1">Echo cancellation</span>
+                  </label>
+                  <label class="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                    <input id="micAutoGain" type="checkbox"
+                      class="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked />
+                    <span class="ml-1">Auto gain</span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>

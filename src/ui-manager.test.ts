@@ -36,6 +36,9 @@ function renderUI(): UIManager {
     <select id="formatSelect"></select>
     <input type="checkbox" id="systemAudioToggle" />
     <input type="checkbox" id="micAudioToggle" />
+    <input type="checkbox" id="micNoiseSuppression" checked />
+    <input type="checkbox" id="micEchoCancellation" checked />
+    <input type="checkbox" id="micAutoGain" checked />
     <div id="systemAudioVisualizer"></div>
     <div id="micAudioVisualizer"></div>
   `;
@@ -383,6 +386,62 @@ describe('UIManager.setPausedState', () => {
 
     expect($('statusDot').classList.contains('is-paused')).toBe(false);
     expect($('statusText').textContent).toBe('Recording...');
+  });
+});
+
+describe('UIManager.getMicOptions', () => {
+  it('defaults to every conditioner on', () => {
+    // jsdom preserves the `checked` attribute the fixture sets.
+    const ui = renderUI();
+
+    expect(ui.getMicOptions()).toEqual({
+      enabled: false,
+      noiseSuppression: true,
+      echoCancellation: true,
+      autoGainControl: true,
+    });
+  });
+
+  it('follows the microphone toggle and each conditioner', () => {
+    const ui = renderUI();
+    ($('micAudioToggle') as HTMLInputElement).checked = true;
+    ($('micNoiseSuppression') as HTMLInputElement).checked = false;
+    ($('micEchoCancellation') as HTMLInputElement).checked = true;
+    ($('micAutoGain') as HTMLInputElement).checked = false;
+
+    expect(ui.getMicOptions()).toEqual({
+      enabled: true,
+      noiseSuppression: false,
+      echoCancellation: true,
+      autoGainControl: false,
+    });
+  });
+
+  it('locks the conditioners while a capture is live', () => {
+    const ui = renderUI();
+    ui.setSharingState(true);
+
+    for (const id of [
+      'micNoiseSuppression',
+      'micEchoCancellation',
+      'micAutoGain',
+    ]) {
+      expect(($(id) as HTMLInputElement).disabled).toBe(true);
+    }
+  });
+
+  it('unlocks them again when sharing stops', () => {
+    const ui = renderUI();
+    ui.setSharingState(true);
+    ui.setSharingState(false);
+
+    for (const id of [
+      'micNoiseSuppression',
+      'micEchoCancellation',
+      'micAutoGain',
+    ]) {
+      expect(($(id) as HTMLInputElement).disabled).toBe(false);
+    }
   });
 });
 
