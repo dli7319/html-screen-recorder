@@ -7,6 +7,7 @@ import { formatBytes, formatDuration } from './format';
 import { bindShortcuts } from './shortcuts';
 import { captureFrame } from './screenshot';
 import { CountdownHandle, runCountdown } from './countdown';
+import { PictureInPicture } from './pip';
 import { Stopwatch } from './stopwatch';
 import { fixWebmDuration } from './webm-duration';
 import { UIManager } from './ui-manager';
@@ -29,6 +30,14 @@ const cropper = new Cropper(
   ui.videoPreview
 );
 const recorder = new Recorder(onRecordingStop);
+const pip = new PictureInPicture(
+  document.getElementById('videoPreview') as HTMLVideoElement,
+  {
+    // The floating window has its own close button, entirely outside this page,
+    // so state has to follow the browser rather than what enter() returned.
+    onChange: (active) => ui.setPipState(active),
+  }
+);
 
 let stream: MediaStream | null = null;
 let audioContext: AudioContext | null | undefined = null;
@@ -65,6 +74,7 @@ ui.videoPreview.addEventListener('resize', syncPreviewAspect);
 
 window.addEventListener('load', () => {
   gallery.bind();
+  ui.setPipSupported(pip.isSupported());
   settings.populateQuality();
 
   if (!window.MediaRecorder) {
@@ -92,6 +102,9 @@ ui.bindEvents({
   onCropToggle: toggleCropping,
   onPause: togglePause,
   onScreenshot: captureScreenshot,
+  onPip: () => {
+    void pip.toggle();
+  },
 });
 
 // R / P / S / Shift+S drive the same actions as the buttons.
