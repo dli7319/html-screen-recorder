@@ -19,13 +19,21 @@ function renderUI(): UIManager {
     <div id="cropTargetElement"></div>
     <div id="cropContainer" class="hidden"></div>
     <input type="checkbox" id="cropCheckbox" />
-    <button id="shareBtn">
-      <span id="shareBtnStart"></span>
-      <span id="shareBtnStop" class="hidden"></span>
-    </button>
-    <button id="recordBtn"><span id="recordBtnText">Start Recording</span></button>
-    <button id="stopBtn"></button>
-    <button id="screenshotBtn" disabled></button>
+    <div id="transport" data-phase="idle">
+      <button id="shareBtn">
+        <span id="shareBtnStart"></span>
+        <span id="shareBtnStop" class="hidden"></span>
+      </button>
+      <button id="recordBtn"><span id="recordBtnText">Start Recording</span></button>
+      <button id="stopBtn"></button>
+      <button id="screenshotBtn" disabled></button>
+    </div>
+    <div id="settingsScrim"></div>
+    <aside id="settingsDrawer"></aside>
+    <button id="openSettings"></button>
+    <button id="settingsChip"></button>
+    <button id="closeSettings"></button>
+    <button id="advToggle"></button>
     <button id="pipBtn" disabled class="hidden">
       <span id="pipBtnText">Pop out</span>
     </button>
@@ -124,6 +132,8 @@ describe('UIManager.setRecordingState', () => {
     ui.setRecordingState(true);
 
     expect($('status').classList.contains('hidden')).toBe(false);
+    expect($('status').dataset.state).toBe('recording');
+    expect($('transport').dataset.phase).toBe('recording');
     expect(($('stopBtn') as HTMLButtonElement).disabled).toBe(false);
     expect(($('recordBtn') as HTMLButtonElement).disabled).toBe(true);
     expect(($('shareBtn') as HTMLButtonElement).disabled).toBe(true);
@@ -137,7 +147,12 @@ describe('UIManager.setRecordingState', () => {
     ui.setRecordingState(true);
     ui.setRecordingState(false);
 
-    expect($('status').classList.contains('hidden')).toBe(true);
+    // The pill is no longer hidden when recording stops: it answers "what is
+    // the app doing" precisely when nothing is happening, so it stays visible
+    // and reports the phase it fell back to.
+    expect($('status').classList.contains('hidden')).toBe(false);
+    expect($('status').dataset.state).toBe('sharing');
+    expect($('transport').dataset.phase).toBe('sharing');
     expect(($('stopBtn') as HTMLButtonElement).disabled).toBe(true);
     expect(($('recordBtn') as HTMLButtonElement).disabled).toBe(false);
     expect(($('shareBtn') as HTMLButtonElement).disabled).toBe(false);

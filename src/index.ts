@@ -19,10 +19,14 @@ import { registerServiceWorker } from './pwa';
 const ui = new UIManager();
 const settings = new SettingsPanel();
 const takes = new TakeStore();
-const gallery = new GalleryView(
-  document.querySelector('main') as HTMLElement,
-  takes
-);
+// The gallery mounts on an explicit id, not a tag name. It used to use
+// `document.querySelector('main')`, which meant a layout rewrite that dropped
+// the <main> element killed the whole boot silently - the page rendered and
+// looked correct while nothing was wired. GalleryView.require() reports a
+// missing element, but only if it gets as far as being constructed.
+const galleryRoot = document.getElementById('takesRoot');
+if (!galleryRoot) throw new Error('Gallery markup is missing #takesRoot');
+const gallery = new GalleryView(galleryRoot, takes);
 const stopwatch = new Stopwatch();
 const cropper = new Cropper(
   ui.cropBox,
