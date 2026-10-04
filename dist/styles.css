@@ -1071,15 +1071,29 @@ kbd {
 }
 
 /*
-   The chevron is the browser's, drawn inside the right padding. At 32px it
-   sat hard against the control's edge and read as clipped.
+   The chevron is ours, not the browser's.
+
+   Two rounds of `padding-right` increases did nothing to the arrow, and the
+   reason is that a native select arrow is not laid out in the padding box:
+   Chrome pins it to the control's right edge and only pushes the text away
+   from it. So the arrow stayed cramped while the text got more room.
+
+   `appearance: none` removes the browser's arrow entirely and this draws its
+   own, positioned with a real inset from the edge. That is also what the rest
+   of the control's styling already assumes.
 */
 .drawer select {
+    appearance: none;
+    -webkit-appearance: none;
     height: 36px;
-    padding: 0 38px 0 12px;
+    padding: 0 34px 0 12px;
     font: 500 13.5px var(--font);
     color: var(--ink);
-    background: var(--surface);
+    background-color: var(--surface);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 13px 13px;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-control);
     cursor: pointer;
@@ -1096,11 +1110,13 @@ kbd {
     gap: 9px;
 }
 
-/* Three selects across a 380px drawer is tight: at full select padding the
-   preset text ("Source") clips. The values are short and never wrap, so give
-   the arrow less room and step the type down slightly. */
+/* Three selects across a 380px drawer is tight: at full padding the preset
+   text ("Source") clips. The values are short and never wrap, so the type
+   steps down slightly - but the chevron keeps the same inset as every other
+   select, because it is a real background image now and is not competing
+   with the text for the same space. */
 .row3 .field select {
-    padding: 0 28px 0 9px;
+    padding: 0 32px 0 9px;
     font-size: 12.5px;
 }
 
@@ -1275,5 +1291,20 @@ kbd {
 
     .row3 {
         grid-template-columns: 1fr;
+    }
+}
+
+/*
+   Dark variant of the select chevron.
+
+   This must sit after `.drawer select` in the file. An identical-specificity
+   override placed earlier loses to the base rule regardless of the media
+   query - the same source-order trap that hid the countdown scrim behind
+   Tailwind's layered `.hidden`. It is a data-URI, so it cannot inherit
+   currentColor and needs its own value per scheme.
+*/
+@media (prefers-color-scheme: dark) {
+    .drawer select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     }
 }
