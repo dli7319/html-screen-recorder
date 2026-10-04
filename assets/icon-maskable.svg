@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Maskable variant. Android will crop this to a circle, squircle or teardrop
+    at runtime, so:
+      - the indigo fills the entire canvas (no transparency, or the crop shows
+        whatever is behind it),
+      - all artwork is inside the central circle of radius 204 (80% of 512),
+        so nothing is clipped by any mask shape.
+
+    Note the monitor is deliberately smaller here than in icon.svg.
+  -->
+  <rect width="512" height="512" fill="#4f39f6" />
+
+  <rect x="136" y="168" width="240" height="164" rx="20" fill="#ffffff" />
+  <rect x="228" y="344" width="56" height="16" rx="8" fill="#ffffff" />
+  <rect x="192" y="364" width="128" height="18" rx="9" fill="#ffffff" />
+
+  <circle cx="256" cy="250" r="46" fill="#dc2626" />
+</svg>
