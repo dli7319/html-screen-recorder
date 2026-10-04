@@ -14,7 +14,7 @@ class FakeMediaRecorder {
 
   constructor(
     public stream: MediaStream,
-    public options: { mimeType: string }
+    public options: MediaRecorderOptions
   ) {
     FakeMediaRecorder.instances.push(this);
     if (FakeMediaRecorder.failOnCreate) {
@@ -145,6 +145,41 @@ describe('Recorder.start', () => {
     const [blob, ext] = onStop.mock.calls[0];
     expect(blob.type).toBe('video/mp4');
     expect(ext).toBe('mp4');
+  });
+});
+
+describe('Recorder encoder settings', () => {
+  it('carries the format through to MediaRecorder', () => {
+    recorder.start(stream, FORMAT);
+    expect(FakeMediaRecorder.instances[0].options.mimeType).toBe(
+      FORMAT.mimeType
+    );
+  });
+
+  it('leaves the bitrate unset so the codec default applies', () => {
+    // An explicit undefined would override the browser's per-codec default.
+    recorder.start(stream, FORMAT);
+    expect(FakeMediaRecorder.instances[0].options).not.toHaveProperty(
+      'videoBitsPerSecond'
+    );
+  });
+
+  it('passes an explicit bitrate through', () => {
+    recorder.start(stream, FORMAT, { videoBitsPerSecond: 6_000_000 });
+    expect(FakeMediaRecorder.instances[0].options.videoBitsPerSecond).toBe(
+      6_000_000
+    );
+  });
+
+  it('applies the bitrate of the current take, not the previous one', () => {
+    // The whole point of the encoder/capture split: bitrate is re-read per take.
+    recorder.start(stream, FORMAT, { videoBitsPerSecond: 12_000_000 });
+    recorder.stop();
+
+    recorder.start(stream, FORMAT, { videoBitsPerSecond: 2_500_000 });
+    const options = FakeMediaRecorder.instances.map((i) => i.options);
+    expect(options[0].videoBitsPerSecond).toBe(12_000_000);
+    expect(options[1].videoBitsPerSecond).toBe(2_500_000);
   });
 });
 

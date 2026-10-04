@@ -1,3 +1,5 @@
+import { CaptureConstraints, buildVideoConstraints } from './quality';
+
 /** Which microphone conditioning to ask the browser for. */
 export interface MicOptions {
   enabled: boolean;
@@ -30,13 +32,16 @@ export interface ShareResult {
 
 export async function shareScreen(
   wantsSystemAudio: boolean,
-  mic: MicOptions
+  mic: MicOptions,
+  capture: CaptureConstraints = {}
 ): Promise<ShareResult> {
   const finalStream = new MediaStream();
 
-  // 1. Get Display Stream
+  // 1. Get Display Stream. The video constraints are built by quality.ts so
+  // the exact object handed to the browser is pinned by tests rather than
+  // assembled inline where it cannot be checked.
   const displayStream = await navigator.mediaDevices.getDisplayMedia({
-    video: { cursor: 'always' } as unknown as MediaTrackConstraints,
+    video: buildVideoConstraints(capture),
     audio: wantsSystemAudio,
   });
 

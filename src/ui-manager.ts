@@ -1,4 +1,13 @@
 import { RecordingFormat } from './types';
+import {
+  BITRATE_PRESETS,
+  CaptureConstraints,
+  EncoderConfig,
+  FRAME_RATE_PRESETS,
+  RESOLUTION_PRESETS,
+  describeQuality,
+  resolvePreset,
+} from './quality';
 
 export class UIManager {
   public videoPreview = document.getElementById(
@@ -45,6 +54,18 @@ export class UIManager {
   private formatSelect = document.getElementById(
     'formatSelect'
   ) as HTMLSelectElement;
+  private resolutionSelect = document.getElementById(
+    'resolutionSelect'
+  ) as HTMLSelectElement;
+  private frameRateSelect = document.getElementById(
+    'frameRateSelect'
+  ) as HTMLSelectElement;
+  private bitrateSelect = document.getElementById(
+    'bitrateSelect'
+  ) as HTMLSelectElement;
+  private qualitySummary = document.getElementById(
+    'qualitySummary'
+  ) as HTMLParagraphElement;
   private systemAudioToggle = document.getElementById(
     'systemAudioToggle'
   ) as HTMLInputElement;
@@ -128,6 +149,87 @@ export class UIManager {
     this.statsText.textContent = '';
   }
 
+  /**
+   * Fill the quality selects from the preset tables. Each option carries its
+   * preset id so `getQuality` can resolve values without re-deriving them.
+   */
+  /**
+   * Populate the quality selects and wire their change handling in one call.
+   *
+   * These are deliberately one method rather than two: a populate/bind pair
+   * that must be called in the right order is a footgun, and a summary that
+   * silently stops updating is the kind of bug nobody reports.
+   */
+  populateQuality() {
+    const fill = (
+      select: HTMLSelectElement,
+      presets: { id: string; label: string }[]
+    ) => {
+      select.innerHTML = '';
+      presets.forEach((preset) => {
+        const option = document.createElement('option');
+        option.value = preset.id;
+        option.textContent = preset.label;
+        select.appendChild(option);
+      });
+    };
+
+    fill(this.resolutionSelect, RESOLUTION_PRESETS);
+    fill(this.frameRateSelect, FRAME_RATE_PRESETS);
+    fill(this.bitrateSelect, BITRATE_PRESETS);
+
+    const sync = () => this.syncQualitySummary();
+    this.resolutionSelect.addEventListener('change', sync);
+    this.frameRateSelect.addEventListener('change', sync);
+    this.bitrateSelect.addEventListener('change', sync);
+
+    this.syncQualitySummary();
+  }
+
+  /**
+   * The settings in effect.
+   *
+   * Split across the two half-interfaces because they have different
+   * lifetimes: capture constraints are fixed once sharing starts, encoder
+   * settings can change between takes.
+   */
+  getQuality(): CaptureConstraints & EncoderConfig {
+    const resolution = resolvePreset(
+      RESOLUTION_PRESETS,
+      this.resolutionSelect.value
+    );
+    const frameRate = resolvePreset(
+      FRAME_RATE_PRESETS,
+      this.frameRateSelect.value
+    );
+    const bitrate = resolvePreset(BITRATE_PRESETS, this.bitrateSelect.value);
+
+    return {
+      width: resolution.width,
+      frameRate: frameRate.frameRate,
+      videoBitsPerSecond: bitrate.videoBitsPerSecond,
+    };
+  }
+
+  /** Keep the plain-language summary of the settings in step. */
+  syncQualitySummary() {
+    const q = this.getQuality();
+    this.qualitySummary.textContent = describeQuality(q, q);
+  }
+
+  /**
+   * Lock the capture-time settings while sharing.
+   *
+   * Only resolution and frame rate lock. The bitrate is an encoder setting and
+   * deliberately stays live, since it can take effect on the next take without
+   * the user having to pick a window again - and graying it out would imply the
+   * opposite.
+   */
+  private setCaptureSettingsDisabled(disabled: boolean) {
+    this.resolutionSelect.disabled = disabled;
+    this.frameRateSelect.disabled = disabled;
+  }
+
   populateFormats(formats: RecordingFormat[]) {
     formats.forEach((format) => {
       if (MediaRecorder.isTypeSupported(format.mimeType)) {
@@ -185,6 +287,7 @@ export class UIManager {
       this.recordBtn.disabled = false;
       this.cropCheckbox.disabled = false;
       this.formatSelect.disabled = true;
+      this.setCaptureSettingsDisabled(true);
       this.systemAudioToggle.disabled = true;
       this.micAudioToggle.disabled = true;
       this.setMicProcessingDisabled(true);
@@ -205,6 +308,7 @@ export class UIManager {
       toggle(this.cropContainer, false);
       this.cropBox.classList.remove('is-recording');
       this.formatSelect.disabled = false;
+      this.setCaptureSettingsDisabled(false);
       this.systemAudioToggle.disabled = false;
       this.micAudioToggle.disabled = false;
       this.setMicProcessingDisabled(false);
