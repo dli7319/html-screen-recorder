@@ -103,11 +103,10 @@
 	}
 	/** Human-readable summary of what will actually be asked for. */
 	function describeQuality(capture, encoder) {
-		const parts = [];
-		parts.push(capture.width ? `${capture.width}w` : "source res");
-		parts.push(capture.frameRate ? `${capture.frameRate}fps` : "source fps");
-		parts.push(encoder.videoBitsPerSecond ? `${(encoder.videoBitsPerSecond / 1e6).toFixed(1)} Mbps` : "auto bitrate");
-		return parts.join(" · ");
+		const dims = [];
+		if (capture.width) dims.push(`${capture.width}w`);
+		if (capture.frameRate) dims.push(`${capture.frameRate}fps`);
+		return `${dims.length ? dims.join(" ") : "Source"} · ${encoder.videoBitsPerSecond ? `${(encoder.videoBitsPerSecond / 1e6).toFixed(1)} Mbps` : "Auto"}`;
 	}
 	//#endregion
 	//#region src/screen-share.ts
@@ -920,6 +919,7 @@
 			this.cropBox = document.getElementById("cropBox");
 			this.cropTargetElement = document.getElementById("cropTargetElement");
 			this.shareBtn = document.getElementById("shareBtn");
+			this.emptyShareBtn = document.getElementById("emptyShareBtn");
 			this.shareBtnStart = document.getElementById("shareBtnStart");
 			this.shareBtnStop = document.getElementById("shareBtnStop");
 			this.recordBtn = document.getElementById("recordBtn");
@@ -943,15 +943,61 @@
 			this.cropContainer = document.getElementById("cropContainer");
 			this.systemAudioVisualizer = document.getElementById("systemAudioVisualizer");
 			this.micAudioVisualizer = document.getElementById("micAudioVisualizer");
+			this.transport = document.getElementById("transport");
+		}
+		/**
+		* Drive the presentation state.
+		*
+		* `data-phase` on the transport container decides which of the four buttons
+		* is currently the obvious next step, and `data-state` on the status pill
+		* decides its colour. Neither touches the buttons' ids, their listeners or
+		* their enabled flags - those are the state machine, and this is only how it
+		* looks. Keeping the two apart is what let the UI go from four equally loud
+		* buttons to one without destabilising the recording logic underneath.
+		*/
+		setPhase(phase) {
+			this.transport.dataset.phase = phase;
+			this.statusDiv.dataset.state = phase;
+			this.statusDiv.classList.remove("hidden");
+			if (phase === "idle") this.statusText.textContent = "Ready";
+			if (phase === "sharing") this.statusText.textContent = "Sharing";
+			if (phase === "recording") this.statusText.textContent = "Recording";
 		}
 		bindEvents(callbacks) {
 			this.shareBtn.addEventListener("click", callbacks.onShare);
+			this.emptyShareBtn.addEventListener("click", callbacks.onShare);
 			this.recordBtn.addEventListener("click", callbacks.onRecord);
 			this.stopBtn.addEventListener("click", callbacks.onStop);
 			this.cropCheckbox.addEventListener("change", callbacks.onCropToggle);
 			this.pauseBtn.addEventListener("click", callbacks.onPause);
 			this.screenshotBtn.addEventListener("click", callbacks.onScreenshot);
 			this.pipBtn.addEventListener("click", callbacks.onPip);
+			const shell = document.body;
+			const drawer = document.getElementById("settingsDrawer");
+			const scrim = document.getElementById("settingsScrim");
+			const openBtn = document.getElementById("openSettings");
+			const chip = document.getElementById("settingsChip");
+			const closeBtn = document.getElementById("closeSettings");
+			const advBtn = document.getElementById("advToggle");
+			const setPanel = (open) => {
+				shell.dataset.panel = open ? "open" : "closed";
+				drawer.setAttribute("aria-hidden", String(!open));
+				openBtn.setAttribute("aria-expanded", String(open));
+				if (open) closeBtn.focus();
+				else openBtn.focus();
+			};
+			openBtn.addEventListener("click", () => setPanel(shell.dataset.panel !== "open"));
+			chip.addEventListener("click", () => setPanel(true));
+			closeBtn.addEventListener("click", () => setPanel(false));
+			scrim.addEventListener("click", () => setPanel(false));
+			document.addEventListener("keydown", (e) => {
+				if (e.key === "Escape" && shell.dataset.panel === "open") setPanel(false);
+			});
+			advBtn.addEventListener("click", () => {
+				const open = shell.dataset.adv !== "open";
+				shell.dataset.adv = open ? "open" : "closed";
+				advBtn.setAttribute("aria-expanded", String(open));
+			});
 		}
 		/**
 		* Reflect whether the preview is currently floating. The label changes
@@ -1039,12 +1085,14 @@
 				this.cropCheckbox.disabled = true;
 				toggle(this.cropContainer, false);
 				this.cropBox.classList.remove("is-recording");
+				this.setPhase("idle");
 			}
+			if (isSharing) this.setPhase("sharing");
 		}
 		setRecordingState(isRecording) {
 			const icon = this.recordBtn.querySelector("svg");
 			if (isRecording) {
-				this.statusDiv.classList.remove("hidden");
+				this.setPhase("recording");
 				this.setPausedState(false);
 				this.stopBtn.disabled = false;
 				this.recordBtn.disabled = true;
@@ -1053,7 +1101,7 @@
 				if (this.cropCheckbox.checked) this.cropBox.classList.add("is-recording");
 				if (icon) icon.style.display = "none";
 			} else {
-				this.statusDiv.classList.add("hidden");
+				this.setPhase("sharing");
 				this.setPausedState(false);
 				this.clearStats();
 				this.stopBtn.disabled = true;
@@ -1521,7 +1569,9 @@
 	const ui = new UIManager();
 	const settings = new SettingsPanel();
 	const takes = new TakeStore();
-	const gallery = new GalleryView(document.querySelector("main"), takes);
+	const galleryRoot = document.getElementById("takesRoot");
+	if (!galleryRoot) throw new Error("Gallery markup is missing #takesRoot");
+	const gallery = new GalleryView(galleryRoot, takes);
 	const stopwatch = new Stopwatch();
 	const cropper = new Cropper(ui.cropBox, ui.cropTargetElement, ui.videoContainer, ui.videoPreview);
 	const recorder = new Recorder(onRecordingStop);
