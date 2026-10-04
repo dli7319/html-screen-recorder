@@ -1,3 +1,5 @@
+import { formatDuration } from './format';
+
 export class Stopwatch {
   private startTime: number = 0;
   private intervalId: number | null = null;
@@ -12,14 +14,7 @@ export class Stopwatch {
     this.paused = false;
     this.intervalId = window.setInterval(() => {
       if (this.paused) return;
-      const seconds = Math.floor(
-        (Date.now() - this.startTime - this.pausedTotal) / 1000
-      );
-      const mins = Math.floor(seconds / 60)
-        .toString()
-        .padStart(2, '0');
-      const secs = (seconds % 60).toString().padStart(2, '0');
-      onTick(`${mins}:${secs}`);
+      onTick(formatDuration(this.elapsed()));
     }, 1000);
   }
 

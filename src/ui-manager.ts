@@ -40,6 +40,7 @@ export class UIManager {
   private pauseBtnIcon = document.getElementById(
     'pauseBtnIcon'
   ) as Element | null;
+  private statsText = document.getElementById('statsText') as HTMLSpanElement;
   private errorDiv = document.getElementById('error') as HTMLDivElement;
   private formatSelect = document.getElementById(
     'formatSelect'
@@ -94,6 +95,18 @@ export class UIManager {
       );
     }
     this.statusDot.classList.toggle('is-paused', isPaused);
+  }
+
+  /**
+   * Show the running length of the take and how much has been written so far.
+   * Both are interim figures until the capture stops.
+   */
+  updateStats(duration: string, size: string) {
+    this.statsText.textContent = `${duration} · ${size}`;
+  }
+
+  clearStats() {
+    this.statsText.textContent = '';
   }
 
   populateFormats(formats: RecordingFormat[]) {
@@ -192,6 +205,7 @@ export class UIManager {
     } else {
       this.statusDiv.classList.add('hidden');
       this.setPausedState(false);
+      this.clearStats();
       this.stopBtn.disabled = true;
       if (this.cropCheckbox.checked)
         this.cropBox.classList.remove('is-recording');

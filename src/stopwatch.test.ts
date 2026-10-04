@@ -56,7 +56,7 @@ describe('Stopwatch', () => {
   });
 
   it('keeps counting past an hour rather than wrapping', () => {
-    // The button label is a recording duration, so 3661s must read 61:01,
+    // The button label is a recording duration, so 3661s must read 1:01:01,
     // not 01:01 - a wrap would silently mislabel long recordings.
     const ticks: string[] = [];
     const stopwatch = new Stopwatch();
@@ -65,7 +65,18 @@ describe('Stopwatch', () => {
     vi.advanceTimersByTime(3_661_000);
     stopwatch.stop();
 
-    expect(ticks.at(-1)).toBe('61:01');
+    expect(ticks.at(-1)).toBe('1:01:01');
+  });
+
+  it('reads a full hour with the hours field present', () => {
+    const ticks: string[] = [];
+    const stopwatch = new Stopwatch();
+    stopwatch.start((time) => ticks.push(time));
+
+    vi.advanceTimersByTime(3_600_000);
+    stopwatch.stop();
+
+    expect(ticks.at(-1)).toBe('1:00:00');
   });
 
   it('stops emitting once stopped', () => {
