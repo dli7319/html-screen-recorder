@@ -1,3 +1,19 @@
+/** Which microphone conditioning to ask the browser for. */
+export interface MicOptions {
+  enabled: boolean;
+  noiseSuppression: boolean;
+  echoCancellation: boolean;
+  autoGainControl: boolean;
+}
+
+/** Sensible starting point: everything on, which suits most rooms. */
+export const DEFAULT_MIC_OPTIONS: MicOptions = {
+  enabled: false,
+  noiseSuppression: true,
+  echoCancellation: true,
+  autoGainControl: true,
+};
+
 export interface ShareResult {
   stream: MediaStream;
   analysers: {
@@ -9,7 +25,7 @@ export interface ShareResult {
 
 export async function shareScreen(
   wantsSystemAudio: boolean,
-  wantsMicAudio: boolean
+  mic: MicOptions
 ): Promise<ShareResult> {
   const finalStream = new MediaStream();
 
@@ -25,9 +41,17 @@ export async function shareScreen(
 
   // 2. Get Mic Stream
   let micStream: MediaStream | undefined;
-  if (wantsMicAudio) {
+  if (mic.enabled) {
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStream = await navigator.mediaDevices.getUserMedia({
+        // These are hints the browser may or may not honour, but leaving them
+        // unset means it applies its own defaults instead of the user's choice.
+        audio: {
+          noiseSuppression: mic.noiseSuppression,
+          echoCancellation: mic.echoCancellation,
+          autoGainControl: mic.autoGainControl,
+        },
+      });
     } catch (micErr) {
       console.error('Could not get microphone:', micErr);
       throw new Error('Could not access microphone. Continuing without it.');
