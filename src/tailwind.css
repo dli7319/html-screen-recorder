@@ -1,3 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/*
+ * `source(none)` turns off Tailwind v4's automatic source scanning. Without it,
+ * `@source` is additive and the compiler also sweeps src/ - where TypeScript
+ * string literals like `icon.style.display = 'inline-block'` and regex character
+ * classes get mistaken for utility classes and end up in the stylesheet.
+ *
+ * Every utility this app uses is declared in dist/index.html, including the
+ * handful toggled from JavaScript (hidden, pointer-events-none, opacity-50,
+ * is-recording), so that one file is the complete source list.
+ */
+@import 'tailwindcss' source(none);
+@source '../dist/index.html';
