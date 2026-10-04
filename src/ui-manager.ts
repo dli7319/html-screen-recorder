@@ -31,6 +31,15 @@ export class UIManager {
     'placeholder'
   ) as HTMLDivElement;
   private statusDiv = document.getElementById('status') as HTMLDivElement;
+  private statusText = document.getElementById('statusText') as HTMLSpanElement;
+  private statusDot = document.getElementById('statusDot') as HTMLDivElement;
+  private pauseBtn = document.getElementById('pauseBtn') as HTMLButtonElement;
+  private pauseBtnText = document.getElementById(
+    'pauseBtnText'
+  ) as HTMLSpanElement;
+  private pauseBtnIcon = document.getElementById(
+    'pauseBtnIcon'
+  ) as SVGUseElement;
   private errorDiv = document.getElementById('error') as HTMLDivElement;
   private formatSelect = document.getElementById(
     'formatSelect'
@@ -59,11 +68,32 @@ export class UIManager {
     onRecord: () => void;
     onStop: () => void;
     onCropToggle: () => void;
+    onPause: () => void;
   }) {
     this.shareBtn.addEventListener('click', callbacks.onShare);
     this.recordBtn.addEventListener('click', callbacks.onRecord);
     this.stopBtn.addEventListener('click', callbacks.onStop);
     this.cropCheckbox.addEventListener('change', callbacks.onCropToggle);
+    this.pauseBtn.addEventListener('click', callbacks.onPause);
+  }
+
+  /**
+   * Reflect a paused capture in the status row: the label, the button, and the
+   * indicator (amber and still rather than red and pulsing).
+   */
+  setPausedState(isPaused: boolean) {
+    this.statusText.textContent = isPaused ? 'Paused' : 'Recording...';
+    this.pauseBtnText.textContent = isPaused ? 'Resume' : 'Pause';
+    this.pauseBtn.title = isPaused
+      ? 'Resume recording (P)'
+      : 'Pause recording (P)';
+    if (this.pauseBtnIcon) {
+      this.pauseBtnIcon.setAttribute(
+        'href',
+        isPaused ? './icons.svg#icon-record' : './icons.svg#icon-pause'
+      );
+    }
+    this.statusDot.classList.toggle('is-paused', isPaused);
   }
 
   populateFormats(formats: RecordingFormat[]) {
@@ -152,6 +182,7 @@ export class UIManager {
 
     if (isRecording) {
       this.statusDiv.classList.remove('hidden');
+      this.setPausedState(false);
       this.stopBtn.disabled = false;
       this.recordBtn.disabled = true;
       this.shareBtn.disabled = true;
@@ -160,6 +191,7 @@ export class UIManager {
       if (icon) icon.style.display = 'none';
     } else {
       this.statusDiv.classList.add('hidden');
+      this.setPausedState(false);
       this.stopBtn.disabled = true;
       if (this.cropCheckbox.checked)
         this.cropBox.classList.remove('is-recording');

@@ -94,9 +94,16 @@
           <label for="cropCheckbox" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Enable Cropping</label>
         </div>
 
-        <div id="status" class="mt-4 flex items-center justify-center gap-2 text-gray-600 dark:text-gray-300 hidden">
-          <div class="status-dot"></div>
+        <div id="status" class="mt-4 flex items-center justify-center gap-3 text-gray-600 dark:text-gray-300 hidden">
+          <div id="statusDot" class="status-dot"></div>
           <span id="statusText" class="font-medium text-sm">Recording...</span>
+          <button id="pauseBtn" title="Pause recording (P)"
+            class="bg-amber-500 text-white text-sm font-semibold py-1.5 px-4 rounded-md shadow-sm hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-400 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 transition-all duration-200 flex items-center gap-1.5">
+            <svg class="w-4 h-4">
+              <use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use>
+            </svg>
+            <span id="pauseBtnText">Pause</span>
+          </button>
         </div>
         <div id="error" class="mt-4 text-center text-red-500 font-medium hidden"></div>
 

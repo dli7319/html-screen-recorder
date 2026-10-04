@@ -29,6 +29,14 @@ body {
     }
 }
 
+/* While paused the capture is still open, so the indicator reads as "held"
+   rather than "live": amber, and no pulse. */
+.status-dot.is-paused {
+    background-color: #fbbf24;
+    /* amber-400 */
+    animation: none;
+}
+
 #recordBtn[disabled],
 #cropCheckbox:disabled+label,
 #systemAudioToggle:disabled+label,
