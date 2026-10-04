@@ -4,9 +4,39 @@
  * string literals like `icon.style.display = 'inline-block'` and regex character
  * classes get mistaken for utility classes and end up in the stylesheet.
  *
- * Every utility this app uses is declared in dist/index.html, including the
- * handful toggled from JavaScript (hidden, pointer-events-none, opacity-50,
- * is-recording), so that one file is the complete source list.
+ * The sources are therefore declared explicitly:
+ *
+ *   1. dist/index.html - every class written into the markup.
+ *   2. `@source inline(...)` below - the classes assigned from JavaScript.
+ *
+ * The second list exists because building a row's className in JS leaves the
+ * class in no scanned file. The gallery rows were written that way and silently
+ * rendered without their typography and dark-mode colours until these were
+ * listed here - `dark:text-gray-100` was never generated, so the filename fell
+ * back to an inherited dark colour and vanished against the dark background.
+ *
+ * RULE: any class set via `element.className = ...` or `classList.toggle(...)`
+ * in src/ must be listed below, verbatim and with its variant prefixes -
+ * `dark:text-gray-100` is not the same class as `text-gray-100`.
+ *
+ * The strings are copied from gallery-view.ts and ui-manager.ts rather than
+ * condensed, so they can be diffed against those files directly.
  */
 @import 'tailwindcss' source(none);
 @source '../dist/index.html';
+
+/* gallery-view.ts renderTake() */
+@source inline(
+  'flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0'
+);
+@source inline('text-lg leading-none shrink-0');
+@source inline('flex-1 min-w-0');
+@source inline('text-sm font-medium text-gray-900 dark:text-gray-100 truncate');
+@source inline('text-xs text-gray-500 dark:text-gray-400');
+@source inline('text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0');
+@source inline(
+  'text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 shrink-0'
+);
+
+/* ui-manager.ts - display toggled on the PiP button */
+@source inline('bg-teal-600');
