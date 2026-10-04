@@ -39,7 +39,7 @@ export class UIManager {
   ) as HTMLSpanElement;
   private pauseBtnIcon = document.getElementById(
     'pauseBtnIcon'
-  ) as SVGUseElement;
+  ) as Element | null;
   private errorDiv = document.getElementById('error') as HTMLDivElement;
   private formatSelect = document.getElementById(
     'formatSelect'

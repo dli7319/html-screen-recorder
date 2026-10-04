@@ -3,6 +3,7 @@ import { Recorder } from './recorder';
 import { Cropper } from './cropper';
 import { FORMATS_TO_CHECK } from './constants';
 import { Stopwatch } from './stopwatch';
+import { fixWebmDuration } from './webm-duration';
 import { UIManager } from './ui-manager';
 
 const ui = new UIManager();
@@ -154,18 +155,24 @@ async function startRecording() {
   stopwatch.start((time) => ui.updateStopwatch(time));
 }
 
-function onRecordingStop(blob: Blob, ext: string) {
+async function onRecordingStop(blob: Blob, ext: string) {
+  // Read the duration before the stopwatch is reset - MediaRecorder's WebM
+  // output has no Duration element, so players otherwise report Infinity.
+  const durationMs = stopwatch.elapsed();
+  stopwatch.stop();
+
+  const fixedBlob = await fixWebmDuration(blob, durationMs);
+
   const now = new Date();
   const timestamp = now
     .toISOString()
     .replace(/[-:T.]/g, '')
     .slice(0, 14);
   const filename = `${timestamp}.${ext}`;
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(fixedBlob);
 
   ui.setDownloadLink(url, filename);
   ui.setRecordingState(false);
-  stopwatch.stop();
 }
 
 async function stopRecording() {
