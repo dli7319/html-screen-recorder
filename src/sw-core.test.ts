@@ -93,7 +93,7 @@ describe('shouldHandle', () => {
     expect(
       shouldHandle({
         method: 'GET',
-        url: 'https://fonts.googleapis.com/css2?family=Inter',
+        url: 'https://fonts.googleapis.com/css2?family=Roboto',
         origin: ORIGIN,
       })
     ).toBe(false);

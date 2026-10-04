@@ -47,7 +47,7 @@ export const SHELL: readonly string[] = [
   'tailwind.css',
   'icons.svg',
   'manifest.json',
-  'fonts/inter-latin.woff2',
+  'fonts/roboto-latin.woff2',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-512-maskable.png',

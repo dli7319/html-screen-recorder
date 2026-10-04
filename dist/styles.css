@@ -1,34 +1,107 @@
 /*
- * Inter, self-hosted.
+ * Roboto, self-hosted.
  *
- * Previously loaded from fonts.googleapis.com. A third-party request is both a
- * render-blocking round trip and a hard blocker for offline use, which is the
- * entire point of the service worker. There is no reason for a screen recorder
- * to need the network before it can draw a button.
+ * Previously Inter, self-hosted before that from fonts.googleapis.com. A
+ * third-party request is both a render-blocking round trip and a hard blocker
+ * for offline use, which is the entire point of the service worker. There is no
+ * reason for a screen recorder to need the network before it can draw a button.
  *
- * Google serves Inter as a *variable* font - one file spans every weight - so
- * the latin subset is a single 47 KB woff2 rather than one file per weight. The
- * unicode-range is copied verbatim from Google's own stylesheet so the browser
- * makes the same font-selection decisions it did before: anything outside it
- * falls through to the system stack in the font-family below.
+ * Roboto is the typeface Google ships in Workspace (Docs, Sheets, Slides), which
+ * is the aesthetic this UI is aiming at, and it is open source (Apache 2.0).
+ *
+ * Google serves it as a *variable* font - one file spans every weight - so the
+ * latin subset is a single 43 KB woff2 rather than one file per weight. Two
+ * details differ from the Inter declaration it replaces and both matter:
+ *
+ *   1. The variable range is 400 700, NOT 100 900. Requesting a weight outside
+ *      it does not fail loudly - the browser synthesises or clips - so the
+ *      declaration has to be honest.
+ *   2. The unicode-range is Roboto's own, copied verbatim from Google's
+ *      stylesheet, so the browser makes the same font-selection decisions it
+ *      would have against the CDN. Anything outside it falls through to the
+ *      system stack in the font-family below.
  *
  * The UI is English strings and ASCII timestamp filenames, so latin is the only
  * subset that ever matches. If that changes, add a second @font-face for
- * inter-latin-ext (83 KB) rather than widening this range.
+ * roboto-latin-ext rather than widening this range.
  */
 @font-face {
-    font-family: 'Inter';
+    font-family: 'Roboto';
     font-style: normal;
-    font-weight: 100 900;
+    font-weight: 400 700;
     font-display: swap;
-    src: url('./fonts/inter-latin.woff2') format('woff2');
+    src: url('./fonts/roboto-latin.woff2') format('woff2');
     unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
         U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
         U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 body {
-    font-family: "Inter", sans-serif;
+    font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/*
+ * Design tokens.
+ *
+ * Declared ahead of the layout that consumes them so the shell redesign and the
+ * settings drawer can reference one set of values instead of scattering raw
+ * hex across the markup. The palette is the Google-Workspace neutral family:
+ * a single blue accent, grey ink, hairline borders, and one saturated colour
+ * reserved entirely for the recording state.
+ *
+ * The rule that makes the whole UI read as designed: `--danger` appears NOWHERE
+ * except while recording. Colour carries state, not identity.
+ */
+:root {
+    --surface: #ffffff;
+    --surface-sunken: #f8f9fa;
+    --border: #dadce0;
+    --border-strong: #bdc1c6;
+
+    --ink: #202124;
+    --ink-muted: #5f6368;
+    --ink-disabled: #80868b;
+
+    --accent: #1a73e8;
+    --accent-hover: #1b66c9;
+    --accent-container: #e8f0fe;
+    --accent-ink: #1967d2;
+
+    --danger: #d93025;
+    --danger-hover: #c5221f;
+    --danger-container: #fce8e6;
+
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-pill: 100px;
+
+    --elev-1: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+    --elev-2: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 2px 6px 2px rgba(60, 64, 67, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --surface: #1e1f20;
+        --surface-sunken: #202124;
+        --border: #3c4043;
+        --border-strong: #5f6368;
+
+        --ink: #e8eaed;
+        --ink-muted: #9aa0a6;
+        --ink-disabled: #7a7f84;
+
+        --accent: #8ab4f8;
+        --accent-hover: #aecbfa;
+        --accent-container: #1f3a5f;
+        --accent-ink: #8ab4f8;
+
+        --danger: #f28b82;
+        --danger-hover: #ee675c;
+        --danger-container: #5c2b29;
+
+        --elev-1: 0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
+        --elev-2: 0 2px 6px 2px rgba(0, 0, 0, 0.5);
+    }
 }
 
 /* Preview sizing.
