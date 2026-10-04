@@ -25,6 +25,23 @@ let audioContext: AudioContext | null | undefined = null;
 let analysers: ShareResult['analysers'] | null = null;
 let visualizationAnimationFrame: number | null = null;
 
+/**
+ * Per-source gains from the current capture, so the faders can drive them.
+ * They are replaced wholesale when a new share starts, since a new capture
+ * builds a fresh audio graph.
+ */
+let currentGains: { system?: GainNode; mic?: GainNode } = {};
+
+function applyVolume(source: 'system' | 'mic') {
+  const gain = source === 'system' ? currentGains.system : currentGains.mic;
+  if (!gain) return;
+  gain.gain.value = ui.getVolume(source);
+}
+
+// Faders stay live while recording; balancing the two inputs is exactly the
+// sort of thing you discover you need mid-take.
+ui.bindVolumeControls(applyVolume);
+
 // --- Initialization ---
 // Keep the preview matched to the shared surface as it changes shape.
 ui.videoPreview.addEventListener('resize', syncPreviewAspect);
@@ -102,6 +119,9 @@ async function handleShareScreen() {
       audioConfig.systemAudio,
       ui.getMicOptions()
     );
+    currentGains = shareResult.gains;
+    applyVolume('system');
+    applyVolume('mic');
 
     stream = shareResult.stream;
     analysers = shareResult.analysers;

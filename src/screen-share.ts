@@ -20,6 +20,11 @@ export interface ShareResult {
     system?: AnalyserNode;
     mic?: AnalyserNode;
   };
+  /** Per-source gain so the two inputs can be balanced against each other. */
+  gains: {
+    system?: GainNode;
+    mic?: GainNode;
+  };
   audioContext?: AudioContext;
 }
 
@@ -60,6 +65,7 @@ export async function shareScreen(
 
   // 3. Setup Audio Context & Analysers
   const analysers: ShareResult['analysers'] = {};
+  const gains: ShareResult['gains'] = {};
   let audioContext: AudioContext | undefined;
 
   const systemTrack = displayStream.getAudioTracks()[0];
@@ -70,30 +76,30 @@ export async function shareScreen(
     audioContext.resume();
     const dest = audioContext.createMediaStreamDestination();
 
-    if (systemTrack) {
-      const source = audioContext.createMediaStreamSource(
-        new MediaStream([systemTrack])
+    const addSource = (track: MediaStreamTrack, which: 'system' | 'mic') => {
+      const source = audioContext!.createMediaStreamSource(
+        new MediaStream([track])
       );
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      analyser.connect(dest);
-      analysers.system = analyser;
-    }
 
-    if (micTrack) {
-      const source = audioContext.createMediaStreamSource(
-        new MediaStream([micTrack])
-      );
-      const analyser = audioContext.createAnalyser();
+      // The meter taps the raw input, so it still shows the source is live
+      // when its fader is pulled down; the gain sits only on the path that is
+      // actually recorded.
+      const analyser = audioContext!.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
-      analyser.connect(dest);
-      analysers.mic = analyser;
-    }
+      analysers[which] = analyser;
+
+      const gain = audioContext!.createGain();
+      source.connect(gain);
+      gain.connect(dest);
+      gains[which] = gain;
+    };
+
+    if (systemTrack) addSource(systemTrack, 'system');
+    if (micTrack) addSource(micTrack, 'mic');
 
     dest.stream.getAudioTracks().forEach((t) => finalStream.addTrack(t));
   }
 
-  return { stream: finalStream, analysers, audioContext };
+  return { stream: finalStream, analysers, gains, audioContext };
 }
