@@ -97,6 +97,20 @@ export class UIManager {
     this.errorDiv.classList.add('hidden');
   }
 
+  /**
+   * Match the preview container's aspect ratio to the shared screen so the
+   * preview is never cropped or letterboxed. The container is `aspect-video`
+   * (16:9) by default, which is wrong for any screen that is not 16:9.
+   */
+  setPreviewAspect(width: number, height: number) {
+    if (!width || !height) return;
+    this.videoContainer.style.aspectRatio = `${width} / ${height}`;
+  }
+
+  resetPreviewAspect() {
+    this.videoContainer.style.removeProperty('aspect-ratio');
+  }
+
   setSharingState(isSharing: boolean) {
     const toggle = (el: HTMLElement, show: boolean) =>
       el.classList.toggle('hidden', !show);
@@ -116,6 +130,7 @@ export class UIManager {
       this.downloadLink.removeAttribute('href');
     } else {
       this.videoPreview.srcObject = null;
+      this.resetPreviewAspect();
       toggle(this.placeholder, true);
       toggle(this.shareBtnStart, true);
       toggle(this.shareBtnStop, false);
