@@ -353,6 +353,18 @@
 			this.errorDiv.textContent = "";
 			this.errorDiv.classList.add("hidden");
 		}
+		/**
+		* Match the preview container's aspect ratio to the shared screen so the
+		* preview is never cropped or letterboxed. The container is `aspect-video`
+		* (16:9) by default, which is wrong for any screen that is not 16:9.
+		*/
+		setPreviewAspect(width, height) {
+			if (!width || !height) return;
+			this.videoContainer.style.aspectRatio = `${width} / ${height}`;
+		}
+		resetPreviewAspect() {
+			this.videoContainer.style.removeProperty("aspect-ratio");
+		}
 		setSharingState(isSharing) {
 			const toggle = (el, show) => el.classList.toggle("hidden", !show);
 			if (isSharing) {
@@ -368,6 +380,7 @@
 				this.downloadLink.removeAttribute("href");
 			} else {
 				this.videoPreview.srcObject = null;
+				this.resetPreviewAspect();
 				toggle(this.placeholder, true);
 				toggle(this.shareBtnStart, true);
 				toggle(this.shareBtnStop, false);
@@ -471,7 +484,10 @@
 			ui.videoPreview.srcObject = stream;
 			await ui.videoPreview.play();
 			ui.setSharingState(true);
-			stream.getVideoTracks()[0].addEventListener("ended", stopSharing);
+			const [videoTrack] = stream.getVideoTracks();
+			syncPreviewAspect(videoTrack);
+			videoTrack.addEventListener("ended", stopSharing);
+			videoTrack.addEventListener("resize", () => syncPreviewAspect(videoTrack));
 			visualizeAudio();
 		} catch (err) {
 			console.error("Error sharing screen:", err);
@@ -483,6 +499,18 @@
 			ui.showError(errorMsg);
 			stopSharing();
 		}
+	}
+	/**
+	* Size the preview container to the shared screen's real aspect ratio. The
+	* markup defaults to `aspect-video` (16:9), which crops any screen that is not
+	* 16:9 - so prefer the track's own settings and fall back to the decoded
+	* frame size.
+	*/
+	function syncPreviewAspect(videoTrack) {
+		const { width, height } = videoTrack.getSettings();
+		const w = width || ui.videoPreview.videoWidth;
+		const h = height || ui.videoPreview.videoHeight;
+		if (w && h) ui.setPreviewAspect(w, h);
 	}
 	async function startRecording() {
 		if (!stream) {
