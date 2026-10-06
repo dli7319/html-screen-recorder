@@ -44,3 +44,29 @@ export function formatDuration(ms: number): string {
     ? `${hours}:${pad(totalMinutes % 60)}:${pad(seconds)}`
     : `${pad(totalMinutes)}:${pad(seconds)}`;
 }
+
+/**
+ * `Expires in 30 days` and friends, for a take cache retention window.
+ *
+ * Rounded to the nearest unit rather than floored: a fresh take is 29.999
+ * days from expiry, and flooring would brand-new clips "Expires in 29 days"
+ * next to a note promising 30 - the display would look wrong on its best
+ * day. Rounding is never off by more than half a unit, and past the window
+ * this reads "Expired" rather than pretending time is left.
+ */
+export function formatExpiry(remainingMs: number): string {
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 'Expired';
+
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+
+  const phrase = (value: number, unit: string) =>
+    `Expires in ${value} ${unit}${value === 1 ? '' : 's'}`;
+
+  if (remainingMs >= DAY) return phrase(Math.round(remainingMs / DAY), 'day');
+  if (remainingMs >= HOUR)
+    return phrase(Math.round(remainingMs / HOUR), 'hour');
+  // The bottom rung stays at one: "Expires in 0 minutes" reads as expired.
+  return phrase(Math.max(1, Math.round(remainingMs / MINUTE)), 'minute');
+}

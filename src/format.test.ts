@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatDuration } from './format';
+import { formatBytes, formatDuration, formatExpiry } from './format';
 
 describe('formatBytes', () => {
   it('reports zero for nothing written', () => {
@@ -75,5 +75,52 @@ describe('formatDuration', () => {
   it('handles multi-hour recordings', () => {
     expect(formatDuration(36_000_000)).toBe('10:00:00');
     expect(formatDuration(86_400_000)).toBe('24:00:00');
+  });
+});
+
+describe('formatExpiry', () => {
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+
+  it('reads a fresh take as the full window', () => {
+    // Exactly 30 days out - the rounding choice that keeps a brand-new clip
+    // reading the same number the retention note promises.
+    expect(formatExpiry(30 * DAY)).toBe('Expires in 30 days');
+  });
+
+  it('counts days down in whole days', () => {
+    expect(formatExpiry(29 * DAY)).toBe('Expires in 29 days');
+    expect(formatExpiry(2 * DAY)).toBe('Expires in 2 days');
+    expect(formatExpiry(DAY)).toBe('Expires in 1 day');
+    // Singular day stays singular; plural days never do.
+    expect(formatExpiry(DAY + 1)).toBe('Expires in 1 day');
+  });
+
+  it('switches to hours inside the last day', () => {
+    expect(formatExpiry(23 * HOUR)).toBe('Expires in 23 hours');
+    expect(formatExpiry(2 * HOUR)).toBe('Expires in 2 hours');
+    expect(formatExpiry(HOUR)).toBe('Expires in 1 hour');
+  });
+
+  it('switches to minutes inside the last hour', () => {
+    expect(formatExpiry(59 * MINUTE)).toBe('Expires in 59 minutes');
+    expect(formatExpiry(2 * MINUTE)).toBe('Expires in 2 minutes');
+    expect(formatExpiry(MINUTE)).toBe('Expires in 1 minute');
+    // The bottom rung stays at one rather than printing "0 minutes".
+    expect(formatExpiry(1)).toBe('Expires in 1 minute');
+  });
+
+  it('rounds rather than under-reports a take that is nearly fresh', () => {
+    // A take made milliseconds ago has 30 days minus epsilon left; flooring
+    // would brand-new clips "Expires in 29 days" beside the 30-day note.
+    expect(formatExpiry(30 * DAY - 1)).toBe('Expires in 30 days');
+  });
+
+  it('says Expired rather than pretending time is left', () => {
+    expect(formatExpiry(0)).toBe('Expired');
+    expect(formatExpiry(-1)).toBe('Expired');
+    expect(formatExpiry(NaN)).toBe('Expired');
+    expect(formatExpiry(-30 * DAY)).toBe('Expired');
   });
 });

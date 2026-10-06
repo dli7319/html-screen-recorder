@@ -33,6 +33,7 @@
 @source inline('flex-1 min-w-0');
 @source inline('text-sm font-medium text-gray-900 dark:text-gray-100 truncate');
 @source inline('text-xs text-gray-500 dark:text-gray-400');
+@source inline('text-xs text-gray-500 dark:text-gray-400 shrink-0');
 @source inline('text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0');
 @source inline(
   'text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 shrink-0'
