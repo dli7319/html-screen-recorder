@@ -235,6 +235,16 @@
         <p id="takesEmpty" class="takes-empty">
           No takes yet. Recordings and screenshots will show up here.
         </p>
+
+        <!--
+          The retention promise for the cache behind this gallery. Small and
+          quiet on purpose - it is a standing fact, not a call to action - but
+          a take-cache.test.ts case pins its "N days" to TAKE_TTL_DAYS so the
+          prose can never drift from the constant it describes.
+        -->
+        <p class="takes-note">
+          Clips and screenshots are cached on-device for 30 days.
+        </p>
       </section>
     </div>
 

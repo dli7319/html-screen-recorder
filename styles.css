@@ -1018,6 +1018,17 @@ kbd {
     text-align: center;
 }
 
+/* The retention line under the gallery: "cached on-device for 30 days". It is
+   deliberately small - a standing fact, not a call to action - but it stays on
+   --ink-muted (~6:1 dark, ~7:1 light) rather than --ink-disabled, matching the
+   placeholder convention above: hierarchy comes from size and weight, never
+   from making informational text harder to read. */
+.takes-note {
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin: 10px 0 0;
+}
+
 /* ---------- settings drawer ---------- */
 
 .scrim {

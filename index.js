@@ -469,6 +469,25 @@
 		const pad = (n) => n.toString().padStart(2, "0");
 		return hours > 0 ? `${hours}:${pad(totalMinutes % 60)}:${pad(seconds)}` : `${pad(totalMinutes)}:${pad(seconds)}`;
 	}
+	/**
+	* `Expires in 30 days` and friends, for a take cache retention window.
+	*
+	* Rounded to the nearest unit rather than floored: a fresh take is 29.999
+	* days from expiry, and flooring would brand-new clips "Expires in 29 days"
+	* next to a note promising 30 - the display would look wrong on its best
+	* day. Rounding is never off by more than half a unit, and past the window
+	* this reads "Expired" rather than pretending time is left.
+	*/
+	function formatExpiry(remainingMs) {
+		if (!Number.isFinite(remainingMs) || remainingMs <= 0) return "Expired";
+		const MINUTE = 6e4;
+		const HOUR = 60 * MINUTE;
+		const DAY = 24 * HOUR;
+		const phrase = (value, unit) => `Expires in ${value} ${unit}${value === 1 ? "" : "s"}`;
+		if (remainingMs >= DAY) return phrase(Math.round(remainingMs / DAY), "day");
+		if (remainingMs >= HOUR) return phrase(Math.round(remainingMs / HOUR), "hour");
+		return phrase(Math.max(1, Math.round(remainingMs / MINUTE)), "minute");
+	}
 	//#endregion
 	//#region src/shortcuts.ts
 	/** Targets where a bare letter must stay a letter, not a command. */
@@ -1342,22 +1361,37 @@
 	//#endregion
 	//#region src/takes.ts
 	/**
+	* A cache that is full, disabled (some private windows), or simply slow must
+	* never break a capture: the take is still made, still listed, still
+	* downloadable - it just will not survive a refresh. So writes are fire and
+	* forget, and only the failure is reported.
+	*/
+	function warnCacheFailure(err) {
+		console.warn("Take cache write failed:", err);
+	}
+	/**
 	* Owns the collection of takes and the blob URLs hanging off them.
 	*
 	* The URL lifecycle is the reason this exists as a class rather than an array.
 	* A blob URL keeps the whole recording in memory until it is explicitly
 	* revoked, and the previous single-download code never revoked anything. One
 	* leaked URL was survivable; a gallery of a dozen takes would not be.
+	*
+	* With a cache attached it is also the only writer of cached takes: the same
+	* three operations the gallery can perform - add, remove, clear - are the
+	* three that reach storage, so the cache cannot drift from what is listed.
 	*/
 	var TakeStore = class {
-		constructor() {
+		constructor(cache) {
+			this.cache = cache;
 			this.takes = [];
 			this.listeners = /* @__PURE__ */ new Set();
 			this.counter = 0;
+			this.sessionTag = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 		}
 		add(input) {
 			const take = {
-				id: `take-${++this.counter}`,
+				id: this.nextId(),
 				kind: input.kind,
 				blob: input.blob,
 				url: URL.createObjectURL(input.blob),
@@ -1368,8 +1402,36 @@
 				formatName: input.formatName
 			};
 			this.takes.unshift(take);
+			const { url: _url, ...record } = take;
+			this.cache?.put(record).catch(warnCacheFailure);
 			this.emit();
 			return take;
+		}
+		nextId() {
+			return `take-${this.sessionTag}-${(++this.counter).toString(36)}`;
+		}
+		/**
+		* Re-populate from the cache. Called once at startup; safe to call on a
+		* store that already holds takes (a capture made while the cache was still
+		* loading) - existing takes win and the rest merge in by creation time.
+		*/
+		async restore() {
+			if (!this.cache) return;
+			let records;
+			try {
+				records = await this.cache.load();
+			} catch (err) {
+				warnCacheFailure(err);
+				return;
+			}
+			const held = new Set(this.takes.map((take) => take.id));
+			const restored = records.filter((record) => !held.has(record.id)).map((record) => ({
+				...record,
+				url: URL.createObjectURL(record.blob)
+			}));
+			if (restored.length === 0) return;
+			this.takes = [...this.takes, ...restored].sort((a, b) => b.createdAt - a.createdAt);
+			this.emit();
 		}
 		/** Remove one take and release its blob URL. */
 		remove(id) {
@@ -1377,6 +1439,7 @@
 			if (index === -1) return;
 			const [removed] = this.takes.splice(index, 1);
 			URL.revokeObjectURL(removed.url);
+			this.cache?.delete(id).catch(warnCacheFailure);
 			this.emit();
 		}
 		/** Remove every take, releasing every blob URL. */
@@ -1384,11 +1447,18 @@
 			for (const take of this.takes) URL.revokeObjectURL(take.url);
 			const had = this.takes.length > 0;
 			this.takes = [];
+			this.cache?.clear().catch(warnCacheFailure);
 			if (had) this.emit();
 		}
-		/** Release everything. The store is unusable afterwards. */
+		/**
+		* Release everything. The store is unusable afterwards.
+		*
+		* Deliberately does not touch the cache: this is the page going away, not
+		* the user saying "forget my takes".
+		*/
 		destroy() {
-			this.clear();
+			for (const take of this.takes) URL.revokeObjectURL(take.url);
+			this.takes = [];
 			this.listeners.clear();
 		}
 		list() {
@@ -1416,6 +1486,88 @@
 			for (const listener of listeners) listener();
 		}
 	};
+	//#endregion
+	//#region src/take-cache.ts
+	const TAKE_TTL_MS = 2592e6;
+	const DB_NAME = "html-screen-recorder";
+	const DB_VERSION = 1;
+	const STORE_NAME = "takes";
+	function requestAsPromise(request) {
+		return new Promise((resolve, reject) => {
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+	}
+	function transactionDone(tx) {
+		return new Promise((resolve, reject) => {
+			tx.oncomplete = () => resolve();
+			tx.onerror = () => reject(tx.error);
+			tx.onabort = () => reject(tx.error);
+		});
+	}
+	function openDatabase() {
+		return new Promise((resolve, reject) => {
+			const request = indexedDB.open(DB_NAME, DB_VERSION);
+			request.onupgradeneeded = () => {
+				request.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+			};
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+	}
+	/**
+	* IndexedDB-backed TakePersistence.
+	*
+	* Every method resolves after its transaction commits, so callers that care
+	* about ordering - a delete racing a put on the same id - can await. The
+	* store itself fires these off without waiting; a cache that is slow or full
+	* must never block a capture.
+	*/
+	var TakeCache = class {
+		constructor() {
+			this.db = null;
+		}
+		/** One open connection per page. Reused after the first call resolves. */
+		database() {
+			this.db ??= openDatabase();
+			return this.db;
+		}
+		async put(record) {
+			const tx = (await this.database()).transaction(STORE_NAME, "readwrite");
+			tx.objectStore(STORE_NAME).put(record);
+			await transactionDone(tx);
+		}
+		async delete(id) {
+			const tx = (await this.database()).transaction(STORE_NAME, "readwrite");
+			tx.objectStore(STORE_NAME).delete(id);
+			await transactionDone(tx);
+		}
+		async clear() {
+			const tx = (await this.database()).transaction(STORE_NAME, "readwrite");
+			tx.objectStore(STORE_NAME).clear();
+			await transactionDone(tx);
+		}
+		/**
+		* Every take still within the TTL, newest first.
+		*
+		* Expired rows are deleted here rather than by a timer: the cache is only
+		* read on load, so this is the one moment stale rows would be seen, and a
+		* sweep costs nothing extra alongside the read that already happened.
+		*/
+		async load() {
+			const tx = (await this.database()).transaction(STORE_NAME, "readwrite");
+			const store = tx.objectStore(STORE_NAME);
+			const all = await requestAsPromise(store.getAll());
+			const cutoff = Date.now() - TAKE_TTL_MS;
+			const fresh = all.filter((record) => !recordExpired(record, cutoff));
+			for (const stale of all) if (recordExpired(stale, cutoff)) store.delete(stale.id);
+			await transactionDone(tx);
+			return fresh.sort((a, b) => b.createdAt - a.createdAt);
+		}
+	};
+	function recordExpired(record, cutoff) {
+		return record.createdAt < cutoff;
+	}
 	//#endregion
 	//#region src/gallery-view.ts
 	/**
@@ -1457,6 +1609,7 @@
 			this.unsubscribe = this.store.onChange(() => this.render());
 			this.downloadAllBtn.addEventListener("click", this.onDownloadAll);
 			this.clearBtn.addEventListener("click", this.onClear);
+			this.expiryTimer = window.setInterval(() => this.refreshExpiries(), 6e4);
 			this.render();
 		}
 		unbind() {
@@ -1464,6 +1617,19 @@
 			this.unsubscribe = null;
 			this.downloadAllBtn.removeEventListener("click", this.onDownloadAll);
 			this.clearBtn.removeEventListener("click", this.onClear);
+			if (this.expiryTimer !== void 0) {
+				window.clearInterval(this.expiryTimer);
+				this.expiryTimer = void 0;
+			}
+			this.list.replaceChildren();
+		}
+		/**
+		* Re-time every row's "Expires in ..." label in place. The rows keep their
+		* identity so a background tick cannot steal focus or hover mid-read.
+		*/
+		refreshExpiries() {
+			const labels = this.list.querySelectorAll("[data-expires-at]");
+			for (const label of labels) label.textContent = formatExpiry(Number(label.dataset.expiresAt) - Date.now());
 		}
 		render() {
 			const takes = this.store.list();
@@ -1491,6 +1657,10 @@
 			const meta = document.createElement("p");
 			meta.className = "text-xs text-gray-500 dark:text-gray-400";
 			meta.textContent = [this.describeTake(take), take.formatName].filter(Boolean).join(" · ");
+			const expires = document.createElement("span");
+			expires.className = "text-xs text-gray-500 dark:text-gray-400 shrink-0";
+			expires.dataset.expiresAt = String(take.createdAt + TAKE_TTL_MS);
+			expires.textContent = formatExpiry(take.createdAt + TAKE_TTL_MS - Date.now());
 			detail.append(name, meta);
 			const download = document.createElement("button");
 			download.type = "button";
@@ -1506,7 +1676,7 @@
 			remove.textContent = "Remove";
 			remove.title = `Remove ${take.filename} from the gallery`;
 			remove.addEventListener("click", () => this.store.remove(take.id));
-			row.append(icon, detail, download, remove);
+			row.append(icon, detail, expires, download, remove);
 			return row;
 		}
 		/** Length and size for a recording, just size for a screenshot. */
@@ -1600,7 +1770,7 @@
 	//#region src/index.ts
 	const ui = new UIManager();
 	const settings = new SettingsPanel();
-	const takes = new TakeStore();
+	const takes = new TakeStore(new TakeCache());
 	const galleryRoot = document.getElementById("takesRoot");
 	if (!galleryRoot) throw new Error("Gallery markup is missing #takesRoot");
 	const gallery = new GalleryView(galleryRoot, takes);
@@ -1633,6 +1803,7 @@
 	ui.videoPreview.addEventListener("resize", syncPreviewAspect);
 	window.addEventListener("load", () => {
 		gallery.bind();
+		takes.restore();
 		ui.setPipSupported(pip.isSupported());
 		settings.populateQuality();
 		if (!window.MediaRecorder) {
