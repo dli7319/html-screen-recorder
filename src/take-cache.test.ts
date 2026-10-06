@@ -1,7 +1,9 @@
 import 'fake-indexeddb/auto';
 import { Blob as NodeBlob } from 'node:buffer';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TakeCache, TAKE_TTL_MS } from './take-cache';
+import { TakeCache, TAKE_TTL_DAYS, TAKE_TTL_MS } from './take-cache';
 import { TakeRecord } from './takes';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -127,5 +129,19 @@ describe('TakeCache retention', () => {
 
     expect((await cache.load()).map((r) => r.id)).toEqual(['fresh']);
     expect((await rawRows()).map((r) => r.id)).toEqual(['fresh']);
+  });
+
+  it('keeps the retention note in the markup in step with the real TTL', () => {
+    // The "cached on-device for 30 days" line under the gallery is prose in
+    // dist/index.html, and prose does not break the build when the constant
+    // moves. This pins the two: change TAKE_TTL_DAYS and this test fails
+    // until the note says the same number.
+    const html = readFileSync(
+      join(process.cwd(), 'dist', 'index.html'),
+      'utf8'
+    );
+    const promised = /cached on-device for (\d+) days/.exec(html);
+    expect(promised, 'the gallery must carry a retention note').toBeTruthy();
+    expect(Number(promised![1])).toBe(TAKE_TTL_DAYS);
   });
 });

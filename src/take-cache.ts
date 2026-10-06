@@ -14,12 +14,17 @@
 import { TakePersistence, TakeRecord } from './takes';
 
 /**
- * How long a cached take is kept. Thirty days: long enough that "I made that
- * a while ago" still finds it, short enough that the cache cannot quietly
- * become a video archive the user never asked for. Expiry is enforced when
- * the cache is read, which is the only time stale rows matter.
+ * How long a cached take is kept, and the same number in days for anything
+ * that has to say it in words - the note under the gallery is prose in the
+ * markup, and prose and code drift apart silently unless a test pins them.
+ *
+ * Thirty days: long enough that "I made that a while ago" still finds it,
+ * short enough that the cache cannot quietly become a video archive the user
+ * never asked for. Expiry is enforced when the cache is read, which is the
+ * only time stale rows matter.
  */
-export const TAKE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const TAKE_TTL_DAYS = 30;
+export const TAKE_TTL_MS = TAKE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 const DB_NAME = 'html-screen-recorder';
 const DB_VERSION = 1;

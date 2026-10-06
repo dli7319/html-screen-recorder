@@ -1,5 +1,6 @@
 import { Take, TakeStore } from './takes';
-import { formatBytes, formatDuration } from './format';
+import { TAKE_TTL_MS } from './take-cache';
+import { formatBytes, formatDuration, formatExpiry } from './format';
 import { downloadBlob } from './screenshot';
 
 /**
@@ -20,6 +21,7 @@ export class GalleryView {
   private downloadAllBtn: HTMLButtonElement;
   private clearBtn: HTMLButtonElement;
   private unsubscribe: (() => void) | null = null;
+  private expiryTimer: number | undefined;
 
   constructor(
     private root: HTMLElement,
@@ -46,6 +48,12 @@ export class GalleryView {
     this.downloadAllBtn.addEventListener('click', this.onDownloadAll);
     this.clearBtn.addEventListener('click', this.onClear);
 
+    // Expiry labels are the one piece of row text that goes stale on its own:
+    // "Expires in 30 minutes" is a lie within the hour if nothing re-times it.
+    // Once a minute is well under the label's own granularity and cheap - the
+    // ticks only rewrite span text, never the rows themselves.
+    this.expiryTimer = window.setInterval(() => this.refreshExpiries(), 60_000);
+
     this.render();
   }
 
@@ -54,6 +62,23 @@ export class GalleryView {
     this.unsubscribe = null;
     this.downloadAllBtn.removeEventListener('click', this.onDownloadAll);
     this.clearBtn.removeEventListener('click', this.onClear);
+    if (this.expiryTimer !== undefined) {
+      window.clearInterval(this.expiryTimer);
+      this.expiryTimer = undefined;
+    }
+    this.list.replaceChildren();
+  }
+
+  /**
+   * Re-time every row's "Expires in ..." label in place. The rows keep their
+   * identity so a background tick cannot steal focus or hover mid-read.
+   */
+  private refreshExpiries() {
+    const labels = this.list.querySelectorAll<HTMLElement>('[data-expires-at]');
+    for (const label of labels) {
+      const expiresAt = Number(label.dataset.expiresAt);
+      label.textContent = formatExpiry(expiresAt - Date.now());
+    }
   }
 
   private onDownloadAll = () => {
@@ -106,6 +131,20 @@ export class GalleryView {
       .filter(Boolean)
       .join(' · ');
 
+    // "Expires in 29 days" and friends: the retention window applied to when
+    // this take was made. The hook is data-*, not a class, so refreshExpiries()
+    // can re-time the labels in place - rebuilding the rows every tick would
+    // yank focus and hover out from under anyone reading the list. The label
+    // states the cache's policy; if a cache write failed (private window,
+    // quota) the take simply won't survive a refresh, and this doesn't track
+    // that per take.
+    const expires = document.createElement('span');
+    expires.className = 'text-xs text-gray-500 dark:text-gray-400 shrink-0';
+    expires.dataset.expiresAt = String(take.createdAt + TAKE_TTL_MS);
+    expires.textContent = formatExpiry(
+      take.createdAt + TAKE_TTL_MS - Date.now()
+    );
+
     detail.append(name, meta);
 
     const download = document.createElement('button');
@@ -128,7 +167,7 @@ export class GalleryView {
     remove.title = `Remove ${take.filename} from the gallery`;
     remove.addEventListener('click', () => this.store.remove(take.id));
 
-    row.append(icon, detail, download, remove);
+    row.append(icon, detail, expires, download, remove);
     return row;
   }
 

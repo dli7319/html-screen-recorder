@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GalleryView, downloadAll } from './gallery-view';
 import { TakeStore } from './takes';
+import { TAKE_TTL_MS } from './take-cache';
 
 const GALLERY_MARKUP = `
   <main>
@@ -181,8 +182,83 @@ describe('GalleryView with takes', () => {
       filename: 'one.webm',
       formatName: 'VP9',
     });
-
     expect($('takeList').children.length).toBe(0);
+  });
+
+  it('labels each take with when it expires', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+
+    const rows = $('takeList').querySelectorAll('[data-take-id]');
+    expect(rows[0].textContent).toContain('Expires in 30 days');
+  });
+
+  it('shows an older take with less time left', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+      // 25 days old with a 30-day window: 5 days remain.
+      createdAt: Date.now() - 25 * 24 * 60 * 60 * 1000,
+    });
+
+    const rows = $('takeList').querySelectorAll('[data-take-id]');
+    expect(rows[0].textContent).toContain('Expires in 5 days');
+  });
+
+  it('re-times expiry labels on the minute without rebuilding rows', () => {
+    // A label is only honest if it keeps up: "Expires in 2 minutes" is a lie
+    // within the hour if nothing re-times it. The tick must rewrite text in
+    // place - replacing rows would steal focus from anyone reading them.
+    vi.useFakeTimers();
+    try {
+      render();
+      store.add({
+        kind: 'recording',
+        blob: new Blob(['a']),
+        filename: 'one.webm',
+        formatName: 'VP9',
+        // 2 minutes of window left.
+        createdAt: Date.now() - (TAKE_TTL_MS - 2 * 60_000),
+      });
+
+      const row = $('takeList').querySelector('[data-take-id]');
+      expect(row?.textContent).toContain('Expires in 2 minutes');
+
+      vi.advanceTimersByTime(60_000);
+
+      expect($('takeList').querySelector('[data-take-id]')).toBe(row);
+      expect(row?.textContent).toContain('Expires in 1 minute');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops re-timing once unbound', () => {
+    vi.useFakeTimers();
+    try {
+      render();
+      store.add({
+        kind: 'recording',
+        blob: new Blob(['a']),
+        filename: 'one.webm',
+        formatName: 'VP9',
+        createdAt: Date.now() - (TAKE_TTL_MS - 2 * 60_000),
+      });
+      view.unbind();
+
+      // Nothing to re-time - the tick must not throw over the emptied list.
+      expect(() => vi.advanceTimersByTime(120_000)).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
