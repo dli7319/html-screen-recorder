@@ -13,12 +13,15 @@ import { fixWebmDuration } from './webm-duration';
 import { UIManager } from './ui-manager';
 import { SettingsPanel } from './settings-panel';
 import { TakeStore } from './takes';
+import { TakeCache } from './take-cache';
 import { GalleryView } from './gallery-view';
 import { registerServiceWorker } from './pwa';
 
 const ui = new UIManager();
 const settings = new SettingsPanel();
-const takes = new TakeStore();
+// Takes are cached so a refresh does not lose them; the store writes through
+// to IndexedDB on every add/remove/clear and restores on load.
+const takes = new TakeStore(new TakeCache());
 // The gallery mounts on an explicit id, not a tag name. It used to use
 // `document.querySelector('main')`, which meant a layout rewrite that dropped
 // the <main> element killed the whole boot silently - the page rendered and
@@ -79,6 +82,10 @@ ui.videoPreview.addEventListener('resize', syncPreviewAspect);
 
 window.addEventListener('load', () => {
   gallery.bind();
+  // Takes made before a refresh come back from the cache. Fire and forget:
+  // the gallery re-renders when the restore lands, and a capture made in the
+  // meantime is merged in rather than racing it.
+  void takes.restore();
   ui.setPipSupported(pip.isSupported());
   settings.populateQuality();
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TakeStore } from './takes';
+import { TakeRecord, TakeStore } from './takes';
 
 /**
  * jsdom implements neither createObjectURL nor revokeObjectURL. The whole
@@ -254,10 +254,139 @@ describe('TakeStore.onChange', () => {
     const b = vi.fn();
     store.onChange(a);
     store.onChange(b);
-
     store.add(take());
 
     expect(a).toHaveBeenCalledTimes(1);
     expect(b).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A minimal cache that records what the store asked of it. The IndexedDB
+ * implementation has its own tests; this pins the store's write-through
+ * contract against a plain fake.
+ */
+class FakeCache {
+  records = new Map<string, TakeRecord>();
+  put = vi.fn(async (record: TakeRecord) => {
+    this.records.set(record.id, record);
+  });
+  delete = vi.fn(async (id: string) => {
+    this.records.delete(id);
+  });
+  clear = vi.fn(async () => {
+    this.records.clear();
+  });
+  load = vi.fn(async () =>
+    Array.from(this.records.values()).sort((a, b) => b.createdAt - a.createdAt)
+  );
+}
+
+describe('TakeStore caching', () => {
+  it('writes each take through to the cache without its URL', () => {
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    const added = store.add(take());
+
+    expect(cache.put).toHaveBeenCalledTimes(1);
+    const record = cache.put.mock.calls[0][0];
+    expect(record.id).toBe(added.id);
+    expect(record.blob).toBe(added.blob);
+    expect('url' in record).toBe(false);
+  });
+
+  it('removes and clears through to the cache too', () => {
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    const added = store.add(take());
+
+    store.remove(added.id);
+    expect(cache.delete).toHaveBeenCalledWith(added.id);
+
+    store.add(take());
+    store.clear();
+    expect(cache.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('still records the take when the cache refuses it', () => {
+    // A full or disabled cache must not lose the capture itself - the take is
+    // still made and downloadable, it just will not survive a refresh.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cache = new FakeCache();
+    cache.put.mockRejectedValue(new Error('quota'));
+    const store = new TakeStore(cache);
+
+    const added = store.add(take());
+
+    expect(store.list()).toEqual([added]);
+    expect(store.count()).toBe(1);
+    warn.mockRestore();
+  });
+
+  it('restores cached takes newest first', async () => {
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    store.add({ ...take(), createdAt: 1_000 });
+    store.add({ ...take(), createdAt: 3_000 });
+
+    // A fresh session over the same cache.
+    const reborn = new TakeStore(cache);
+    await reborn.restore();
+
+    expect(reborn.count()).toBe(2);
+    expect(reborn.list().map((t) => t.createdAt)).toEqual([3_000, 1_000]);
+    expect(reborn.list().every((t) => t.url.startsWith('blob:test/'))).toBe(
+      true
+    );
+  });
+
+  it('merges takes made while the restore was still loading', async () => {
+    const cache = new FakeCache();
+    const seed = new TakeStore(cache);
+    seed.add({ ...take(), createdAt: 1_000 });
+
+    const reborn = new TakeStore(cache);
+    const early = reborn.add({ ...take(), createdAt: 2_000 });
+    await reborn.restore();
+
+    expect(reborn.list().map((t) => t.createdAt)).toEqual([2_000, 1_000]);
+    // No take is listed twice: "Download all" would double-download it.
+    expect(reborn.list().filter((t) => t.id === early.id)).toHaveLength(1);
+  });
+
+  it('survives a cache that fails to load', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cache = new FakeCache();
+    cache.load.mockRejectedValue(new Error('no idb in this window'));
+    const store = new TakeStore(cache);
+
+    await expect(store.restore()).resolves.toBeUndefined();
+    expect(store.count()).toBe(0);
+    warn.mockRestore();
+  });
+
+  it('removes a restored take from the cache by the id it came back with', async () => {
+    const cache = new FakeCache();
+    const seed = new TakeStore(cache);
+    seed.add(take());
+
+    const reborn = new TakeStore(cache);
+    await reborn.restore();
+    reborn.remove(reborn.list()[0].id);
+
+    expect(cache.delete).toHaveBeenCalledWith(seed.list()[0].id);
+    expect(cache.records.size).toBe(0);
+  });
+
+  it('does not empty the cache when the store is destroyed', async () => {
+    // destroy() is the page going away, not the user forgetting their takes.
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    store.add(take());
+
+    store.destroy();
+
+    expect(cache.clear).not.toHaveBeenCalled();
+    expect(cache.records.size).toBe(1);
   });
 });
