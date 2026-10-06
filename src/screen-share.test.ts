@@ -260,6 +260,41 @@ describe('shareScreen gain graph', () => {
       expect(analyser.connections).toEqual([]);
     }
   });
+
+  it('reports whether the share actually carries system audio', async () => {
+    // The picker can return a silent stream even when audio was asked for -
+    // "Share tab audio" is the user's to untick - and the chip has to be able
+    // to tell "system audio is off" apart from "there is none".
+    getDisplayMedia.mockResolvedValue(fakeStream(true, 0));
+
+    const silent = await shareScreen(true, mic({ enabled: false }));
+    expect(silent.hasSystemAudio).toBe(false);
+
+    getDisplayMedia.mockResolvedValue(fakeStream(true, 1));
+
+    const ctx = makeAudioContext();
+    vi.stubGlobal('AudioContext', function () {
+      return ctx;
+    });
+
+    const withAudio = await shareScreen(true, mic({ enabled: false }));
+    expect(withAudio.hasSystemAudio).toBe(true);
+  });
+
+  it('counts only the display track as system audio', async () => {
+    // A mic track must not make the system audio chip look available - each
+    // chip describes its own source.
+    getDisplayMedia.mockResolvedValue(fakeStream(true, 0));
+    getUserMedia.mockResolvedValue(fakeStream(false, 1));
+
+    const ctx = makeAudioContext();
+    vi.stubGlobal('AudioContext', function () {
+      return ctx;
+    });
+
+    const result = await shareScreen(true, mic({ enabled: true }));
+    expect(result.hasSystemAudio).toBe(false);
+  });
 });
 
 describe('DEFAULT_MIC_OPTIONS', () => {

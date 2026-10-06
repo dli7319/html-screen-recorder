@@ -62,6 +62,8 @@ export class SettingsPanel {
   private micVolumeValue = document.getElementById(
     'micVolumeValue'
   ) as HTMLSpanElement;
+  private locked = false;
+  private systemAudioUnavailable = false;
 
   populateFormats(formats: RecordingFormat[]) {
     formats.forEach((format) => {
@@ -215,15 +217,45 @@ export class SettingsPanel {
    * re-sharing - graying it out would imply the opposite.
    */
   setLocked(locked: boolean) {
+    this.locked = locked;
     // The countdown select is not here on purpose: it governs the next take,
     // not the shared stream, so it stays live exactly like the bitrate.
     this.formatSelect.disabled = locked;
     this.resolutionSelect.disabled = locked;
     this.frameRateSelect.disabled = locked;
-    this.systemAudioToggle.disabled = locked;
     this.micAudioToggle.disabled = locked;
     this.micNoiseSuppression.disabled = locked;
     this.micEchoCancellation.disabled = locked;
     this.micAutoGain.disabled = locked;
+    this.syncSystemAudioChip();
+  }
+
+  /**
+   * A share can come back without system audio - the picker's "Share tab
+   * audio" is the user's to untick, and window and screen shares carry no
+   * audio at all. The chip then has nothing to control: the fader drives no
+   * gain and the toggle cannot conjure a track the capture never made. So it
+   * goes disabled and says why on hover, instead of accepting input that
+   * silently does nothing. Restored by the next share.
+   */
+  setSystemAudioAvailable(available: boolean) {
+    this.systemAudioUnavailable = !available;
+    this.syncSystemAudioChip();
+  }
+
+  private syncSystemAudioChip() {
+    const unavailable = this.systemAudioUnavailable;
+    const chip = this.systemAudioToggle.closest(
+      '.source'
+    ) as HTMLElement | null;
+    this.systemAudioToggle.disabled = this.locked || unavailable;
+    this.systemVolume.disabled = unavailable;
+    if (!chip) return;
+    chip.toggleAttribute('data-unavailable', unavailable);
+    if (unavailable) {
+      chip.title = 'System audio was not part of this share';
+    } else {
+      chip.removeAttribute('title');
+    }
   }
 }

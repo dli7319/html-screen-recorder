@@ -228,6 +228,9 @@ async function handleShareScreen() {
     stream = shareResult.stream;
     analysers = shareResult.analysers;
     audioContext = shareResult.audioContext;
+    // The picker can hand back a silent share; the chip must not pretend to
+    // control audio the capture does not carry.
+    settings.setSystemAudioAvailable(shareResult.hasSystemAudio);
 
     ui.videoPreview.srcObject = stream;
     await ui.videoPreview.play();
@@ -407,6 +410,7 @@ async function stopSharing() {
   }
 
   ui.setSharingState(false);
+  settings.setSystemAudioAvailable(true);
   cropper.hide();
 }
 
