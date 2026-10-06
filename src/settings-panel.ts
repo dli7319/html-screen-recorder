@@ -245,7 +245,9 @@ export class SettingsPanel {
 
   private syncSystemAudioChip() {
     const unavailable = this.systemAudioUnavailable;
-    const chip = this.systemAudioToggle.closest('.source') as HTMLElement | null;
+    const chip = this.systemAudioToggle.closest(
+      '.source'
+    ) as HTMLElement | null;
     this.systemAudioToggle.disabled = this.locked || unavailable;
     this.systemVolume.disabled = unavailable;
     if (!chip) return;
