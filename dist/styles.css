@@ -51,6 +51,12 @@ body {
  *
  * The rule that makes the whole UI read as designed: `--danger` appears NOWHERE
  * except while recording. Colour carries state, not identity.
+ *
+ * Filled surfaces never take `color: #fff` — they take `--on-accent` /
+ * `--on-danger`. The dark theme's accent and danger fills are pale, and white
+ * text on `#8ab4f8` is 2.11:1: invisible where it matters most. The on-colour
+ * is chosen per theme against its own fill (dark ink on pale fills, white on
+ * saturated ones), so contrast survives any future palette change.
  */
 :root {
     --surface: #ffffff;
@@ -66,10 +72,12 @@ body {
     --accent-hover: #1b66c9;
     --accent-container: #e8f0fe;
     --accent-ink: #1967d2;
+    --on-accent: #ffffff;
 
     --danger: #d93025;
     --danger-hover: #c5221f;
     --danger-container: #fce8e6;
+    --on-danger: #ffffff;
 
     --radius-card: 12px;
     --radius-control: 8px;
@@ -94,10 +102,12 @@ body {
         --accent-hover: #aecbfa;
         --accent-container: #1f3a5f;
         --accent-ink: #8ab4f8;
+        --on-accent: #1e1f20;
 
         --danger: #f28b82;
         --danger-hover: #ee675c;
         --danger-container: #5c2b29;
+        --on-danger: #1e1f20;
 
         --elev-1: 0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
         --elev-2: 0 2px 6px 2px rgba(0, 0, 0, 0.5);
@@ -327,7 +337,7 @@ kbd {
     border-radius: 7px;
     flex: none;
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     display: grid;
     place-items: center;
 }
@@ -446,7 +456,7 @@ kbd {
 
 .btn--primary {
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
 }
 
 .btn--primary:hover:not([disabled]) {
@@ -456,7 +466,7 @@ kbd {
 
 .btn--live {
     background: var(--danger);
-    color: #fff;
+    color: var(--on-danger);
 }
 
 .btn--live:hover:not([disabled]) {
@@ -910,12 +920,12 @@ kbd {
 
 .transport[data-phase='sharing'] #recordBtn {
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
 }
 
 .transport[data-phase='recording'] #stopBtn {
     background: var(--danger);
-    color: #fff;
+    color: var(--on-danger);
 }
 
 .error {
@@ -1178,6 +1188,7 @@ kbd {
 
 .switch:checked::after {
     left: 16px;
+    background: var(--on-accent);
 }
 
 .switch:disabled {
