@@ -509,6 +509,7 @@ kbd {
 .btn:focus-visible,
 .icon-btn:focus-visible,
 .settings-chip:focus-visible,
+.take-thumb:focus-visible,
 .source:focus-within {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -1031,7 +1032,12 @@ kbd {
 
 /* ---------- settings drawer ---------- */
 
-.scrim {
+/* The shared dimming layer for both overlays. `.scrim` is the settings
+   drawer's, `.preview-scrim` the take preview's: separate classes because
+   the activation rules below match on class, and a shared one would light
+   both layers whenever either overlay opened. */
+.scrim,
+.preview-scrim {
     position: fixed;
     inset: 0;
     background: rgba(32, 33, 36, 0.32);
@@ -1065,6 +1071,120 @@ kbd {
 
 .shell[data-panel='open'] .drawer {
     transform: none;
+}
+
+/* ---------- take preview ---------- */
+
+/* Centered card rather than the drawer's edge panel: the media is the point,
+   so the dialog hugs it and sits in the middle of the screen. The z-index
+   steps over the drawer's - a preview opened from the gallery is the top-most
+   thing the user asked for. */
+.preview {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 110;
+    width: max-content;
+    max-width: min(92vw, 1100px);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--elev-2);
+    overflow: hidden;
+    /* visibility, not just opacity: a closed card at z-index 110 that is
+       merely transparent would still swallow clicks and sit in the tab
+       order. visibility removes it from both, and transitions discretely. */
+    visibility: hidden;
+    opacity: 0;
+    transition:
+        opacity 0.18s ease,
+        visibility 0s linear 0.18s;
+}
+
+.shell[data-preview='open'] .preview-scrim {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.shell[data-preview='open'] .preview {
+    visibility: visible;
+    opacity: 1;
+    transition:
+        opacity 0.18s ease,
+        visibility 0s;
+}
+
+.preview-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.preview-head strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The media keeps its own aspect ratio and shrinks to the card; a tall
+   screenshot must not push the head off the screen. */
+.preview-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 12px;
+    background: var(--surface-sunken);
+}
+
+.preview-media img,
+.preview-media video {
+    display: block;
+    max-width: min(88vw, 1080px);
+    max-height: 72vh;
+    border-radius: var(--radius-control);
+    background: var(--surface);
+}
+
+.preview-media img {
+    object-fit: contain;
+}
+
+/* The thumbnail slot in a take row: a fixed small box so rows stay aligned
+   whether the take has a picture yet or not. Clicking it previews the take,
+   so it is a real button - keyboard users get the same path as a click. */
+.take-thumb {
+    flex: none;
+    width: 64px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    overflow: hidden;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.take-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.take-thumb:hover {
+    border-color: var(--ink-muted);
 }
 
 .drawer-head {

@@ -21,6 +21,13 @@ export interface Take {
   readonly durationMs?: number;
   readonly createdAt: number;
   readonly formatName: string;
+  /** Small preview image for the gallery, present once one has been made.
+   *  Missing is a normal state, not an error: extraction is best-effort and
+   *  rows fall back to their glyph. */
+  readonly thumbnail?: Blob;
+  /** Object URL for the thumbnail, subject to the same lifetime rules as
+   *  `url` - revoked by the store, never by the view. */
+  readonly thumbnailUrl?: string;
 }
 
 export interface TakeInput {
@@ -33,10 +40,12 @@ export interface TakeInput {
 }
 
 /**
- * Everything about a take that survives a refresh: the model minus `url`,
- * which names memory in this tab and must be rebuilt on restore.
+ * Everything about a take that survives a refresh: the model minus `url` and
+ * `thumbnailUrl`, which name memory in this tab and must be rebuilt on
+ * restore. The thumbnail blob itself survives - it is the picture, not a
+ * reference to one.
  */
-export type TakeRecord = Omit<Take, 'url'>;
+export type TakeRecord = Omit<Take, 'url' | 'thumbnailUrl'>;
 
 /**
  * The slice of persistence the store needs. An interface rather than a direct
@@ -105,10 +114,42 @@ export class TakeStore {
 
     // Newest first: a take you just made is the one you want to reach for.
     this.takes.unshift(take);
-    const { url: _url, ...record } = take;
-    this.cache?.put(record).catch(warnCacheFailure);
+    this.cache?.put(TakeStore.toRecord(take)).catch(warnCacheFailure);
     this.emit();
     return take;
+  }
+
+  /**
+   * The take as stored: blob-backed facts only. Both URL fields name memory
+   * in this tab and are rebuilt on restore, so they are stripped here - the
+   * one place that happens.
+   */
+  private static toRecord(take: Take): TakeRecord {
+    const { url: _url, thumbnailUrl: _thumbUrl, ...record } = take;
+    return record;
+  }
+
+  /**
+   * Attach a thumbnail that was made after the take landed. Idempotent, and a
+   * no-op for an id that has since been removed or cleared - extraction is
+   * async and the user is faster than any decoder. Reports whether the take
+   * was still there to receive it.
+   */
+  setThumbnail(id: string, thumbnail: Blob): boolean {
+    const take = this.takes.find((candidate) => candidate.id === id);
+    if (!take) return false;
+
+    if (take.thumbnailUrl) URL.revokeObjectURL(take.thumbnailUrl);
+    const updated: Take = {
+      ...take,
+      thumbnail,
+      thumbnailUrl: URL.createObjectURL(thumbnail),
+    };
+    this.takes[this.takes.indexOf(take)] = updated;
+
+    this.cache?.put(TakeStore.toRecord(updated)).catch(warnCacheFailure);
+    this.emit();
+    return true;
   }
 
   private nextId(): string {
@@ -136,7 +177,15 @@ export class TakeStore {
       // A record whose id is already listed was written by this session's own
       // add(); listing it twice would double every download.
       .filter((record) => !held.has(record.id))
-      .map((record) => ({ ...record, url: URL.createObjectURL(record.blob) }));
+      .map((record) => ({
+        ...record,
+        url: URL.createObjectURL(record.blob),
+        // Rows cached before thumbnails existed simply have no `thumbnail`;
+        // they restore without one and pick it up from the backfill pass.
+        thumbnailUrl: record.thumbnail
+          ? URL.createObjectURL(record.thumbnail)
+          : undefined,
+      }));
     if (restored.length === 0) return;
 
     this.takes = [...this.takes, ...restored].sort(
@@ -145,20 +194,20 @@ export class TakeStore {
     this.emit();
   }
 
-  /** Remove one take and release its blob URL. */
+  /** Remove one take and release its blob URLs. */
   remove(id: string): void {
     const index = this.takes.findIndex((take) => take.id === id);
     if (index === -1) return;
 
     const [removed] = this.takes.splice(index, 1);
-    URL.revokeObjectURL(removed.url);
+    TakeStore.release(removed);
     this.cache?.delete(id).catch(warnCacheFailure);
     this.emit();
   }
 
   /** Remove every take, releasing every blob URL. */
   clear(): void {
-    for (const take of this.takes) URL.revokeObjectURL(take.url);
+    for (const take of this.takes) TakeStore.release(take);
     const had = this.takes.length > 0;
     this.takes = [];
     this.cache?.clear().catch(warnCacheFailure);
@@ -172,9 +221,15 @@ export class TakeStore {
    * the user saying "forget my takes".
    */
   destroy(): void {
-    for (const take of this.takes) URL.revokeObjectURL(take.url);
+    for (const take of this.takes) TakeStore.release(take);
     this.takes = [];
     this.listeners.clear();
+  }
+
+  /** Every blob URL a take holds. Both are owned here and revoked nowhere else. */
+  private static release(take: Take): void {
+    URL.revokeObjectURL(take.url);
+    if (take.thumbnailUrl) URL.revokeObjectURL(take.thumbnailUrl);
   }
 
   list(): readonly Take[] {

@@ -10,6 +10,13 @@ const GALLERY_MARKUP = `
     <span id="takeCount"></span>
     <button id="downloadAllBtn" disabled></button>
     <button id="clearTakesBtn" disabled></button>
+    <div id="previewScrim"></div>
+    <div id="previewModal">
+      <strong id="previewTitle"></strong>
+      <button id="previewDownload"></button>
+      <button id="previewClose"></button>
+      <div id="previewMedia"></div>
+    </div>
   </main>
 `;
 
@@ -318,5 +325,105 @@ describe('downloadAll', () => {
 
   it('reports zero for an empty list', () => {
     expect(downloadAll([])).toBe(0);
+  });
+});
+
+describe('GalleryView thumbnails', () => {
+  it('shows the thumbnail picture when the take has one', () => {
+    render();
+    const added = store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+    store.setThumbnail(added.id, new Blob(['thumb']));
+
+    const img = $('takeList').querySelector(
+      '.take-thumb img'
+    ) as HTMLImageElement;
+    expect(img).toBeTruthy();
+    expect(img.getAttribute('src')).toBe(store.list()[0].thumbnailUrl);
+    // The picture is decorative; the button carries the name.
+    expect(img.alt).toBe('');
+    expect(
+      ($('takeList').querySelector('.take-thumb') as HTMLElement).getAttribute(
+        'aria-label'
+      )
+    ).toBe('Preview one.webm');
+  });
+
+  it('keeps the glyph when there is no thumbnail yet', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+
+    const thumbs = $('takeList').querySelectorAll('.take-thumb');
+    // Newest first, so the screenshot (added second) leads.
+    expect(thumbs[0].textContent).toBe('📷');
+    expect(thumbs[1].textContent).toBe('🎬');
+    expect($('takeList').querySelector('.take-thumb img')).toBeNull();
+  });
+
+  it('updates the row when a thumbnail lands after rendering', () => {
+    // Extraction is async: the row is drawn first, the picture fills in.
+    render();
+    const added = store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+
+    store.setThumbnail(added.id, new Blob(['thumb']));
+
+    expect($('takeList').querySelector('.take-thumb img')).toBeTruthy();
+    expect($('takeList').querySelector('.take-thumb')?.textContent).toBe('');
+  });
+
+  it('opens the preview on click and puts the take in it', () => {
+    render();
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+
+    ($('takeList').querySelector('.take-thumb') as HTMLButtonElement).click();
+
+    expect(document.body.dataset.preview).toBe('open');
+    expect($('previewTitle').textContent).toBe('two.png');
+    expect($('previewMedia').querySelector('img')).toBeTruthy();
+  });
+
+  it('is a real button, so Enter opens the preview too', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+
+    const thumb = $('takeList').querySelector(
+      '.take-thumb'
+    ) as HTMLButtonElement;
+    expect(thumb.tagName).toBe('BUTTON');
+    expect(thumb.type).toBe('button');
+
+    thumb.click();
+
+    expect(document.body.dataset.preview).toBe('open');
   });
 });

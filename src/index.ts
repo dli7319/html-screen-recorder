@@ -12,9 +12,10 @@ import { Stopwatch } from './stopwatch';
 import { fixWebmDuration } from './webm-duration';
 import { UIManager } from './ui-manager';
 import { SettingsPanel } from './settings-panel';
-import { TakeStore } from './takes';
+import { Take, TakeStore } from './takes';
 import { TakeCache } from './take-cache';
 import { GalleryView } from './gallery-view';
+import { downscaleImage, extractVideoThumbnail } from './thumbnail';
 import { registerServiceWorker } from './pwa';
 
 const ui = new UIManager();
@@ -85,7 +86,7 @@ window.addEventListener('load', () => {
   // Takes made before a refresh come back from the cache. Fire and forget:
   // the gallery re-renders when the restore lands, and a capture made in the
   // meantime is merged in rather than racing it.
-  void takes.restore();
+  void takes.restore().then(backfillThumbnails);
   ui.setPipSupported(pip.isSupported());
   settings.populateQuality();
 
@@ -188,12 +189,55 @@ async function captureScreenshot() {
   const blob = await captureFrame(ui.videoPreview);
   if (!blob) return;
 
-  takes.add({
+  const take = takes.add({
     kind: 'screenshot',
     blob,
     filename: timestampFilename('png'),
     formatName: 'PNG',
   });
+  // A screenshot is already an image, so its thumbnail is just a shrunk copy.
+  void attachThumbnail(take, () => downscaleImage(blob));
+}
+
+/**
+ * Make a take's thumbnail and attach it, best-effort. Fired from the capture
+ * paths without awaiting: decoding must never delay the stop feedback. `make`
+ * is a function so the store can have moved on by the time it resolves -
+ * setThumbnail() is then a no-op rather than an error.
+ */
+function attachThumbnail(
+  take: Take,
+  make: () => Promise<Blob | null>
+): Promise<void> {
+  return make().then((thumbnail) => {
+    if (thumbnail) takes.setThumbnail(take.id, thumbnail);
+  });
+}
+
+/**
+ * Give restored takes that never got a thumbnail one.
+ *
+ * Rows cached before this feature existed have none, and one may have failed
+ * mid-decode on a previous run. Two workers: a dozen simultaneous video
+ * decodes at startup is a jank source, and there is no user-visible rush -
+ * rows show their glyph until each picture lands.
+ */
+function backfillThumbnails(): void {
+  const queue = takes.list().filter((take) => !take.thumbnail);
+
+  const worker = async (): Promise<void> => {
+    for (let take = queue.shift(); take; take = queue.shift()) {
+      await attachThumbnail(take, () => makeThumbnail(take));
+    }
+  };
+  void Promise.all([worker(), worker()]);
+}
+
+/** The thumbnail generator that fits a take's kind. */
+function makeThumbnail(take: Take): Promise<Blob | null> {
+  return take.kind === 'recording'
+    ? extractVideoThumbnail(take.blob, take.durationMs)
+    : downscaleImage(take.blob);
 }
 
 /**
@@ -375,13 +419,18 @@ async function onRecordingStop(blob: Blob, ext: string) {
 
   // The take is added to the gallery rather than written to a single download
   // link, so making the next one cannot lose this one.
-  takes.add({
+  const take = takes.add({
     kind: 'recording',
     blob: fixedBlob,
     filename: timestampFilename(ext),
     formatName: settings.getFormat().name,
     durationMs,
   });
+  // A frame from the clip becomes its gallery thumbnail. Off the stop path:
+  // the seek + decode takes real time and the feedback must not wait for it.
+  void attachThumbnail(take, () =>
+    extractVideoThumbnail(fixedBlob, durationMs)
+  );
 
   ui.setRecordingState(false);
 }

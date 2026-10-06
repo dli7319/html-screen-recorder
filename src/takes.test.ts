@@ -390,3 +390,122 @@ describe('TakeStore caching', () => {
     expect(cache.records.size).toBe(1);
   });
 });
+
+describe('TakeStore thumbnails', () => {
+  const thumb = () => new Blob(['thumb']);
+
+  it('attaches a thumbnail later and writes it through', () => {
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    const added = store.add(take());
+
+    expect(store.setThumbnail(added.id, thumb())).toBe(true);
+
+    const updated = store.list()[0];
+    expect(updated.thumbnail).toBeDefined();
+    expect(updated.thumbnailUrl).toBeDefined();
+    // The blob persists, its URL does not: same contract as `url`.
+    const stored = cache.records.get(added.id);
+    expect(stored?.thumbnail).toBeDefined();
+    expect(stored).not.toHaveProperty('thumbnailUrl');
+    expect(stored).not.toHaveProperty('url');
+  });
+
+  it('notifies listeners when a thumbnail lands', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+    const listener = vi.fn();
+    store.onChange(listener);
+
+    store.setThumbnail(added.id, thumb());
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a no-op for a take that has been removed', () => {
+    // Extraction is async and the user is faster than any decoder.
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    const added = store.add(take());
+    store.remove(added.id);
+
+    expect(store.setThumbnail(added.id, thumb())).toBe(false);
+    expect(cache.records.size).toBe(0);
+  });
+
+  it('replaces a thumbnail and releases the old URL', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+    store.setThumbnail(added.id, thumb());
+    const first = store.list()[0].thumbnailUrl;
+
+    store.setThumbnail(added.id, thumb());
+
+    expect(store.list()[0].thumbnailUrl).not.toBe(first);
+    expect(revoked).toContain(first);
+  });
+
+  it('releases the thumbnail URL alongside the take URL', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+    store.setThumbnail(added.id, thumb());
+    const takeUrl = store.list()[0].url;
+    const thumbUrl = store.list()[0].thumbnailUrl;
+
+    store.remove(added.id);
+
+    expect(revoked).toContain(takeUrl);
+    expect(revoked).toContain(thumbUrl);
+  });
+
+  it('releases every thumbnail URL on clear and on destroy', () => {
+    const store = new TakeStore();
+    const a = store.add(take());
+    const b = store.add(take());
+    store.setThumbnail(a.id, thumb());
+    const takeA = store.list().find((t) => t.id === a.id);
+    const takeB = store.list().find((t) => t.id === b.id);
+
+    store.clear();
+
+    // Two take URLs and the one thumbnail URL.
+    expect(revoked).toContain(takeA?.url);
+    expect(revoked).toContain(takeA?.thumbnailUrl);
+    expect(revoked).toContain(takeB?.url);
+
+    const c = store.add(take());
+    store.setThumbnail(c.id, thumb());
+    const thumbUrl = store.list().find((t) => t.id === c.id)?.thumbnailUrl;
+
+    store.destroy();
+    expect(revoked).toContain(thumbUrl);
+  });
+
+  it('rebuilds the thumbnail URL on restore', async () => {
+    const cache = new FakeCache();
+    const seed = new TakeStore(cache);
+    const added = seed.add(take());
+    seed.setThumbnail(added.id, thumb());
+
+    const reborn = new TakeStore(cache);
+    await reborn.restore();
+
+    const restored = reborn.list()[0];
+    expect(restored.thumbnail).toBeDefined();
+    expect(restored.thumbnailUrl).toBeDefined();
+    // A fresh URL for this session, not the dead one from the last.
+    expect(restored.thumbnailUrl).not.toBe(seed.list()[0].thumbnailUrl);
+  });
+
+  it('restores old rows that predate thumbnails without one', async () => {
+    const cache = new FakeCache();
+    const seed = new TakeStore(cache);
+    seed.add(take());
+
+    const reborn = new TakeStore(cache);
+    await reborn.restore();
+
+    expect(reborn.list()[0].thumbnail).toBeUndefined();
+    expect(reborn.list()[0].thumbnailUrl).toBeUndefined();
+  });
+});

@@ -84,6 +84,25 @@ describe('TakeCache round-trip', () => {
     expect(loaded[0].filename).toBe('second.webm');
   });
 
+  it('round-trips a thumbnail blob alongside its record', async () => {
+    const cache = new TakeCache();
+    await cache.put(record({ id: 'take-1', thumbnail: new Blob(['poster']) }));
+
+    const [loaded] = await cache.load();
+
+    expect(loaded.thumbnail).toBeDefined();
+    await expect(loaded.thumbnail?.text()).resolves.toBe('poster');
+  });
+
+  it('loads rows from before thumbnails existed without one', async () => {
+    const cache = new TakeCache();
+    await cache.put(record({ id: 'take-1' }));
+
+    const [loaded] = await cache.load();
+
+    expect(loaded.thumbnail).toBeUndefined();
+  });
+
   it('deletes one take and keeps the rest', async () => {
     const cache = new TakeCache();
     await cache.put(record({ id: 'keep' }));
