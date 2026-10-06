@@ -154,6 +154,7 @@
 		}
 		return {
 			stream: finalStream,
+			hasSystemAudio: Boolean(systemTrack),
 			analysers,
 			gains,
 			audioContext
@@ -1178,6 +1179,8 @@
 			this.micVolume = document.getElementById("micVolume");
 			this.systemVolumeValue = document.getElementById("systemVolumeValue");
 			this.micVolumeValue = document.getElementById("micVolumeValue");
+			this.locked = false;
+			this.systemAudioUnavailable = false;
 		}
 		populateFormats(formats) {
 			formats.forEach((format) => {
@@ -1303,14 +1306,37 @@
 		* re-sharing - graying it out would imply the opposite.
 		*/
 		setLocked(locked) {
+			this.locked = locked;
 			this.formatSelect.disabled = locked;
 			this.resolutionSelect.disabled = locked;
 			this.frameRateSelect.disabled = locked;
-			this.systemAudioToggle.disabled = locked;
 			this.micAudioToggle.disabled = locked;
 			this.micNoiseSuppression.disabled = locked;
 			this.micEchoCancellation.disabled = locked;
 			this.micAutoGain.disabled = locked;
+			this.syncSystemAudioChip();
+		}
+		/**
+		* A share can come back without system audio - the picker's "Share tab
+		* audio" is the user's to untick, and window and screen shares carry no
+		* audio at all. The chip then has nothing to control: the fader drives no
+		* gain and the toggle cannot conjure a track the capture never made. So it
+		* goes disabled and says why on hover, instead of accepting input that
+		* silently does nothing. Restored by the next share.
+		*/
+		setSystemAudioAvailable(available) {
+			this.systemAudioUnavailable = !available;
+			this.syncSystemAudioChip();
+		}
+		syncSystemAudioChip() {
+			const unavailable = this.systemAudioUnavailable;
+			const chip = this.systemAudioToggle.closest(".source");
+			this.systemAudioToggle.disabled = this.locked || unavailable;
+			this.systemVolume.disabled = unavailable;
+			if (!chip) return;
+			chip.toggleAttribute("data-unavailable", unavailable);
+			if (unavailable) chip.title = "System audio was not part of this share";
+			else chip.removeAttribute("title");
 		}
 	};
 	//#endregion
@@ -1713,6 +1739,7 @@
 			stream = shareResult.stream;
 			analysers = shareResult.analysers;
 			audioContext = shareResult.audioContext;
+			settings.setSystemAudioAvailable(shareResult.hasSystemAudio);
 			ui.videoPreview.srcObject = stream;
 			await ui.videoPreview.play();
 			ui.setSharingState(true);
@@ -1840,6 +1867,7 @@
 			stream = null;
 		}
 		ui.setSharingState(false);
+		settings.setSystemAudioAvailable(true);
 		cropper.hide();
 	}
 	function visualizeAudio() {
