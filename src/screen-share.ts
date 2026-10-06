@@ -18,6 +18,13 @@ export const DEFAULT_MIC_OPTIONS: MicOptions = {
 
 export interface ShareResult {
   stream: MediaStream;
+  /**
+   * Whether the display stream actually carried an audio track. The picker can
+   * hand back a silent share - "Share tab audio" is the user's to untick, and
+   * window and screen shares carry no audio at all - so the UI cannot infer
+   * this from what it asked for, only from what arrived.
+   */
+  hasSystemAudio: boolean;
   analysers: {
     system?: AnalyserNode;
     mic?: AnalyserNode;
@@ -106,5 +113,11 @@ export async function shareScreen(
     dest.stream.getAudioTracks().forEach((t) => finalStream.addTrack(t));
   }
 
-  return { stream: finalStream, analysers, gains, audioContext };
+  return {
+    stream: finalStream,
+    hasSystemAudio: Boolean(systemTrack),
+    analysers,
+    gains,
+    audioContext,
+  };
 }

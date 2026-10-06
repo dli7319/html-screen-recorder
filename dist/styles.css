@@ -824,6 +824,42 @@ kbd {
 }
 
 /*
+   Disabled when the live share carries no system audio. The picker can return
+   a silent share - "Share tab audio" is the user's to untick, and window and
+   screen captures have no audio at all - and nothing on the chip can fix that
+   mid-share: the toggle cannot conjure a track the capture never made, and the
+   fader drives no gain. Accepting input that silently does nothing is worse
+   than saying so, so the chip greys out and explains itself on hover, and the
+   next share restores it.
+*/
+.source[data-unavailable] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.source[data-unavailable] .source-toggle,
+.source[data-unavailable] .level {
+    cursor: not-allowed;
+}
+
+/* The accent tint says "this source is live"; this one is absent, so the chip
+   drops back to the neutral look even when the toggle is still checked. The
+   checkmark itself stays - the toggle's state is what the next share requests. */
+.source[data-unavailable]:has(input:checked) {
+    background: var(--surface);
+    border-color: var(--border);
+}
+
+.source[data-unavailable]:has(input:checked) .source-toggle {
+    color: var(--ink-disabled);
+}
+
+.source[data-unavailable]:has(input:checked) .pct {
+    color: var(--ink-disabled);
+    opacity: 1;
+}
+
+/*
    Level meter. It was briefly a 2px hairline along the bottom of the pill,
    which was a mistake: it looked like decoration and answered nothing. The
    meter is the difference between "the mic is muted" and "the mic is broken",

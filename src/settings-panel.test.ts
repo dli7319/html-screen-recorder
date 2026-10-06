@@ -18,14 +18,16 @@ function renderSettings(): SettingsPanel {
       <option value="3" selected>3 seconds</option>
       <option value="5">5 seconds</option>
     </select>
-    <input type="checkbox" id="systemAudioToggle" />
+    <div class="source">
+      <input type="checkbox" id="systemAudioToggle" />
+      <input type="range" id="systemVolume" min="0" max="100" value="100" />
+      <span id="systemVolumeValue"></span>
+    </div>
     <input type="checkbox" id="micAudioToggle" />
     <input type="checkbox" id="micNoiseSuppression" checked />
     <input type="checkbox" id="micEchoCancellation" checked />
     <input type="checkbox" id="micAutoGain" checked />
-    <input type="range" id="systemVolume" min="0" max="100" value="100" />
     <input type="range" id="micVolume" min="0" max="100" value="100" />
-    <span id="systemVolumeValue"></span>
     <span id="micVolumeValue"></span>
   `;
   return new SettingsPanel();
@@ -317,5 +319,55 @@ describe('SettingsPanel audio', () => {
 
     $('micVolume').dispatchEvent(new Event('input'));
     expect(seen.at(-1)).toBe('mic');
+  });
+});
+
+describe('SettingsPanel system audio availability', () => {
+  it('disables the chip when the share came back without system audio', () => {
+    const settings = renderSettings();
+    settings.setSystemAudioAvailable(false);
+
+    expect(($('systemAudioToggle') as HTMLInputElement).disabled).toBe(true);
+    expect(($('systemVolume') as HTMLInputElement).disabled).toBe(true);
+
+    const chip = $('systemAudioToggle').closest('.source') as HTMLElement;
+    expect(chip.hasAttribute('data-unavailable')).toBe(true);
+    expect(chip.title).toContain('not part of this share');
+  });
+
+  it('restores the chip when system audio is there', () => {
+    const settings = renderSettings();
+    settings.setSystemAudioAvailable(false);
+    settings.setSystemAudioAvailable(true);
+
+    expect(($('systemAudioToggle') as HTMLInputElement).disabled).toBe(false);
+    expect(($('systemVolume') as HTMLInputElement).disabled).toBe(false);
+
+    const chip = $('systemAudioToggle').closest('.source') as HTMLElement;
+    expect(chip.hasAttribute('data-unavailable')).toBe(false);
+    expect(chip.hasAttribute('title')).toBe(false);
+  });
+
+  it('keeps the toggle disabled after the lock lifts if the share is silent', () => {
+    // Two independent reasons to disable: the lock (a share is live) and the
+    // missing track (this share has no system audio). Lifting one must not
+    // re-enable the control while the other still stands.
+    const settings = renderSettings();
+    settings.setSystemAudioAvailable(false);
+    settings.setLocked(true);
+    settings.setLocked(false);
+
+    expect(($('systemAudioToggle') as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('stays locked when the audio is back but the share is live', () => {
+    const settings = renderSettings();
+    settings.setLocked(true);
+    settings.setSystemAudioAvailable(true);
+
+    expect(($('systemAudioToggle') as HTMLInputElement).disabled).toBe(true);
+    // The fader is deliberately outside the lock - it drives live gains - so
+    // only the missing track can disable it.
+    expect(($('systemVolume') as HTMLInputElement).disabled).toBe(false);
   });
 });
