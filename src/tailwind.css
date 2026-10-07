@@ -29,7 +29,6 @@
 @source inline(
   'flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0'
 );
-@source inline('text-lg leading-none shrink-0');
 @source inline('flex-1 min-w-0');
 @source inline('text-sm font-medium text-gray-900 dark:text-gray-100 truncate');
 @source inline('text-xs text-gray-500 dark:text-gray-400');

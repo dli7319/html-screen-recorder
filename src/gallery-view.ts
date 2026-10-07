@@ -2,6 +2,7 @@ import { Take, TakeStore } from './takes';
 import { TAKE_TTL_MS } from './take-cache';
 import { formatBytes, formatDuration, formatExpiry } from './format';
 import { downloadBlob } from './screenshot';
+import { TakePreview } from './preview-modal';
 
 /**
  * Renders the take list and its actions.
@@ -22,6 +23,9 @@ export class GalleryView {
   private clearBtn: HTMLButtonElement;
   private unsubscribe: (() => void) | null = null;
   private expiryTimer: number | undefined;
+  /** The one preview dialog rows open into. Lives at document level - the
+   *  markup sits beside the settings drawer, not inside the gallery. */
+  private preview: TakePreview;
 
   constructor(
     private root: HTMLElement,
@@ -32,6 +36,7 @@ export class GalleryView {
     this.count = this.require('#takeCount');
     this.downloadAllBtn = this.require('#downloadAllBtn') as HTMLButtonElement;
     this.clearBtn = this.require('#clearTakesBtn') as HTMLButtonElement;
+    this.preview = new TakePreview(document, store);
   }
 
   private require(selector: string): HTMLElement {
@@ -47,6 +52,7 @@ export class GalleryView {
 
     this.downloadAllBtn.addEventListener('click', this.onDownloadAll);
     this.clearBtn.addEventListener('click', this.onClear);
+    this.preview.bind();
 
     // Expiry labels are the one piece of row text that goes stale on its own:
     // "Expires in 30 minutes" is a lie within the hour if nothing re-times it.
@@ -62,6 +68,7 @@ export class GalleryView {
     this.unsubscribe = null;
     this.downloadAllBtn.removeEventListener('click', this.onDownloadAll);
     this.clearBtn.removeEventListener('click', this.onClear);
+    this.preview.unbind();
     if (this.expiryTimer !== undefined) {
       window.clearInterval(this.expiryTimer);
       this.expiryTimer = undefined;
@@ -111,10 +118,32 @@ export class GalleryView {
       'flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
     row.dataset.takeId = take.id;
 
-    const icon = document.createElement('span');
-    icon.className = 'text-lg leading-none shrink-0';
-    icon.textContent = take.kind === 'recording' ? '🎬' : '📷';
-    icon.title = take.kind === 'recording' ? 'Recording' : 'Screenshot';
+    const icon = document.createElement('button');
+    icon.type = 'button';
+    icon.className = 'take-thumb';
+    icon.title = `Preview ${take.filename}`;
+    icon.setAttribute('aria-label', `Preview ${take.filename}`);
+    if (take.thumbnailUrl) {
+      const img = document.createElement('img');
+      img.src = take.thumbnailUrl;
+      img.alt = '';
+      icon.append(img);
+    } else {
+      // No thumbnail yet (extraction is async) or never (it failed): the
+      // glyph keeps the row complete and the button still previews the take.
+      icon.textContent = take.kind === 'recording' ? '🎬' : '📷';
+    }
+    icon.addEventListener('click', () => this.preview.open(take, icon));
+    // Hover plays the clip inside the thumbnail itself: muted, looping, no
+    // controls - a moving preview, not a player. Screenshots have no motion
+    // to show. The video is built on first hover and dropped on leave, so a
+    // page of takes does not keep a page of decoders standing by.
+    if (take.kind === 'recording') {
+      icon.addEventListener('mouseenter', () =>
+        this.startHoverPlay(icon, take)
+      );
+      icon.addEventListener('mouseleave', () => this.stopHoverPlay(icon));
+    }
 
     const detail = document.createElement('div');
     detail.className = 'flex-1 min-w-0';
@@ -178,6 +207,33 @@ export class GalleryView {
       parts.unshift(formatDuration(take.durationMs));
     }
     return parts.join(' · ');
+  }
+
+  /**
+   * Play the take's clip inside its thumbnail box on hover.
+   *
+   * The video is muted and looping with no controls - it is a moving preview
+   * of the thumbnail, not playback. Autoplay is only ever granted to muted
+   * elements, and if the browser refuses anyway the still simply stays.
+   */
+  private startHoverPlay(thumb: HTMLElement, take: Take) {
+    if (thumb.querySelector('video')) return;
+    const video = document.createElement('video');
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.src = take.url;
+    thumb.append(video);
+    void Promise.resolve(video.play()).catch(() => {});
+  }
+
+  /** Take the hover video back out, leaving the thumbnail as it was. */
+  private stopHoverPlay(thumb: HTMLElement) {
+    const video = thumb.querySelector('video');
+    if (!video) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.remove();
   }
 }
 
