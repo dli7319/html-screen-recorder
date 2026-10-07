@@ -1381,7 +1381,7 @@
 	* three operations the gallery can perform - add, remove, clear - are the
 	* three that reach storage, so the cache cannot drift from what is listed.
 	*/
-	var TakeStore = class {
+	var TakeStore = class TakeStore {
 		constructor(cache) {
 			this.cache = cache;
 			this.takes = [];
@@ -1402,10 +1402,38 @@
 				formatName: input.formatName
 			};
 			this.takes.unshift(take);
-			const { url: _url, ...record } = take;
-			this.cache?.put(record).catch(warnCacheFailure);
+			this.cache?.put(TakeStore.toRecord(take)).catch(warnCacheFailure);
 			this.emit();
 			return take;
+		}
+		/**
+		* The take as stored: blob-backed facts only. Both URL fields name memory
+		* in this tab and are rebuilt on restore, so they are stripped here - the
+		* one place that happens.
+		*/
+		static toRecord(take) {
+			const { url: _url, thumbnailUrl: _thumbUrl, ...record } = take;
+			return record;
+		}
+		/**
+		* Attach a thumbnail that was made after the take landed. Idempotent, and a
+		* no-op for an id that has since been removed or cleared - extraction is
+		* async and the user is faster than any decoder. Reports whether the take
+		* was still there to receive it.
+		*/
+		setThumbnail(id, thumbnail) {
+			const take = this.takes.find((candidate) => candidate.id === id);
+			if (!take) return false;
+			if (take.thumbnailUrl) URL.revokeObjectURL(take.thumbnailUrl);
+			const updated = {
+				...take,
+				thumbnail,
+				thumbnailUrl: URL.createObjectURL(thumbnail)
+			};
+			this.takes[this.takes.indexOf(take)] = updated;
+			this.cache?.put(TakeStore.toRecord(updated)).catch(warnCacheFailure);
+			this.emit();
+			return true;
 		}
 		nextId() {
 			return `take-${this.sessionTag}-${(++this.counter).toString(36)}`;
@@ -1427,24 +1455,25 @@
 			const held = new Set(this.takes.map((take) => take.id));
 			const restored = records.filter((record) => !held.has(record.id)).map((record) => ({
 				...record,
-				url: URL.createObjectURL(record.blob)
+				url: URL.createObjectURL(record.blob),
+				thumbnailUrl: record.thumbnail ? URL.createObjectURL(record.thumbnail) : void 0
 			}));
 			if (restored.length === 0) return;
 			this.takes = [...this.takes, ...restored].sort((a, b) => b.createdAt - a.createdAt);
 			this.emit();
 		}
-		/** Remove one take and release its blob URL. */
+		/** Remove one take and release its blob URLs. */
 		remove(id) {
 			const index = this.takes.findIndex((take) => take.id === id);
 			if (index === -1) return;
 			const [removed] = this.takes.splice(index, 1);
-			URL.revokeObjectURL(removed.url);
+			TakeStore.release(removed);
 			this.cache?.delete(id).catch(warnCacheFailure);
 			this.emit();
 		}
 		/** Remove every take, releasing every blob URL. */
 		clear() {
-			for (const take of this.takes) URL.revokeObjectURL(take.url);
+			for (const take of this.takes) TakeStore.release(take);
 			const had = this.takes.length > 0;
 			this.takes = [];
 			this.cache?.clear().catch(warnCacheFailure);
@@ -1457,9 +1486,14 @@
 		* the user saying "forget my takes".
 		*/
 		destroy() {
-			for (const take of this.takes) URL.revokeObjectURL(take.url);
+			for (const take of this.takes) TakeStore.release(take);
 			this.takes = [];
 			this.listeners.clear();
+		}
+		/** Every blob URL a take holds. Both are owned here and revoked nowhere else. */
+		static release(take) {
+			URL.revokeObjectURL(take.url);
+			if (take.thumbnailUrl) URL.revokeObjectURL(take.thumbnailUrl);
 		}
 		list() {
 			return this.takes;
@@ -1569,6 +1603,149 @@
 		return record.createdAt < cutoff;
 	}
 	//#endregion
+	//#region src/preview-modal.ts
+	/**
+	* The aspect the media box takes. The box itself is sized in CSS from these
+	* variables (falling back to 16:9), so setting them keeps a clip's own shape
+	* even when the element that knows the shape loads late. `--preview-ar-k` is
+	* the same ratio as a plain number, which the width cap multiplies by to fit
+	* the box exactly - a height cap alone would leave black bars wherever the
+	* box ends up wider than its content.
+	*/
+	function setMediaAspect(video, width, height) {
+		video.style.setProperty("--preview-ar", `${width} / ${height}`);
+		video.style.setProperty("--preview-ar-k", String(width / height));
+	}
+	/**
+	* A take shown large: the clip playing, or the still at full size, with the
+	* one action that matters from here - saving it.
+	*
+	* One modal, reused: opening again replaces the content rather than stacking
+	* a second dialog. It watches the store because a take can vanish while it is
+	* on screen (Remove, Clear) - a modal pointing at a revoked blob URL is worse
+	* than no modal, so that is a close, not an error.
+	*
+	* Lifetime rules stay with the store: the media here borrows `take.url` and
+	* `take.thumbnailUrl`, and closing detaches them from the element without
+	* revoking anything.
+	*/
+	var TakePreview = class {
+		constructor(root, store) {
+			this.root = root;
+			this.store = store;
+			this.currentId = null;
+			this.opener = null;
+			this.unsubscribe = null;
+			this.onCloseClick = () => {
+				this.close();
+			};
+			this.onKeyDown = (e) => {
+				if (e.key === "Escape") this.close();
+			};
+			this.onDownload = () => {
+				const take = this.store.list().find((t) => t.id === this.currentId);
+				if (take) downloadBlob(take.blob, take.filename);
+			};
+			this.onStoreChange = () => {
+				if (this.currentId === null) return;
+				const take = this.store.list().find((t) => t.id === this.currentId);
+				if (!take) {
+					this.close();
+					return;
+				}
+				const video = this.mediaSlot.querySelector("video");
+				if (video && take.thumbnailUrl) video.poster = take.thumbnailUrl;
+			};
+			this.scrim = this.require("#previewScrim");
+			this.modal = this.require("#previewModal");
+			this.title = this.require("#previewTitle");
+			this.mediaSlot = this.require("#previewMedia");
+			this.downloadBtn = this.require("#previewDownload");
+			this.closeBtn = this.require("#previewClose");
+		}
+		require(selector) {
+			const el = this.root.querySelector(selector);
+			if (!el) throw new Error(`Preview markup is missing ${selector}`);
+			return el;
+		}
+		/** Wire the chrome. The document-level pieces are undone by unbind(). */
+		bind() {
+			this.unsubscribe?.();
+			this.unsubscribe = this.store.onChange(this.onStoreChange);
+			this.closeBtn.addEventListener("click", this.onCloseClick);
+			this.scrim.addEventListener("click", this.onCloseClick);
+			this.downloadBtn.addEventListener("click", this.onDownload);
+			document.addEventListener("keydown", this.onKeyDown);
+		}
+		unbind() {
+			this.unsubscribe?.();
+			this.unsubscribe = null;
+			this.closeBtn.removeEventListener("click", this.onCloseClick);
+			this.scrim.removeEventListener("click", this.onCloseClick);
+			this.downloadBtn.removeEventListener("click", this.onDownload);
+			document.removeEventListener("keydown", this.onKeyDown);
+			this.close();
+		}
+		open(take, opener) {
+			this.clearMedia();
+			this.title.textContent = take.filename;
+			this.modal.setAttribute("aria-label", take.filename);
+			if (take.kind === "recording") {
+				const video = document.createElement("video");
+				video.controls = true;
+				video.playsInline = true;
+				if (take.thumbnailUrl) video.poster = take.thumbnailUrl;
+				video.src = take.url;
+				this.mediaSlot.append(video);
+				if (take.thumbnailUrl) {
+					const probe = new Image();
+					probe.addEventListener("load", () => {
+						if (this.currentId === take.id && probe.naturalWidth > 0) setMediaAspect(video, probe.naturalWidth, probe.naturalHeight);
+					});
+					probe.src = take.thumbnailUrl;
+				}
+				video.addEventListener("loadedmetadata", () => {
+					if (video.videoWidth > 0) setMediaAspect(video, video.videoWidth, video.videoHeight);
+				});
+			} else {
+				const img = document.createElement("img");
+				img.src = take.url;
+				img.alt = take.filename;
+				this.mediaSlot.append(img);
+			}
+			this.currentId = take.id;
+			this.opener = opener ?? null;
+			this.setOpen(true);
+			this.closeBtn.focus();
+		}
+		close() {
+			if (this.currentId === null) return;
+			this.clearMedia();
+			this.currentId = null;
+			this.setOpen(false);
+			this.opener?.focus();
+			this.opener = null;
+		}
+		setOpen(open) {
+			document.body.dataset.preview = open ? "open" : "closed";
+			this.modal.setAttribute("aria-hidden", String(!open));
+		}
+		/**
+		* Detach the media without revoking anything. Clearing `src` stops a
+		* playing clip at once - otherwise closing the dialog leaves its audio
+		* running over the gallery.
+		*/
+		clearMedia() {
+			const video = this.mediaSlot.querySelector("video");
+			if (video) {
+				video.pause();
+				video.removeAttribute("src");
+				video.load();
+			}
+			this.mediaSlot.replaceChildren();
+		}
+	};
+	//#endregion
 	//#region src/gallery-view.ts
 	/**
 	* Renders the take list and its actions.
@@ -1597,6 +1774,7 @@
 			this.count = this.require("#takeCount");
 			this.downloadAllBtn = this.require("#downloadAllBtn");
 			this.clearBtn = this.require("#clearTakesBtn");
+			this.preview = new TakePreview(document, store);
 		}
 		require(selector) {
 			const el = this.root.querySelector(selector);
@@ -1609,6 +1787,7 @@
 			this.unsubscribe = this.store.onChange(() => this.render());
 			this.downloadAllBtn.addEventListener("click", this.onDownloadAll);
 			this.clearBtn.addEventListener("click", this.onClear);
+			this.preview.bind();
 			this.expiryTimer = window.setInterval(() => this.refreshExpiries(), 6e4);
 			this.render();
 		}
@@ -1617,6 +1796,7 @@
 			this.unsubscribe = null;
 			this.downloadAllBtn.removeEventListener("click", this.onDownloadAll);
 			this.clearBtn.removeEventListener("click", this.onClear);
+			this.preview.unbind();
 			if (this.expiryTimer !== void 0) {
 				window.clearInterval(this.expiryTimer);
 				this.expiryTimer = void 0;
@@ -1644,10 +1824,22 @@
 			const row = document.createElement("div");
 			row.className = "flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0";
 			row.dataset.takeId = take.id;
-			const icon = document.createElement("span");
-			icon.className = "text-lg leading-none shrink-0";
-			icon.textContent = take.kind === "recording" ? "🎬" : "📷";
-			icon.title = take.kind === "recording" ? "Recording" : "Screenshot";
+			const icon = document.createElement("button");
+			icon.type = "button";
+			icon.className = "take-thumb";
+			icon.title = `Preview ${take.filename}`;
+			icon.setAttribute("aria-label", `Preview ${take.filename}`);
+			if (take.thumbnailUrl) {
+				const img = document.createElement("img");
+				img.src = take.thumbnailUrl;
+				img.alt = "";
+				icon.append(img);
+			} else icon.textContent = take.kind === "recording" ? "🎬" : "📷";
+			icon.addEventListener("click", () => this.preview.open(take, icon));
+			if (take.kind === "recording") {
+				icon.addEventListener("mouseenter", () => this.startHoverPlay(icon, take));
+				icon.addEventListener("mouseleave", () => this.stopHoverPlay(icon));
+			}
 			const detail = document.createElement("div");
 			detail.className = "flex-1 min-w-0";
 			const name = document.createElement("p");
@@ -1685,6 +1877,31 @@
 			if (take.durationMs !== void 0) parts.unshift(formatDuration(take.durationMs));
 			return parts.join(" · ");
 		}
+		/**
+		* Play the take's clip inside its thumbnail box on hover.
+		*
+		* The video is muted and looping with no controls - it is a moving preview
+		* of the thumbnail, not playback. Autoplay is only ever granted to muted
+		* elements, and if the browser refuses anyway the still simply stays.
+		*/
+		startHoverPlay(thumb, take) {
+			if (thumb.querySelector("video")) return;
+			const video = document.createElement("video");
+			video.muted = true;
+			video.loop = true;
+			video.playsInline = true;
+			video.src = take.url;
+			thumb.append(video);
+			Promise.resolve(video.play()).catch(() => {});
+		}
+		/** Take the hover video back out, leaving the thumbnail as it was. */
+		stopHoverPlay(thumb) {
+			const video = thumb.querySelector("video");
+			if (!video) return;
+			video.pause();
+			video.removeAttribute("src");
+			video.remove();
+		}
 	};
 	/**
 	* Download every take in turn.
@@ -1697,6 +1914,115 @@
 			window.setTimeout(() => downloadBlob(take.blob, take.filename), index * delayMs);
 		});
 		return takes.length;
+	}
+	/** Give up on extraction rather than leave a half-loaded video hanging. */
+	const THUMBNAIL_TIMEOUT_MS = 3e3;
+	/**
+	* Where in a recording to grab the frame.
+	*
+	* Not the first frame: a MediaRecorder stream can open on a black or partial
+	* frame before the compositor settles. Not the middle either - for a screen
+	* recording, a second in is what the user was actually looking at. Clips
+	* shorter than two seconds go to their midpoint instead of past their end.
+	*/
+	function pickSeekTime(durationMs) {
+		if (!Number.isFinite(durationMs) || durationMs <= 0) return 0;
+		return Math.min(1e3, durationMs / 2);
+	}
+	/**
+	* The largest size within a max box that keeps the source aspect ratio.
+	* Never upscales: a 40px screenshot stays 40px wide rather than blurring.
+	*/
+	function fitWithin(sourceWidth, sourceHeight, maxEdge = 320) {
+		if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) return {
+			width: 0,
+			height: 0
+		};
+		const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+		return {
+			width: Math.max(1, Math.round(sourceWidth * scale)),
+			height: Math.max(1, Math.round(sourceHeight * scale))
+		};
+	}
+	/**
+	* Draw a source that knows its own size into a JPEG/WebP blob. Prefers WebP
+	* (roughly a third smaller at equal quality); falls back to JPEG for the
+	* canvases that do not implement it. Returns null if the canvas cannot be
+	* read back - some privacy modes taint or blank it.
+	*/
+	async function canvasToThumbnail(source, sourceWidth, sourceHeight) {
+		const { width, height } = fitWithin(sourceWidth, sourceHeight);
+		if (width === 0) return null;
+		const canvas = document.createElement("canvas");
+		canvas.width = width;
+		canvas.height = height;
+		const context = canvas.getContext("2d");
+		if (!context) return null;
+		context.drawImage(source, 0, 0, width, height);
+		const encode = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+		return await encode("image/webp", .75) ?? await encode("image/jpeg", .8);
+	}
+	/**
+	* One frame of a recorded clip, as a small image. `durationMs` comes from the
+	* take when known - a MediaRecorder blob cannot be trusted to describe its
+	* own length - and is only used to choose where to seek.
+	*
+	* Resolves null rather than rejecting: callers treat failure identically
+	* whether it is a decode error, a timeout, or the browser refusing.
+	*/
+	async function extractVideoThumbnail(blob, durationMs) {
+		const url = URL.createObjectURL(blob);
+		const video = document.createElement("video");
+		video.preload = "metadata";
+		video.muted = true;
+		try {
+			return await new Promise((resolve) => {
+				let settled = false;
+				const finish = (thumb) => {
+					if (settled) return;
+					settled = true;
+					resolve(thumb);
+				};
+				const timer = setTimeout(() => finish(null), THUMBNAIL_TIMEOUT_MS);
+				const done = (thumb) => {
+					clearTimeout(timer);
+					finish(thumb);
+				};
+				video.addEventListener("error", () => done(null), { once: true });
+				video.addEventListener("loadeddata", () => {
+					const seekTo = pickSeekTime(durationMs ?? video.duration * 1e3);
+					if (seekTo > 0) {
+						video.addEventListener("seeked", () => {
+							canvasToThumbnail(video, video.videoWidth, video.videoHeight).then(done);
+						}, { once: true });
+						video.currentTime = seekTo / 1e3;
+					} else canvasToThumbnail(video, video.videoWidth, video.videoHeight).then(done);
+				}, { once: true });
+				video.src = url;
+				video.load();
+			});
+		} finally {
+			URL.revokeObjectURL(url);
+			video.removeAttribute("src");
+			video.load();
+		}
+	}
+	/**
+	* A screenshot is already an image, so its thumbnail is just a shrunk copy -
+	* the same fit math as the video path, without the seek.
+	*/
+	async function downscaleImage(blob) {
+		let bitmap;
+		try {
+			bitmap = await createImageBitmap(blob);
+		} catch {
+			return null;
+		}
+		try {
+			return await canvasToThumbnail(bitmap, bitmap.width, bitmap.height);
+		} finally {
+			bitmap.close();
+		}
 	}
 	//#endregion
 	//#region src/pwa.ts
@@ -1803,7 +2129,7 @@
 	ui.videoPreview.addEventListener("resize", syncPreviewAspect);
 	window.addEventListener("load", () => {
 		gallery.bind();
-		takes.restore();
+		takes.restore().then(backfillThumbnails);
 		ui.setPipSupported(pip.isSupported());
 		settings.populateQuality();
 		if (!window.MediaRecorder) {
@@ -1877,12 +2203,42 @@
 	async function captureScreenshot() {
 		const blob = await captureFrame(ui.videoPreview);
 		if (!blob) return;
-		takes.add({
+		attachThumbnail(takes.add({
 			kind: "screenshot",
 			blob,
 			filename: timestampFilename("png"),
 			formatName: "PNG"
+		}), () => downscaleImage(blob));
+	}
+	/**
+	* Make a take's thumbnail and attach it, best-effort. Fired from the capture
+	* paths without awaiting: decoding must never delay the stop feedback. `make`
+	* is a function so the store can have moved on by the time it resolves -
+	* setThumbnail() is then a no-op rather than an error.
+	*/
+	function attachThumbnail(take, make) {
+		return make().then((thumbnail) => {
+			if (thumbnail) takes.setThumbnail(take.id, thumbnail);
 		});
+	}
+	/**
+	* Give restored takes that never got a thumbnail one.
+	*
+	* Rows cached before this feature existed have none, and one may have failed
+	* mid-decode on a previous run. Two workers: a dozen simultaneous video
+	* decodes at startup is a jank source, and there is no user-visible rush -
+	* rows show their glyph until each picture lands.
+	*/
+	function backfillThumbnails() {
+		const queue = takes.list().filter((take) => !take.thumbnail);
+		const worker = async () => {
+			for (let take = queue.shift(); take; take = queue.shift()) await attachThumbnail(take, () => makeThumbnail(take));
+		};
+		Promise.all([worker(), worker()]);
+	}
+	/** The thumbnail generator that fits a take's kind. */
+	function makeThumbnail(take) {
+		return take.kind === "recording" ? extractVideoThumbnail(take.blob, take.durationMs) : downscaleImage(take.blob);
 	}
 	/**
 	* Pause/resume the in-flight capture. The stopwatch is paused alongside the
@@ -2007,13 +2363,13 @@
 		const durationMs = stopwatch.elapsed();
 		stopwatch.stop();
 		const fixedBlob = await fixWebmDuration(blob, durationMs);
-		takes.add({
+		attachThumbnail(takes.add({
 			kind: "recording",
 			blob: fixedBlob,
 			filename: timestampFilename(ext),
 			formatName: settings.getFormat().name,
 			durationMs
-		});
+		}), () => extractVideoThumbnail(fixedBlob, durationMs));
 		ui.setRecordingState(false);
 	}
 	async function stopRecording() {
