@@ -178,8 +178,7 @@ export class GalleryView {
 
     const download = document.createElement('button');
     download.type = 'button';
-    download.className =
-      'text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0';
+    download.className = 'btn btn--outline btn--sm shrink-0';
     download.textContent = 'Download';
     download.title = `Download ${take.filename}`;
     download.addEventListener('click', () => {
@@ -188,10 +187,9 @@ export class GalleryView {
 
     const remove = document.createElement('button');
     remove.type = 'button';
-    // Explicit dark override rather than reusing one grey: text-gray-400 is
-    // fine on the dark card but only reaches 2.6:1 on white, well under AA.
-    remove.className =
-      'text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 shrink-0';
+    // A destructive secondary action: same outline pill as Download, but it
+    // turns danger on hover so "Remove" still reads as destructive.
+    remove.className = 'btn btn--outline btn--danger btn--sm shrink-0';
     remove.textContent = 'Remove';
     remove.title = `Remove ${take.filename} from the gallery`;
     remove.addEventListener('click', () => this.store.remove(take.id));
