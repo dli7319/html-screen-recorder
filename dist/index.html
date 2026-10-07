@@ -358,26 +358,28 @@
       large, with Download - the fastest path from "what was that?" to having
       the file, without leaving the page.
 
-      One dialog, reused: opening another take replaces the content rather
-      than stacking. The scrim and the Escape key close it exactly like the
-      settings drawer.
+      Layout: a full-screen scrim with the media centered on it, close
+      top-right, and Download centered below the media. No card. One dialog,
+      reused: opening another take replaces the content rather than stacking.
+      The scrim and the Escape key close it.
     -->
     <div id="previewScrim" class="preview-scrim"></div>
     <div id="previewModal" class="preview" role="dialog" aria-modal="true"
       aria-label="Take preview" aria-hidden="true">
-      <div class="preview-head">
-        <strong id="previewTitle"></strong>
-        <div class="spacer"></div>
-        <button id="previewDownload" type="button" class="btn btn--primary btn--sm">
-          Download
-        </button>
-        <button id="previewClose" type="button" class="icon-btn" aria-label="Close preview">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
+      <button id="previewClose" type="button" class="icon-btn preview-close" aria-label="Close preview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+      <div class="preview-stage">
+        <div id="previewMedia" class="preview-media"></div>
+        <div class="preview-actions">
+          <button id="previewDownload" type="button" class="btn btn--primary btn--sm">
+            Download
+          </button>
+          <p id="previewTitle" class="preview-title"></p>
+        </div>
       </div>
-      <div id="previewMedia" class="preview-media"></div>
     </div>
 
     <!--

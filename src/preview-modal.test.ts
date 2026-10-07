@@ -109,6 +109,93 @@ describe('TakePreview.open', () => {
     expect(media().children.length).toBe(1);
     expect(media().querySelector('video')).toBeNull();
   });
+
+  it('sizes the media box from the clip itself, not the video default', () => {
+    // The bug this guards: a <video> is 300x150 until its metadata arrives -
+    // which for MediaRecorder MP4s can be at play time - so a dialog sized
+    // from content opened tiny and jumped on play. The box is sized from the
+    // aspect instead, so it must be set from whatever knows the shape.
+    setup();
+    const take = addRecording();
+    preview.open(take);
+
+    const video = media().querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'videoWidth', { value: 1280 });
+    Object.defineProperty(video, 'videoHeight', { value: 720 });
+    video.dispatchEvent(new Event('loadedmetadata'));
+
+    expect(video.style.getPropertyValue('--preview-ar')).toBe('1280 / 720');
+    expect(video.style.getPropertyValue('--preview-ar-k')).toBe(
+      String(1280 / 720)
+    );
+  });
+
+  it('takes the aspect from the thumbnail before any metadata lands', () => {
+    // The thumbnail is cut from the clip, so its shape is the clip's shape -
+    // available the moment the dialog opens, far ahead of video metadata.
+    const probes: FakeImage[] = [];
+    class FakeImage {
+      naturalWidth = 0;
+      naturalHeight = 0;
+      private listeners: Record<string, () => void> = {};
+      addEventListener(type: string, fn: () => void) {
+        this.listeners[type] = fn;
+      }
+      set src(_value: string) {
+        probes.push(this);
+      }
+      load(width: number, height: number) {
+        this.naturalWidth = width;
+        this.naturalHeight = height;
+        this.listeners['load']?.();
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+
+    setup();
+    const take = addRecording();
+    store.setThumbnail(take.id, new Blob(['thumb']));
+    preview.open(store.list()[0]);
+
+    expect(probes.length).toBe(1);
+    probes[0].load(640, 360);
+
+    const video = media().querySelector('video') as HTMLVideoElement;
+    expect(video.style.getPropertyValue('--preview-ar')).toBe('640 / 360');
+    vi.unstubAllGlobals();
+  });
+
+  it('ignores a thumbnail probe that answers for a take already replaced', () => {
+    const probes: FakeImage[] = [];
+    class FakeImage {
+      naturalWidth = 0;
+      naturalHeight = 0;
+      private listeners: Record<string, () => void> = {};
+      addEventListener(type: string, fn: () => void) {
+        this.listeners[type] = fn;
+      }
+      set src(_value: string) {
+        probes.push(this);
+      }
+      load(width: number, height: number) {
+        this.naturalWidth = width;
+        this.naturalHeight = height;
+        this.listeners['load']?.();
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+
+    setup();
+    const first = addRecording();
+    store.setThumbnail(first.id, new Blob(['thumb']));
+    preview.open(store.list()[0]);
+    preview.open(addScreenshot());
+
+    // The stale probe must not touch the screenshot now on screen.
+    probes[0].load(640, 360);
+    expect(media().querySelector('video')).toBeNull();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('TakePreview closing', () => {

@@ -134,6 +134,16 @@ export class GalleryView {
       icon.textContent = take.kind === 'recording' ? '🎬' : '📷';
     }
     icon.addEventListener('click', () => this.preview.open(take, icon));
+    // Hover plays the clip inside the thumbnail itself: muted, looping, no
+    // controls - a moving preview, not a player. Screenshots have no motion
+    // to show. The video is built on first hover and dropped on leave, so a
+    // page of takes does not keep a page of decoders standing by.
+    if (take.kind === 'recording') {
+      icon.addEventListener('mouseenter', () =>
+        this.startHoverPlay(icon, take)
+      );
+      icon.addEventListener('mouseleave', () => this.stopHoverPlay(icon));
+    }
 
     const detail = document.createElement('div');
     detail.className = 'flex-1 min-w-0';
@@ -197,6 +207,33 @@ export class GalleryView {
       parts.unshift(formatDuration(take.durationMs));
     }
     return parts.join(' · ');
+  }
+
+  /**
+   * Play the take's clip inside its thumbnail box on hover.
+   *
+   * The video is muted and looping with no controls - it is a moving preview
+   * of the thumbnail, not playback. Autoplay is only ever granted to muted
+   * elements, and if the browser refuses anyway the still simply stays.
+   */
+  private startHoverPlay(thumb: HTMLElement, take: Take) {
+    if (thumb.querySelector('video')) return;
+    const video = document.createElement('video');
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.src = take.url;
+    thumb.append(video);
+    void Promise.resolve(video.play()).catch(() => {});
+  }
+
+  /** Take the hover video back out, leaving the thumbnail as it was. */
+  private stopHoverPlay(thumb: HTMLElement) {
+    const video = thumb.querySelector('video');
+    if (!video) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.remove();
   }
 }
 

@@ -1075,29 +1075,33 @@ kbd {
 
 /* ---------- take preview ---------- */
 
-/* Centered card rather than the drawer's edge panel: the media is the point,
-   so the dialog hugs it and sits in the middle of the screen. The z-index
-   steps over the drawer's - a preview opened from the gallery is the top-most
-   thing the user asked for. */
+/* The viewer's backdrop. Darker than the drawer's scrim on purpose: this one
+   is a media stage, and a near-black field is what makes the picture read as
+   the subject instead of one element among many. */
+.preview-scrim {
+    background: rgba(15, 16, 18, 0.88);
+}
+
+/*
+   Full-screen stage, no card: the dialog is a transparent layer over the
+   scrim with the media centered in it - close at the top right, Download
+   under the media. Clicks on empty space must reach the scrim (which
+   closes), so the layer takes no pointer events and only the media and the
+   buttons take them back. visibility is the hide, not opacity: a closed
+   overlay at z-index 110 would otherwise still swallow clicks and sit in
+   the tab order.
+*/
 .preview {
     position: fixed;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    inset: 0;
     z-index: 110;
-    width: max-content;
-    max-width: min(92vw, 1100px);
-    max-height: 86vh;
     display: flex;
     flex-direction: column;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card);
-    box-shadow: var(--elev-2);
-    overflow: hidden;
-    /* visibility, not just opacity: a closed card at z-index 110 that is
-       merely transparent would still swallow clicks and sit in the tab
-       order. visibility removes it from both, and transitions discretely. */
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    pointer-events: none;
     visibility: hidden;
     opacity: 0;
     transition:
@@ -1118,48 +1122,88 @@ kbd {
         visibility 0s;
 }
 
-.preview-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border);
+.preview-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    pointer-events: auto;
+    /* The chrome floats over the dark viewer scrim in both themes, so it is
+       fixed light ink rather than a theme token. */
+    color: rgba(255, 255, 255, 0.9);
 }
 
-.preview-head strong {
+.preview-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.preview-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    max-width: 100%;
+}
+
+.preview-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    max-width: 100%;
+}
+
+/*
+   The media box is sized here, not by the media: a <video> reports the
+   default 300x150 until its metadata is read, and MediaRecorder MP4s often
+   only expose metadata at playback - so a dialog sized from content opens at
+   a postage stamp and jumps on play. A fixed box with the media contained in
+   it opens at full size every time. open() refines --preview-ar from the
+   thumbnail's aspect (and again from real metadata when it lands).
+*/
+.preview-media video {
+    /* The width cap folds in the height cap through the ratio, so the box
+       shrinks from whichever side binds and never letterboxes its content.
+       --preview-ar-k is set (as a number) by open() whenever the real aspect
+       is known; 1.7778 is its 16:9 stand-in. */
+    width: min(92vw, 1120px, calc(72vh * var(--preview-ar-k, 1.7778)));
+    aspect-ratio: var(--preview-ar, 16 / 9);
+    background: #000;
+    object-fit: contain;
+}
+
+.preview-media img {
+    max-width: min(92vw, 1120px);
+    max-height: 72vh;
+    object-fit: contain;
+}
+
+.preview-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+/* The filename sits under the Download button as a quiet caption: the row
+   already names the take, this is only here so a full-screen preview still
+   says what it is showing. */
+.preview-title {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.72);
+    max-width: min(92vw, 720px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* The media keeps its own aspect ratio and shrinks to the card; a tall
-   screenshot must not push the head off the screen. */
-.preview-media {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 0;
-    padding: 12px;
-    background: var(--surface-sunken);
-}
-
-.preview-media img,
-.preview-media video {
-    display: block;
-    max-width: min(88vw, 1080px);
-    max-height: 72vh;
-    border-radius: var(--radius-control);
-    background: var(--surface);
-}
-
-.preview-media img {
-    object-fit: contain;
-}
-
 /* The thumbnail slot in a take row: a fixed small box so rows stay aligned
    whether the take has a picture yet or not. Clicking it previews the take,
-   so it is a real button - keyboard users get the same path as a click. */
+   so it is a real button - keyboard users get the same path as a click.
+   position: relative so a hover video can fill the same box. */
 .take-thumb {
+    position: relative;
     flex: none;
     width: 64px;
     height: 36px;
@@ -1177,6 +1221,18 @@ kbd {
 }
 
 .take-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Hover playback: the clip runs over the still in the same box, muted and
+   without controls. It is created on hover and removed on leave, so this is
+   all the chrome it needs. */
+.take-thumb video {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;

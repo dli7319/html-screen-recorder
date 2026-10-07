@@ -423,7 +423,79 @@ describe('GalleryView thumbnails', () => {
     expect(thumb.type).toBe('button');
 
     thumb.click();
-
     expect(document.body.dataset.preview).toBe('open');
+  });
+});
+
+describe('GalleryView hover playback', () => {
+  it('plays the clip inside the thumbnail on hover, muted and without controls', () => {
+    render();
+    const added = store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    thumb.dispatchEvent(new MouseEvent('mouseenter'));
+
+    const video = thumb.querySelector('video') as HTMLVideoElement;
+    expect(video).toBeTruthy();
+    expect(video.muted).toBe(true);
+    expect(video.loop).toBe(true);
+    expect(video.controls).toBe(false);
+    expect(video.hasAttribute('controls')).toBe(false);
+    expect(video.getAttribute('src')).toBe(added.url);
+  });
+
+  it('takes the hover video back out on leave', () => {
+    render();
+    const added = store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+    store.setThumbnail(added.id, new Blob(['thumb']));
+
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    thumb.dispatchEvent(new MouseEvent('mouseenter'));
+    thumb.dispatchEvent(new MouseEvent('mouseleave'));
+
+    expect(thumb.querySelector('video')).toBeNull();
+    // The still underneath is undisturbed, so the next hover starts clean.
+    expect(thumb.querySelector('img')).toBeTruthy();
+  });
+
+  it('does not stack a second video when the pointer fusses in and out', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    thumb.dispatchEvent(new MouseEvent('mouseenter'));
+    thumb.dispatchEvent(new MouseEvent('mouseenter'));
+
+    expect(thumb.querySelectorAll('video').length).toBe(1);
+  });
+
+  it('gives screenshots nothing to play', () => {
+    render();
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    thumb.dispatchEvent(new MouseEvent('mouseenter'));
+
+    expect(thumb.querySelector('video')).toBeNull();
   });
 });

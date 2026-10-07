@@ -2,6 +2,23 @@ import { Take, TakeStore } from './takes';
 import { downloadBlob } from './screenshot';
 
 /**
+ * The aspect the media box takes. The box itself is sized in CSS from these
+ * variables (falling back to 16:9), so setting them keeps a clip's own shape
+ * even when the element that knows the shape loads late. `--preview-ar-k` is
+ * the same ratio as a plain number, which the width cap multiplies by to fit
+ * the box exactly - a height cap alone would leave black bars wherever the
+ * box ends up wider than its content.
+ */
+function setMediaAspect(
+  video: HTMLVideoElement,
+  width: number,
+  height: number
+) {
+  video.style.setProperty('--preview-ar', `${width} / ${height}`);
+  video.style.setProperty('--preview-ar-k', String(width / height));
+}
+
+/**
  * A take shown large: the clip playing, or the still at full size, with the
  * one action that matters from here - saving it.
  *
@@ -84,6 +101,27 @@ export class TakePreview {
       if (take.thumbnailUrl) video.poster = take.thumbnailUrl;
       video.src = take.url;
       this.mediaSlot.append(video);
+      // The box is sized from the clip's aspect, but a <video> does not know
+      // its own dimensions until metadata - which MediaRecorder MP4s often
+      // only hand over at playback. Two cheaper sources fill the gap: the
+      // thumbnail's aspect (it was cut from this very clip), then the real
+      // metadata whenever it does arrive. Until either lands the CSS
+      // fallback's 16:9 stands, so the box never opens at the 300x150
+      // default.
+      if (take.thumbnailUrl) {
+        const probe = new Image();
+        probe.addEventListener('load', () => {
+          if (this.currentId === take.id && probe.naturalWidth > 0) {
+            setMediaAspect(video, probe.naturalWidth, probe.naturalHeight);
+          }
+        });
+        probe.src = take.thumbnailUrl;
+      }
+      video.addEventListener('loadedmetadata', () => {
+        if (video.videoWidth > 0) {
+          setMediaAspect(video, video.videoWidth, video.videoHeight);
+        }
+      });
     } else {
       const img = document.createElement('img');
       img.src = take.url;
