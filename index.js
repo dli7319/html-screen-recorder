@@ -1856,7 +1856,7 @@
 			detail.append(name, meta);
 			const download = document.createElement("button");
 			download.type = "button";
-			download.className = "text-sm text-blue-600 dark:text-blue-400 hover:underline shrink-0";
+			download.className = "btn btn--outline btn--sm shrink-0";
 			download.textContent = "Download";
 			download.title = `Download ${take.filename}`;
 			download.addEventListener("click", () => {
@@ -1864,7 +1864,7 @@
 			});
 			const remove = document.createElement("button");
 			remove.type = "button";
-			remove.className = "text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 shrink-0";
+			remove.className = "btn btn--outline btn--danger btn--sm shrink-0";
 			remove.textContent = "Remove";
 			remove.title = `Remove ${take.filename} from the gallery`;
 			remove.addEventListener("click", () => this.store.remove(take.id));

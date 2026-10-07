@@ -79,6 +79,11 @@ body {
     --danger-container: #fce8e6;
     --on-danger: #ffffff;
 
+    /* One horizontal inset for every full-width region (app bar, session bar,
+       takes). A single token keeps their right edges - and the actions pinned
+       to them - on the same vertical line. */
+    --gutter: 22px;
+
     --radius-card: 12px;
     --radius-control: 8px;
     --radius-pill: 100px;
@@ -319,7 +324,7 @@ kbd {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 0 18px 0 22px;
+    padding: 0 var(--gutter);
     border-bottom: 1px solid var(--border);
 }
 
@@ -499,6 +504,19 @@ kbd {
     height: 32px;
     padding: 0 15px;
     font-size: 13px;
+}
+
+/* A destructive secondary action (Clear, Remove): an outline pill until it is
+   about to act, then it turns danger. Keeps the "this removes things" hint the
+   old text link had without breaking the one-button-language rule. */
+.btn--danger {
+    color: var(--ink-muted);
+}
+
+.btn--danger:hover:not([disabled]) {
+    border-color: var(--danger);
+    background: var(--danger-container);
+    color: var(--danger);
 }
 
 .btn[disabled] {
@@ -709,7 +727,7 @@ kbd {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 14px 22px;
+    padding: 14px var(--gutter);
     flex-wrap: nowrap;
 }
 
@@ -905,12 +923,15 @@ kbd {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    height: 34px;
-    padding: 0 13px;
+    /* Matches the .btn box height so the chip sits in the session bar as one
+       row of equal-sized controls, not a smaller capsule beside taller
+       buttons. It stays a shade quieter in weight/colour - it is a readout. */
+    height: 40px;
+    padding: 0 16px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
     background: var(--surface);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ink-muted);
     cursor: pointer;
@@ -976,7 +997,7 @@ kbd {
 /* ---------- takes ---------- */
 
 .takes {
-    padding: 6px 22px 26px;
+    padding: 6px var(--gutter) 26px;
 }
 
 .takes-head {
