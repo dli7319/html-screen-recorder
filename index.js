@@ -1652,12 +1652,22 @@
 				this.close();
 			};
 			this.onKeyDown = (e) => {
+				if (this.currentId === null) return;
 				if (e.key === "Escape") this.close();
+				else if (e.key === "ArrowLeft") {
+					e.preventDefault();
+					this.openRelative(-1);
+				} else if (e.key === "ArrowRight") {
+					e.preventDefault();
+					this.openRelative(1);
+				}
 			};
 			this.onDownload = () => {
 				const take = this.store.list().find((t) => t.id === this.currentId);
 				if (take) downloadBlob(take.blob, take.filename);
 			};
+			this.onPrev = () => this.openRelative(-1);
+			this.onNext = () => this.openRelative(1);
 			this.onStoreChange = () => {
 				if (this.currentId === null) return;
 				const take = this.store.list().find((t) => t.id === this.currentId);
@@ -1667,6 +1677,7 @@
 				}
 				const video = this.mediaSlot.querySelector("video");
 				if (video && take.thumbnailUrl) video.poster = take.thumbnailUrl;
+				this.updateNav();
 			};
 			this.scrim = this.require("#previewScrim");
 			this.modal = this.require("#previewModal");
@@ -1674,6 +1685,9 @@
 			this.mediaSlot = this.require("#previewMedia");
 			this.downloadBtn = this.require("#previewDownload");
 			this.closeBtn = this.require("#previewClose");
+			this.counter = this.require("#previewCounter");
+			this.prevBtn = this.require("#previewPrev");
+			this.nextBtn = this.require("#previewNext");
 		}
 		require(selector) {
 			const el = this.root.querySelector(selector);
@@ -1687,6 +1701,8 @@
 			this.closeBtn.addEventListener("click", this.onCloseClick);
 			this.scrim.addEventListener("click", this.onCloseClick);
 			this.downloadBtn.addEventListener("click", this.onDownload);
+			this.prevBtn.addEventListener("click", this.onPrev);
+			this.nextBtn.addEventListener("click", this.onNext);
 			document.addEventListener("keydown", this.onKeyDown);
 		}
 		unbind() {
@@ -1695,6 +1711,8 @@
 			this.closeBtn.removeEventListener("click", this.onCloseClick);
 			this.scrim.removeEventListener("click", this.onCloseClick);
 			this.downloadBtn.removeEventListener("click", this.onDownload);
+			this.prevBtn.removeEventListener("click", this.onPrev);
+			this.nextBtn.removeEventListener("click", this.onNext);
 			document.removeEventListener("keydown", this.onKeyDown);
 			this.close();
 		}
@@ -1728,6 +1746,7 @@
 			this.currentId = take.id;
 			this.opener = opener ?? null;
 			this.setOpen(true);
+			this.updateNav();
 			this.closeBtn.focus();
 		}
 		close() {
@@ -1755,6 +1774,26 @@
 				video.load();
 			}
 			this.mediaSlot.replaceChildren();
+		}
+		/** Move to a neighbouring take in list order (the gallery is newest-first). */
+		openRelative(offset) {
+			const list = this.store.list();
+			const idx = list.findIndex((t) => t.id === this.currentId);
+			const target = list[idx + offset];
+			if (idx < 0 || !target) return;
+			this.open(target, this.opener ?? void 0);
+		}
+		/** Position in the list, and which way there is left to go. */
+		updateNav() {
+			const list = this.store.list();
+			const idx = list.findIndex((t) => t.id === this.currentId);
+			const total = list.length;
+			const multi = total > 1;
+			this.counter.textContent = multi ? `${idx + 1} / ${total}` : "";
+			this.prevBtn.classList.toggle("hidden", !multi);
+			this.nextBtn.classList.toggle("hidden", !multi);
+			this.prevBtn.disabled = idx <= 0;
+			this.nextBtn.disabled = idx >= total - 1;
 		}
 	};
 	//#endregion
