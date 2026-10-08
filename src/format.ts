@@ -70,3 +70,17 @@ export function formatExpiry(remainingMs: number): string {
   // The bottom rung stays at one: "Expires in 0 minutes" reads as expired.
   return phrase(Math.max(1, Math.round(remainingMs / MINUTE)), 'minute');
 }
+
+/**
+ * The tone an expiry label should take: a take about to vanish (or gone) must
+ * stand out from one with weeks left. Returns a modifier class for the label,
+ * or '' for the calm default.
+ */
+export function expiryTone(remainingMs: number): string {
+  const HOUR = 60 * 60_000;
+  const DAY = 24 * HOUR;
+  // Expired and under an hour are both "act now"; under a day is a gentle nudge.
+  if (remainingMs <= HOUR) return 'is-urgent';
+  if (remainingMs < DAY) return 'is-soon';
+  return '';
+}

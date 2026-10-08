@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatDuration, formatExpiry } from './format';
+import {
+  formatBytes,
+  formatDuration,
+  formatExpiry,
+  expiryTone,
+} from './format';
 
 describe('formatBytes', () => {
   it('reports zero for nothing written', () => {
@@ -122,5 +127,28 @@ describe('formatExpiry', () => {
     expect(formatExpiry(-1)).toBe('Expired');
     expect(formatExpiry(NaN)).toBe('Expired');
     expect(formatExpiry(-30 * DAY)).toBe('Expired');
+  });
+});
+
+describe('expiryTone', () => {
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+
+  it('stays calm with a day or more left', () => {
+    expect(expiryTone(30 * DAY)).toBe('');
+    expect(expiryTone(DAY)).toBe('');
+  });
+
+  it('nudges amber inside a day', () => {
+    expect(expiryTone(DAY - 1)).toBe('is-soon');
+    expect(expiryTone(2 * HOUR)).toBe('is-soon');
+  });
+
+  it('turns red under an hour and once expired', () => {
+    expect(expiryTone(HOUR)).toBe('is-urgent');
+    expect(expiryTone(30 * MINUTE)).toBe('is-urgent');
+    expect(expiryTone(0)).toBe('is-urgent');
+    expect(expiryTone(-DAY)).toBe('is-urgent');
   });
 });

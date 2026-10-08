@@ -622,3 +622,55 @@ describe('GalleryView thumbnail polish', () => {
     expect(thumb.querySelector('img')).toBeTruthy();
   });
 });
+
+describe('GalleryView expiry tone', () => {
+  const MIN = 60_000;
+  const HOUR = 60 * MIN;
+
+  function addAt(createdAt: number) {
+    return store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+      createdAt,
+    });
+  }
+
+  const expiryLabel = () =>
+    $('takeList').querySelector('[data-expires-at]') as HTMLElement;
+
+  it('keeps a take with weeks left calm', () => {
+    render();
+    addAt(Date.now());
+    const label = expiryLabel();
+    expect(label.classList.contains('take-expiry')).toBe(true);
+    expect(label.classList.contains('is-soon')).toBe(false);
+    expect(label.classList.contains('is-urgent')).toBe(false);
+  });
+
+  it('flags a take with hours left as soon', () => {
+    render();
+    addAt(Date.now() - (TAKE_TTL_MS - 3 * HOUR));
+    expect(expiryLabel().classList.contains('is-soon')).toBe(true);
+  });
+
+  it('flags a take about to vanish as urgent', () => {
+    render();
+    addAt(Date.now() - (TAKE_TTL_MS - 30 * MIN));
+    expect(expiryLabel().classList.contains('is-urgent')).toBe(true);
+  });
+
+  it('groups expiry and the actions so they wrap together on a narrow row', () => {
+    render();
+    addAt(Date.now());
+
+    const row = $('takeList').querySelector('.take-row') as HTMLElement;
+    const actions = row.querySelector('.take-actions') as HTMLElement;
+    expect(actions).toBeTruthy();
+    expect(actions.querySelector('[data-expires-at]')).toBeTruthy();
+    expect(
+      [...actions.querySelectorAll('button')].map((b) => b.textContent.trim())
+    ).toEqual(['Download', 'Remove']);
+  });
+});

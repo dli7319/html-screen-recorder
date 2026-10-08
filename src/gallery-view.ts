@@ -1,6 +1,11 @@
 import { Take, TakeStore } from './takes';
 import { TAKE_TTL_MS } from './take-cache';
-import { formatBytes, formatDuration, formatExpiry } from './format';
+import {
+  formatBytes,
+  formatDuration,
+  formatExpiry,
+  expiryTone,
+} from './format';
 import { downloadBlob } from './screenshot';
 import { TakePreview } from './preview-modal';
 import { showToast } from './toast';
@@ -91,8 +96,17 @@ export class GalleryView {
     const labels = this.list.querySelectorAll<HTMLElement>('[data-expires-at]');
     for (const label of labels) {
       const expiresAt = Number(label.dataset.expiresAt);
-      label.textContent = formatExpiry(expiresAt - Date.now());
+      const remaining = expiresAt - Date.now();
+      label.textContent = formatExpiry(remaining);
+      this.setExpiryTone(label, remaining);
     }
+  }
+
+  /** Swap the label's urgency class to match the time left. */
+  private setExpiryTone(label: HTMLElement, remainingMs: number) {
+    label.classList.remove('is-soon', 'is-urgent');
+    const tone = expiryTone(remainingMs);
+    if (tone) label.classList.add(tone);
   }
 
   private onDownloadAll = () => {
@@ -150,7 +164,7 @@ export class GalleryView {
   private renderTake(take: Take): HTMLElement {
     const row = document.createElement('div');
     row.className =
-      'flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
+      'take-row flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
     row.dataset.takeId = take.id;
 
     const icon = document.createElement('button');
@@ -218,11 +232,11 @@ export class GalleryView {
     // quota) the take simply won't survive a refresh, and this doesn't track
     // that per take.
     const expires = document.createElement('span');
-    expires.className = 'text-xs text-gray-500 dark:text-gray-400 shrink-0';
+    expires.className = 'text-xs shrink-0 take-expiry';
     expires.dataset.expiresAt = String(take.createdAt + TAKE_TTL_MS);
-    expires.textContent = formatExpiry(
-      take.createdAt + TAKE_TTL_MS - Date.now()
-    );
+    const remaining = take.createdAt + TAKE_TTL_MS - Date.now();
+    expires.textContent = formatExpiry(remaining);
+    this.setExpiryTone(expires, remaining);
 
     detail.append(name, meta);
 
@@ -252,7 +266,13 @@ export class GalleryView {
       showToast(`Removed ${name}`);
     });
 
-    row.append(icon, detail, expires, download, remove);
+    // Expiry + the two actions ride together so they can drop below the name on
+    // a narrow row instead of squeezing it (see the narrow-viewport rules).
+    const actions = document.createElement('div');
+    actions.className = 'take-actions';
+    actions.append(expires, download, remove);
+
+    row.append(icon, detail, actions);
     return row;
   }
 
