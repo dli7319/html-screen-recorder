@@ -3,6 +3,7 @@ import { TAKE_TTL_MS } from './take-cache';
 import { formatBytes, formatDuration, formatExpiry } from './format';
 import { downloadBlob } from './screenshot';
 import { TakePreview } from './preview-modal';
+import { showToast } from './toast';
 
 /**
  * Renders the take list and its actions.
@@ -23,6 +24,12 @@ export class GalleryView {
   private clearBtn: HTMLButtonElement;
   private unsubscribe: (() => void) | null = null;
   private expiryTimer: number | undefined;
+  /** "Clear" is destructive and had no guard, so its click is two-step: the
+   *  first arms it ("Confirm clear?"), the second acts. Armed reverts after a
+   *  beat or on any other action so a stray half-click can't linger. */
+  private clearArmed = false;
+  private clearTimer: number | undefined;
+  private readonly clearLabel = 'Clear';
   /** The one preview dialog rows open into. Lives at document level - the
    *  markup sits beside the settings drawer, not inside the gallery. */
   private preview: TakePreview;
@@ -89,12 +96,40 @@ export class GalleryView {
   }
 
   private onDownloadAll = () => {
-    downloadAll(this.store.list());
+    const takes = this.store.list();
+    downloadAll(takes);
+    const n = takes.length;
+    showToast(`Downloading ${n} ${n === 1 ? 'take' : 'takes'}`);
   };
 
   private onClear = () => {
+    // Two-step: first click arms ("Confirm clear?"), second actually clears.
+    if (!this.clearArmed) {
+      this.armClear();
+      return;
+    }
+    const n = this.store.list().length;
     this.store.clear();
+    this.disarmClear();
+    showToast(`Cleared ${n} ${n === 1 ? 'take' : 'takes'}`);
   };
+
+  /** First click: turn Clear into a danger-tinted "Confirm clear?" for a beat. */
+  private armClear(): void {
+    this.clearArmed = true;
+    this.clearBtn.textContent = 'Confirm clear?';
+    this.clearBtn.classList.add('is-armed');
+    this.clearTimer = window.setTimeout(() => this.disarmClear(), 4000);
+  }
+
+  /** Revert Clear to idle: text, tint, armed flag, and any pending timer. */
+  private disarmClear(): void {
+    this.clearArmed = false;
+    window.clearTimeout(this.clearTimer);
+    this.clearTimer = undefined;
+    this.clearBtn.textContent = this.clearLabel;
+    this.clearBtn.classList.remove('is-armed');
+  }
 
   render() {
     const takes = this.store.list();
@@ -192,7 +227,15 @@ export class GalleryView {
     remove.className = 'btn btn--outline btn--danger btn--sm shrink-0';
     remove.textContent = 'Remove';
     remove.title = `Remove ${take.filename} from the gallery`;
-    remove.addEventListener('click', () => this.store.remove(take.id));
+    remove.addEventListener('click', () => {
+      this.store.remove(take.id);
+      // The row vanishes instantly; the toast is the only trace it happened.
+      const name =
+        take.filename.length > 32
+          ? `${take.filename.slice(0, 31)}…`
+          : take.filename;
+      showToast(`Removed ${name}`);
+    });
 
     row.append(icon, detail, expires, download, remove);
     return row;

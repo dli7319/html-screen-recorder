@@ -17,6 +17,7 @@ const GALLERY_MARKUP = `
       <button id="previewClose"></button>
       <div id="previewMedia"></div>
     </div>
+    <div id="toastHost"><span id="toastText"></span></div>
   </main>
 `;
 
@@ -172,6 +173,8 @@ describe('GalleryView with takes', () => {
       formatName: 'VP9',
     });
 
+    // Two-step: first click arms, second empties.
+    $('clearTakesBtn').click();
     $('clearTakesBtn').click();
 
     expect(store.count()).toBe(0);
@@ -497,5 +500,74 @@ describe('GalleryView hover playback', () => {
     thumb.dispatchEvent(new MouseEvent('mouseenter'));
 
     expect(thumb.querySelector('video')).toBeNull();
+  });
+});
+
+describe('GalleryView action feedback', () => {
+  function addOne() {
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+  }
+
+  it('Clear is two-step: first click arms, second clears', () => {
+    render();
+    addOne();
+    const clear = $('clearTakesBtn') as HTMLButtonElement;
+
+    clear.click();
+    expect(clear.textContent).toBe('Confirm clear?');
+    expect(clear.classList.contains('is-armed')).toBe(true);
+    expect($('takeList').children.length).toBe(1); // armed, not yet cleared
+
+    clear.click();
+    expect($('takeList').children.length).toBe(0);
+    expect(clear.textContent).toBe('Clear');
+    expect(clear.classList.contains('is-armed')).toBe(false);
+    expect($('toastText').textContent).toBe('Cleared 1 take');
+  });
+
+  it('an armed Clear reverts after a beat, never stranded', () => {
+    vi.useFakeTimers();
+    render();
+    addOne();
+    const clear = $('clearTakesBtn') as HTMLButtonElement;
+
+    clear.click();
+    expect(clear.textContent).toBe('Confirm clear?');
+    vi.advanceTimersByTime(4000);
+    expect(clear.textContent).toBe('Clear');
+    expect(clear.classList.contains('is-armed')).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('removing a take reports it in the toast', () => {
+    render();
+    addOne();
+
+    const remove = [...$('takeList').querySelectorAll('button')].find(
+      (b) => b.textContent.trim() === 'Remove'
+    ) as HTMLButtonElement;
+    remove.click();
+
+    expect($('takeList').children.length).toBe(0);
+    expect($('toastText').textContent).toBe('Removed one.webm');
+  });
+
+  it('Download all announces what it is doing', () => {
+    render();
+    addOne();
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+
+    ($('downloadAllBtn') as HTMLButtonElement).click();
+    expect($('toastText').textContent).toBe('Downloading 2 takes');
   });
 });
