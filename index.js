@@ -1889,7 +1889,17 @@
 				img.src = take.thumbnailUrl;
 				img.alt = "";
 				icon.append(img);
-			} else icon.textContent = take.kind === "recording" ? "🎬" : "📷";
+				if (take.kind === "recording") {
+					const cue = document.createElement("span");
+					cue.className = "thumb-cue";
+					cue.setAttribute("aria-hidden", "true");
+					cue.innerHTML = "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg>";
+					icon.append(cue);
+				}
+			} else {
+				icon.textContent = take.kind === "recording" ? "🎬" : "📷";
+				icon.classList.add("is-loading");
+			}
 			icon.addEventListener("click", () => this.preview.open(take, icon));
 			if (take.kind === "recording") {
 				icon.addEventListener("mouseenter", () => this.startHoverPlay(icon, take));

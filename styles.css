@@ -1304,6 +1304,62 @@ kbd {
     border-color: var(--ink-muted);
 }
 
+/* A recording's still looks like a photo, so it gets a small play badge to say
+   "hover me, I'm a clip". It sits in the corner and fades out on hover once the
+   clip itself is playing. Purely decorative - the button's aria-label already
+   names it. */
+.thumb-cue {
+    position: absolute;
+    left: 3px;
+    bottom: 3px;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    opacity: 0.92;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.thumb-cue svg {
+    width: 9px;
+    height: 9px;
+    display: block;
+}
+
+.take-thumb:hover .thumb-cue {
+    opacity: 0;
+}
+
+/* No thumbnail yet: the box shimmers so the gap reads as "loading", not
+   "missing". The glyph underneath stays so the row is never an empty box; the
+   shimmer drops the moment the still lands and the row re-renders. */
+.take-thumb.is-loading {
+    background:
+        linear-gradient(
+            100deg,
+            var(--surface-sunken) 32%,
+            var(--surface) 50%,
+            var(--surface-sunken) 68%
+        );
+    background-size: 220% 100%;
+    animation: thumb-shimmer 1.4s ease-in-out infinite;
+    /* keep the glyph a touch quieter while it is a placeholder */
+    color: var(--ink-disabled);
+}
+
+@keyframes thumb-shimmer {
+    from {
+        background-position: 120% 0;
+    }
+    to {
+        background-position: -120% 0;
+    }
+}
+
 .drawer-head {
     display: flex;
     align-items: center;
