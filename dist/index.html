@@ -385,6 +385,16 @@
     </div>
 
     <!--
+      Action confirmation. One shared, transient toast bottom-centre: every
+      take action (Download all, Remove, Clear) reports what it did here instead
+      of firing silently. `role="status"` + aria-live means a screen reader hears
+      the same confirmation.
+    -->
+    <div id="toastHost" class="toast-host" role="status" aria-live="polite">
+      <span id="toastText" class="toast-text"></span>
+    </div>
+
+    <!--
       Update banner. Hidden until a service worker is sitting in `waiting`.
 
       This never reloads by itself. Takes live in memory as blob URLs, so a

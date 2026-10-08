@@ -519,6 +519,14 @@ kbd {
     color: var(--danger);
 }
 
+/* The armed step of a two-step destructive button: first click turns Clear into
+   a danger-tinted "Confirm clear?", the second click acts. */
+.btn.is-armed {
+    border-color: var(--danger);
+    background: var(--danger-container);
+    color: var(--danger);
+}
+
 .btn[disabled] {
     opacity: 0.38;
     cursor: default;
@@ -1049,6 +1057,38 @@ kbd {
     font-size: 11px;
     color: var(--ink-muted);
     margin: 10px 0 0;
+}
+
+/* ---------- action toast ---------- */
+
+/* One transient confirmation bottom-centre, shared by every take action. It is
+   an overlay (fixed, above the page) so it never shifts layout, and it fades up
+   rather than popping in. `pointer-events: none` while hidden keeps it from
+   swallowing clicks on the gallery beneath. */
+.toast-host {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    z-index: 130;
+    transform: translateX(-50%) translateY(10px);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease;
+    padding: 10px 18px;
+    border-radius: var(--radius-pill);
+    background: var(--ink);
+    color: var(--surface);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: var(--elev-2);
+}
+
+.toast-host.is-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
 
 /* ---------- settings drawer ---------- */
