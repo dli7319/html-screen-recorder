@@ -1746,6 +1746,34 @@
 		}
 	};
 	//#endregion
+	//#region src/toast.ts
+	/**
+	* A single transient confirmation shown bottom-centre for a few seconds.
+	*
+	* Every take action used to fire silently: "Download all" kicked off N downloads,
+	* "Remove" made a row vanish, "Clear" wiped the gallery - each with no trace that
+	* it happened. This is the one shared way an action says "it worked" (or what it
+	* did), so a click never leaves you wondering.
+	*
+	* It doubles as a live region (`role="status" aria-live="polite"` on the host in
+	* index.html), so a screen reader hears the same confirmation everyone else sees.
+	* One host element is reused and re-timed; a burst of actions shows the latest
+	* message rather than stacking a pile of toasts.
+	*/
+	let timer;
+	/** Show `message` bottom-centre for a few seconds, replacing any current one. */
+	function showToast(message) {
+		const host = document.getElementById("toastHost");
+		const text = document.getElementById("toastText");
+		if (!host || !text) return;
+		text.textContent = message;
+		host.classList.add("is-visible");
+		window.clearTimeout(timer);
+		timer = window.setTimeout(() => {
+			host.classList.remove("is-visible");
+		}, 3200);
+	}
+	//#endregion
 	//#region src/gallery-view.ts
 	/**
 	* Renders the take list and its actions.
@@ -1763,11 +1791,23 @@
 			this.root = root;
 			this.store = store;
 			this.unsubscribe = null;
+			this.clearArmed = false;
+			this.clearLabel = "Clear";
 			this.onDownloadAll = () => {
-				downloadAll(this.store.list());
+				const takes = this.store.list();
+				downloadAll(takes);
+				const n = takes.length;
+				showToast(`Downloading ${n} ${n === 1 ? "take" : "takes"}`);
 			};
 			this.onClear = () => {
+				if (!this.clearArmed) {
+					this.armClear();
+					return;
+				}
+				const n = this.store.list().length;
 				this.store.clear();
+				this.disarmClear();
+				showToast(`Cleared ${n} ${n === 1 ? "take" : "takes"}`);
 			};
 			this.list = this.require("#takeList");
 			this.emptyState = this.require("#takesEmpty");
@@ -1810,6 +1850,21 @@
 		refreshExpiries() {
 			const labels = this.list.querySelectorAll("[data-expires-at]");
 			for (const label of labels) label.textContent = formatExpiry(Number(label.dataset.expiresAt) - Date.now());
+		}
+		/** First click: turn Clear into a danger-tinted "Confirm clear?" for a beat. */
+		armClear() {
+			this.clearArmed = true;
+			this.clearBtn.textContent = "Confirm clear?";
+			this.clearBtn.classList.add("is-armed");
+			this.clearTimer = window.setTimeout(() => this.disarmClear(), 4e3);
+		}
+		/** Revert Clear to idle: text, tint, armed flag, and any pending timer. */
+		disarmClear() {
+			this.clearArmed = false;
+			window.clearTimeout(this.clearTimer);
+			this.clearTimer = void 0;
+			this.clearBtn.textContent = this.clearLabel;
+			this.clearBtn.classList.remove("is-armed");
 		}
 		render() {
 			const takes = this.store.list();
@@ -1867,7 +1922,10 @@
 			remove.className = "btn btn--outline btn--danger btn--sm shrink-0";
 			remove.textContent = "Remove";
 			remove.title = `Remove ${take.filename} from the gallery`;
-			remove.addEventListener("click", () => this.store.remove(take.id));
+			remove.addEventListener("click", () => {
+				this.store.remove(take.id);
+				showToast(`Removed ${take.filename.length > 32 ? `${take.filename.slice(0, 31)}…` : take.filename}`);
+			});
 			row.append(icon, detail, expires, download, remove);
 			return row;
 		}
