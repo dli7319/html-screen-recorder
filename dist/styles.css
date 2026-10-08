@@ -79,6 +79,8 @@ body {
     --danger-container: #fce8e6;
     --on-danger: #ffffff;
 
+    --warning: #b45309;
+
     /* One horizontal inset for every full-width region (app bar, session bar,
        takes). A single token keeps their right edges - and the actions pinned
        to them - on the same vertical line. */
@@ -113,6 +115,8 @@ body {
         --danger-hover: #ee675c;
         --danger-container: #5c2b29;
         --on-danger: #1e1f20;
+
+        --warning: #fbbf24;
 
         --elev-1: 0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
         --elev-2: 0 2px 6px 2px rgba(0, 0, 0, 0.5);
@@ -1057,6 +1061,48 @@ kbd {
     font-size: 11px;
     color: var(--ink-muted);
     margin: 10px 0 0;
+}
+
+/* ---------- take-row extras ---------- */
+
+/* Expiry: the label is muted by default, but a take about to vanish (or gone)
+   turns amber then red so it is not missed among the rows. Colour is the only
+   change - the wording already carries the time. */
+.take-expiry {
+    color: var(--ink-muted);
+}
+
+.take-expiry.is-soon {
+    color: var(--warning);
+}
+
+.take-expiry.is-urgent {
+    color: var(--danger);
+}
+
+/* Expiry + the two actions ride together as one group, so on a narrow row the
+   group can drop below the name instead of squeezing it. */
+.take-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+/* On a narrow row the trailing group drops below the name and right-aligns,
+   instead of squeezing the filename down to nothing. The thumbnail and name
+   stay on the first line. */
+@media (max-width: 600px) {
+    .take-row {
+        flex-wrap: wrap;
+    }
+
+    .take-row .take-actions {
+        flex-basis: 100%;
+        margin-left: auto;
+        justify-content: flex-end;
+        padding-left: 76px; /* clear the thumbnail column */
+    }
 }
 
 /* ---------- action toast ---------- */
