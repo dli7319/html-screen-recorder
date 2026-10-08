@@ -488,6 +488,18 @@
 		if (remainingMs >= HOUR) return phrase(Math.round(remainingMs / HOUR), "hour");
 		return phrase(Math.max(1, Math.round(remainingMs / MINUTE)), "minute");
 	}
+	/**
+	* The tone an expiry label should take: a take about to vanish (or gone) must
+	* stand out from one with weeks left. Returns a modifier class for the label,
+	* or '' for the calm default.
+	*/
+	function expiryTone(remainingMs) {
+		const HOUR = 36e5;
+		const DAY = 24 * HOUR;
+		if (remainingMs <= HOUR) return "is-urgent";
+		if (remainingMs < DAY) return "is-soon";
+		return "";
+	}
 	//#endregion
 	//#region src/shortcuts.ts
 	/** Targets where a bare letter must stay a letter, not a command. */
@@ -1849,7 +1861,17 @@
 		*/
 		refreshExpiries() {
 			const labels = this.list.querySelectorAll("[data-expires-at]");
-			for (const label of labels) label.textContent = formatExpiry(Number(label.dataset.expiresAt) - Date.now());
+			for (const label of labels) {
+				const remaining = Number(label.dataset.expiresAt) - Date.now();
+				label.textContent = formatExpiry(remaining);
+				this.setExpiryTone(label, remaining);
+			}
+		}
+		/** Swap the label's urgency class to match the time left. */
+		setExpiryTone(label, remainingMs) {
+			label.classList.remove("is-soon", "is-urgent");
+			const tone = expiryTone(remainingMs);
+			if (tone) label.classList.add(tone);
 		}
 		/** First click: turn Clear into a danger-tinted "Confirm clear?" for a beat. */
 		armClear() {
@@ -1877,7 +1899,7 @@
 		}
 		renderTake(take) {
 			const row = document.createElement("div");
-			row.className = "flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0";
+			row.className = "take-row flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0";
 			row.dataset.takeId = take.id;
 			const icon = document.createElement("button");
 			icon.type = "button";
@@ -1915,9 +1937,11 @@
 			meta.className = "text-xs text-gray-500 dark:text-gray-400";
 			meta.textContent = [this.describeTake(take), take.formatName].filter(Boolean).join(" · ");
 			const expires = document.createElement("span");
-			expires.className = "text-xs text-gray-500 dark:text-gray-400 shrink-0";
+			expires.className = "text-xs shrink-0 take-expiry";
 			expires.dataset.expiresAt = String(take.createdAt + TAKE_TTL_MS);
-			expires.textContent = formatExpiry(take.createdAt + TAKE_TTL_MS - Date.now());
+			const remaining = take.createdAt + TAKE_TTL_MS - Date.now();
+			expires.textContent = formatExpiry(remaining);
+			this.setExpiryTone(expires, remaining);
 			detail.append(name, meta);
 			const download = document.createElement("button");
 			download.type = "button";
@@ -1936,7 +1960,10 @@
 				this.store.remove(take.id);
 				showToast(`Removed ${take.filename.length > 32 ? `${take.filename.slice(0, 31)}…` : take.filename}`);
 			});
-			row.append(icon, detail, expires, download, remove);
+			const actions = document.createElement("div");
+			actions.className = "take-actions";
+			actions.append(expires, download, remove);
+			row.append(icon, detail, actions);
 			return row;
 		}
 		/** Length and size for a recording, just size for a screenshot. */
