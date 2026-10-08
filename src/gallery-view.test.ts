@@ -571,3 +571,54 @@ describe('GalleryView action feedback', () => {
     expect($('toastText').textContent).toBe('Downloading 2 takes');
   });
 });
+
+describe('GalleryView thumbnail polish', () => {
+  it('gives a recording with a still a play badge for the hover clip', () => {
+    render();
+    const added = store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+    store.setThumbnail(added.id, new Blob(['t']));
+
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    expect(thumb.querySelector('.thumb-cue')).toBeTruthy();
+    expect(thumb.classList.contains('is-loading')).toBe(false);
+  });
+
+  it('gives a screenshot no play badge - it has no motion', () => {
+    render();
+    const added = store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+    store.setThumbnail(added.id, new Blob(['t']));
+
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    expect(thumb.querySelector('.thumb-cue')).toBeNull();
+  });
+
+  it('shimmers the box while a still is pending, and drops it once it lands', () => {
+    render();
+    const added = store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+
+    // No thumbnail yet -> loading shimmer over the glyph.
+    let thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    expect(thumb.classList.contains('is-loading')).toBe(true);
+    expect(thumb.textContent).toBe('📷');
+
+    store.setThumbnail(added.id, new Blob(['t']));
+    thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    expect(thumb.classList.contains('is-loading')).toBe(false);
+    expect(thumb.querySelector('img')).toBeTruthy();
+  });
+});
