@@ -51,7 +51,7 @@
 
         <div id="status" class="status-pill" data-state="idle">
           <span class="dot" id="statusDot"></span>
-          <span id="statusText">Ready</span>
+          <span id="statusText" aria-live="polite">Ready</span>
           <span id="statsText" class="stats"></span>
         </div>
 
@@ -373,9 +373,20 @@
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       </button>
+      <button id="previewPrev" type="button" class="icon-btn preview-nav preview-nav--prev" aria-label="Previous take">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+      </button>
+      <button id="previewNext" type="button" class="icon-btn preview-nav preview-nav--next" aria-label="Next take">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
       <div class="preview-stage">
         <div id="previewMedia" class="preview-media"></div>
         <div class="preview-actions">
+          <p id="previewCounter" class="preview-counter"></p>
           <button id="previewDownload" type="button" class="btn btn--primary btn--sm">
             Download
           </button>

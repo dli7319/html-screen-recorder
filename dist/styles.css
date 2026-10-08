@@ -1305,6 +1305,48 @@ kbd {
     white-space: nowrap;
 }
 
+/* Prev/next chevrons, lightbox-style at the sides of the viewer. They float over
+   the dark scrim like the close button. Hidden entirely for a single take, and
+   faded at the ends of the list. */
+.preview-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: auto;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.preview-nav--prev {
+    left: 14px;
+}
+
+.preview-nav--next {
+    right: 14px;
+}
+
+.preview-nav:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.preview-nav[disabled] {
+    opacity: 0.3;
+}
+
+.preview-nav.hidden {
+    display: none;
+}
+
+/* "2 / 5" over the viewer - only shown when there is somewhere to navigate. */
+.preview-counter {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.preview-counter:empty {
+    display: none;
+}
+
 /* The thumbnail slot in a take row: a fixed small box so rows stay aligned
    whether the take has a picture yet or not. Clicking it previews the take,
    so it is a real button - keyboard users get the same path as a click.

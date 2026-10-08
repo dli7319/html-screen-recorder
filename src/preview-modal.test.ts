@@ -9,6 +9,9 @@ const PREVIEW_MARKUP = `
       <strong id="previewTitle"></strong>
       <button id="previewDownload"></button>
       <button id="previewClose"></button>
+      <button id="previewPrev"></button>
+      <button id="previewNext"></button>
+      <p id="previewCounter"></p>
       <div id="previewMedia"></div>
     </div>
   </main>
@@ -337,5 +340,71 @@ describe('TakePreview download', () => {
 
     expect(clicks).not.toHaveBeenCalled();
     clicks.mockRestore();
+  });
+});
+
+describe('TakePreview navigation', () => {
+  it('hides the nav and shows no count for a single take', () => {
+    setup();
+    preview.open(addRecording());
+
+    expect($('previewCounter').textContent).toBe('');
+    expect($('previewPrev').classList.contains('hidden')).toBe(true);
+    expect($('previewNext').classList.contains('hidden')).toBe(true);
+  });
+
+  it('shows position and steps forward with the next button', () => {
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[0]);
+
+    expect($('previewCounter').textContent).toBe('1 / 2');
+    expect(($('previewPrev') as HTMLButtonElement).disabled).toBe(true);
+    expect(($('previewNext') as HTMLButtonElement).disabled).toBe(false);
+
+    ($('previewNext') as HTMLButtonElement).click();
+    expect($('previewCounter').textContent).toBe('2 / 2');
+    expect(($('previewPrev') as HTMLButtonElement).disabled).toBe(false);
+    expect(($('previewNext') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('steps with the arrow keys', () => {
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[0]);
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+    );
+    expect($('previewCounter').textContent).toBe('2 / 2');
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
+    );
+    expect($('previewCounter').textContent).toBe('1 / 2');
+  });
+
+  it('reports the open take at its own position', () => {
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[1]);
+
+    expect($('previewCounter').textContent).toBe('2 / 2');
+    expect(($('previewPrev') as HTMLButtonElement).disabled).toBe(false);
+    expect(($('previewNext') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('keeps the media in step with the position', () => {
+    setup();
+    addRecording();
+    const shot = addScreenshot();
+    preview.open(store.list()[0]);
+    expect($('previewTitle').textContent).toBe(shot.filename);
+
+    ($('previewNext') as HTMLButtonElement).click();
+    expect($('previewTitle').textContent).toBe('clip.webm');
   });
 });
