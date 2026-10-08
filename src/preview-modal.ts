@@ -38,6 +38,9 @@ export class TakePreview {
   private mediaSlot: HTMLElement;
   private downloadBtn: HTMLButtonElement;
   private closeBtn: HTMLButtonElement;
+  private counter: HTMLElement;
+  private prevBtn: HTMLButtonElement;
+  private nextBtn: HTMLButtonElement;
 
   /** Which take is on screen, if any. */
   private currentId: string | null = null;
@@ -55,6 +58,9 @@ export class TakePreview {
     this.mediaSlot = this.require('#previewMedia');
     this.downloadBtn = this.require('#previewDownload') as HTMLButtonElement;
     this.closeBtn = this.require('#previewClose') as HTMLButtonElement;
+    this.counter = this.require('#previewCounter');
+    this.prevBtn = this.require('#previewPrev') as HTMLButtonElement;
+    this.nextBtn = this.require('#previewNext') as HTMLButtonElement;
   }
 
   private require(selector: string): HTMLElement {
@@ -70,6 +76,8 @@ export class TakePreview {
     this.closeBtn.addEventListener('click', this.onCloseClick);
     this.scrim.addEventListener('click', this.onCloseClick);
     this.downloadBtn.addEventListener('click', this.onDownload);
+    this.prevBtn.addEventListener('click', this.onPrev);
+    this.nextBtn.addEventListener('click', this.onNext);
     document.addEventListener('keydown', this.onKeyDown);
   }
 
@@ -79,6 +87,8 @@ export class TakePreview {
     this.closeBtn.removeEventListener('click', this.onCloseClick);
     this.scrim.removeEventListener('click', this.onCloseClick);
     this.downloadBtn.removeEventListener('click', this.onDownload);
+    this.prevBtn.removeEventListener('click', this.onPrev);
+    this.nextBtn.removeEventListener('click', this.onNext);
     document.removeEventListener('keydown', this.onKeyDown);
     this.close();
   }
@@ -132,6 +142,7 @@ export class TakePreview {
     this.currentId = take.id;
     this.opener = opener ?? null;
     this.setOpen(true);
+    this.updateNav();
     this.closeBtn.focus();
   }
 
@@ -173,7 +184,16 @@ export class TakePreview {
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') this.close();
+    if (this.currentId === null) return;
+    if (e.key === 'Escape') {
+      this.close();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      this.openRelative(-1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      this.openRelative(1);
+    }
   };
 
   private onDownload = () => {
@@ -182,6 +202,33 @@ export class TakePreview {
     const take = this.store.list().find((t) => t.id === this.currentId);
     if (take) downloadBlob(take.blob, take.filename);
   };
+
+  private onPrev = () => this.openRelative(-1);
+  private onNext = () => this.openRelative(1);
+
+  /** Move to a neighbouring take in list order (the gallery is newest-first). */
+  private openRelative(offset: number) {
+    const list = this.store.list();
+    const idx = list.findIndex((t) => t.id === this.currentId);
+    const target = list[idx + offset];
+    if (idx < 0 || !target) return;
+    // Keep the original opener so close() still returns focus where it came
+    // from, even after stepping through several takes.
+    this.open(target, this.opener ?? undefined);
+  }
+
+  /** Position in the list, and which way there is left to go. */
+  private updateNav() {
+    const list = this.store.list();
+    const idx = list.findIndex((t) => t.id === this.currentId);
+    const total = list.length;
+    const multi = total > 1;
+    this.counter.textContent = multi ? `${idx + 1} / ${total}` : '';
+    this.prevBtn.classList.toggle('hidden', !multi);
+    this.nextBtn.classList.toggle('hidden', !multi);
+    this.prevBtn.disabled = idx <= 0;
+    this.nextBtn.disabled = idx >= total - 1;
+  }
 
   /**
    * A re-render or removal while the dialog is open. If the take is gone the
@@ -197,5 +244,7 @@ export class TakePreview {
     }
     const video = this.mediaSlot.querySelector('video');
     if (video && take.thumbnailUrl) video.poster = take.thumbnailUrl;
+    // A neighbour may have been removed/added, shifting position and count.
+    this.updateNav();
   };
 }

@@ -15,6 +15,9 @@ const GALLERY_MARKUP = `
       <strong id="previewTitle"></strong>
       <button id="previewDownload"></button>
       <button id="previewClose"></button>
+      <button id="previewPrev"></button>
+      <button id="previewNext"></button>
+      <p id="previewCounter"></p>
       <div id="previewMedia"></div>
     </div>
     <div id="toastHost"><span id="toastText"></span></div>
