@@ -163,10 +163,25 @@ export class GalleryView {
       img.src = take.thumbnailUrl;
       img.alt = '';
       icon.append(img);
+      // A recording's still looks like a photo, so nothing hints it plays on
+      // hover. A small play badge says "this is a clip" - and fades on hover
+      // as the clip itself takes over.
+      if (take.kind === 'recording') {
+        const cue = document.createElement('span');
+        cue.className = 'thumb-cue';
+        cue.setAttribute('aria-hidden', 'true');
+        cue.innerHTML =
+          '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        icon.append(cue);
+      }
     } else {
       // No thumbnail yet (extraction is async) or never (it failed): the
       // glyph keeps the row complete and the button still previews the take.
+      // While it is still expected, the box shimmers so the gap reads as
+      // "loading" rather than "missing" - it resolves the moment the still
+      // lands and the row re-renders with the image.
       icon.textContent = take.kind === 'recording' ? '🎬' : '📷';
+      icon.classList.add('is-loading');
     }
     icon.addEventListener('click', () => this.preview.open(take, icon));
     // Hover plays the clip inside the thumbnail itself: muted, looping, no
