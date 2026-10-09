@@ -976,6 +976,9 @@
 			this.systemAudioVisualizer = document.getElementById("systemAudioVisualizer");
 			this.micAudioVisualizer = document.getElementById("micAudioVisualizer");
 			this.transport = document.getElementById("transport");
+			this.recordingActive = false;
+			this.pausedActive = false;
+			this.runDuration = "";
 		}
 		/**
 		* Drive the presentation state.
@@ -994,6 +997,19 @@
 			if (phase === "idle") this.statusText.textContent = "Ready";
 			if (phase === "sharing") this.statusText.textContent = "Sharing";
 			if (phase === "recording") this.statusText.textContent = "Recording";
+		}
+		/**
+		* Reflect a live capture in the tab title, so a backgrounded tab still shows
+		* the recorder is running - the one cue that survives switching away. The
+		* pill is only visible while you are looking at the app; the title is not.
+		*/
+		syncTabTitle() {
+			const BASE = "Screen Recorder";
+			if (this.recordingActive && this.pausedActive) document.title = `⏸ Paused — ${BASE}`;
+			else if (this.recordingActive) {
+				const run = this.runDuration ? ` ${this.runDuration}` : "";
+				document.title = `● Recording${run} — ${BASE}`;
+			} else document.title = BASE;
 		}
 		bindEvents(callbacks) {
 			this.shareBtn.addEventListener("click", callbacks.onShare);
@@ -1050,18 +1066,22 @@
 		* indicator (amber and still rather than red and pulsing).
 		*/
 		setPausedState(isPaused) {
+			this.pausedActive = isPaused;
 			this.statusText.textContent = isPaused ? "Paused" : "Recording...";
 			this.pauseBtnText.textContent = isPaused ? "Resume" : "Pause";
 			this.pauseBtn.title = isPaused ? "Resume recording (P)" : "Pause recording (P)";
 			if (this.pauseBtnIcon) this.pauseBtnIcon.setAttribute("href", isPaused ? "./icons.svg#icon-record" : "./icons.svg#icon-pause");
 			this.statusDot.classList.toggle("is-paused", isPaused);
+			this.syncTabTitle();
 		}
 		/**
 		* Show the running length of the take and how much has been written so far.
 		* Both are interim figures until the capture stops.
 		*/
 		updateStats(duration, size) {
+			this.runDuration = duration;
 			this.statsText.textContent = `${duration} · ${size}`;
+			this.syncTabTitle();
 		}
 		clearStats() {
 			this.statsText.textContent = "";
@@ -1123,6 +1143,8 @@
 		}
 		setRecordingState(isRecording) {
 			const icon = this.recordBtn.querySelector("svg");
+			this.recordingActive = isRecording;
+			if (!isRecording) this.runDuration = "";
 			if (isRecording) {
 				this.setPhase("recording");
 				this.setPausedState(false);
@@ -1144,6 +1166,7 @@
 				this.shareBtn.disabled = false;
 				this.cropCheckbox.disabled = false;
 			}
+			this.syncTabTitle();
 		}
 		updateStopwatch(text) {
 			this.recordBtnText.textContent = text;
@@ -2227,6 +2250,29 @@
 		} catch {}
 	}
 	//#endregion
+	//#region src/unload-guard.ts
+	/**
+	* Warn before the page unloads while a capture is still in flight.
+	*
+	* A reload or tab close destroys a MediaRecorder mid-stream: no take has landed
+	* yet, so the clip is simply gone. Takes that already made it into the store are
+	* cached in IndexedDB and come back after a reload, so the guard only fires while
+	* a capture is actually being recorded or written out - never to nag about a
+	* gallery of already-saved takes.
+	*
+	* Returns a teardown that removes the listener, so tests (and any future
+	* teardown path) can undo it.
+	*/
+	function installUnloadGuard(isCapturing) {
+		const handler = (event) => {
+			if (!isCapturing()) return;
+			event.preventDefault();
+			event.returnValue = "";
+		};
+		window.addEventListener("beforeunload", handler);
+		return () => window.removeEventListener("beforeunload", handler);
+	}
+	//#endregion
 	//#region src/index.ts
 	const ui = new UIManager();
 	const settings = new SettingsPanel();
@@ -2254,6 +2300,14 @@
 	* one that is still counting.
 	*/
 	let activeCountdown = null;
+	/**
+	* True from the moment a take starts recording until its blob is safely in the
+	* store. The unload guard keys off this rather than `recorder.isActive()`,
+	* because a reload in the instant between the recorder stopping and the take
+	* being written would still lose the clip.
+	*/
+	let captureInFlight = false;
+	installUnloadGuard(() => captureInFlight);
 	function applyVolume(source) {
 		const gain = source === "system" ? currentGains.system : currentGains.mic;
 		if (!gain) return;
@@ -2486,6 +2540,7 @@
 			stopSharing();
 			return;
 		}
+		captureInFlight = true;
 		ui.setRecordingState(true);
 		ui.clearStats();
 		stopwatch.start((time) => {
@@ -2505,6 +2560,7 @@
 			durationMs
 		}), () => extractVideoThumbnail(fixedBlob, durationMs));
 		ui.setRecordingState(false);
+		captureInFlight = false;
 	}
 	async function stopRecording() {
 		await cropper.stopCrop(stream);
