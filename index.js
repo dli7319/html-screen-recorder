@@ -935,6 +935,47 @@
 		}
 	}
 	//#endregion
+	//#region src/focus-trap.ts
+	/**
+	* Keep keyboard focus inside a modal while it is open.
+	*
+	* Both overlays (the take preview and the settings drawer) declare
+	* `role="dialog"`, but without a trap the Tab key walks straight out behind the
+	* scrim and into the page underneath - a screen-reader or keyboard user then
+	* operates controls they cannot see. This wraps Tab from the last focusable
+	* element back to the first (and Shift+Tab from the first to the last), so the
+	* dialog is the only thing reachable until it closes.
+	*
+	* Focus *return* on close is each dialog's own job (they know their invoker);
+	* this only handles the cycling while open. Returns the teardown.
+	*/
+	const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]:not([tabindex=\"-1\"])";
+	function focusable(container) {
+		return [...container.querySelectorAll(FOCUSABLE)].filter((el) => !el.hasAttribute("disabled") && el.getAttribute("tabindex") !== "-1" && !el.classList.contains("hidden") && el.getAttribute("aria-hidden") !== "true");
+	}
+	function trapFocus(container) {
+		const onKeyDown = (e) => {
+			if (e.key !== "Tab") return;
+			const items = focusable(container);
+			if (items.length === 0) return;
+			const first = items[0];
+			const last = items[items.length - 1];
+			const active = document.activeElement;
+			const inside = active ? container.contains(active) : false;
+			if (e.shiftKey) {
+				if (!inside || active === first) {
+					e.preventDefault();
+					last.focus();
+				}
+			} else if (!inside || active === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}
+	//#endregion
 	//#region src/ui-manager.ts
 	/**
 	* The transport and status surface: the preview, the share/record/stop/pause
@@ -1027,15 +1068,25 @@
 			const chip = document.getElementById("settingsChip");
 			const closeBtn = document.getElementById("closeSettings");
 			const advBtn = document.getElementById("advToggle");
-			const setPanel = (open) => {
+			let releaseTrap = null;
+			let invoker = openBtn;
+			const setPanel = (open, source) => {
 				shell.dataset.panel = open ? "open" : "closed";
 				drawer.setAttribute("aria-hidden", String(!open));
 				openBtn.setAttribute("aria-expanded", String(open));
-				if (open) closeBtn.focus();
-				else openBtn.focus();
+				if (open) {
+					invoker = source ?? openBtn;
+					releaseTrap?.();
+					releaseTrap = trapFocus(drawer);
+					closeBtn.focus();
+				} else {
+					releaseTrap?.();
+					releaseTrap = null;
+					invoker.focus();
+				}
 			};
-			openBtn.addEventListener("click", () => setPanel(shell.dataset.panel !== "open"));
-			chip.addEventListener("click", () => setPanel(true));
+			openBtn.addEventListener("click", () => setPanel(shell.dataset.panel !== "open", openBtn));
+			chip.addEventListener("click", () => setPanel(true, chip));
 			closeBtn.addEventListener("click", () => setPanel(false));
 			scrim.addEventListener("click", () => setPanel(false));
 			document.addEventListener("keydown", (e) => {
@@ -1661,188 +1712,6 @@
 		return record.createdAt < cutoff;
 	}
 	//#endregion
-	//#region src/preview-modal.ts
-	/**
-	* The aspect the media box takes. The box itself is sized in CSS from these
-	* variables (falling back to 16:9), so setting them keeps a clip's own shape
-	* even when the element that knows the shape loads late. `--preview-ar-k` is
-	* the same ratio as a plain number, which the width cap multiplies by to fit
-	* the box exactly - a height cap alone would leave black bars wherever the
-	* box ends up wider than its content.
-	*/
-	function setMediaAspect(video, width, height) {
-		video.style.setProperty("--preview-ar", `${width} / ${height}`);
-		video.style.setProperty("--preview-ar-k", String(width / height));
-	}
-	/**
-	* A take shown large: the clip playing, or the still at full size, with the
-	* one action that matters from here - saving it.
-	*
-	* One modal, reused: opening again replaces the content rather than stacking
-	* a second dialog. It watches the store because a take can vanish while it is
-	* on screen (Remove, Clear) - a modal pointing at a revoked blob URL is worse
-	* than no modal, so that is a close, not an error.
-	*
-	* Lifetime rules stay with the store: the media here borrows `take.url` and
-	* `take.thumbnailUrl`, and closing detaches them from the element without
-	* revoking anything.
-	*/
-	var TakePreview = class {
-		constructor(root, store) {
-			this.root = root;
-			this.store = store;
-			this.currentId = null;
-			this.opener = null;
-			this.unsubscribe = null;
-			this.onCloseClick = () => {
-				this.close();
-			};
-			this.onKeyDown = (e) => {
-				if (this.currentId === null) return;
-				if (e.key === "Escape") this.close();
-				else if (e.key === "ArrowLeft") {
-					e.preventDefault();
-					this.openRelative(-1);
-				} else if (e.key === "ArrowRight") {
-					e.preventDefault();
-					this.openRelative(1);
-				}
-			};
-			this.onDownload = () => {
-				const take = this.store.list().find((t) => t.id === this.currentId);
-				if (take) downloadBlob(take.blob, take.filename);
-			};
-			this.onPrev = () => this.openRelative(-1);
-			this.onNext = () => this.openRelative(1);
-			this.onStoreChange = () => {
-				if (this.currentId === null) return;
-				const take = this.store.list().find((t) => t.id === this.currentId);
-				if (!take) {
-					this.close();
-					return;
-				}
-				const video = this.mediaSlot.querySelector("video");
-				if (video && take.thumbnailUrl) video.poster = take.thumbnailUrl;
-				this.updateNav();
-			};
-			this.scrim = this.require("#previewScrim");
-			this.modal = this.require("#previewModal");
-			this.title = this.require("#previewTitle");
-			this.mediaSlot = this.require("#previewMedia");
-			this.downloadBtn = this.require("#previewDownload");
-			this.closeBtn = this.require("#previewClose");
-			this.counter = this.require("#previewCounter");
-			this.prevBtn = this.require("#previewPrev");
-			this.nextBtn = this.require("#previewNext");
-		}
-		require(selector) {
-			const el = this.root.querySelector(selector);
-			if (!el) throw new Error(`Preview markup is missing ${selector}`);
-			return el;
-		}
-		/** Wire the chrome. The document-level pieces are undone by unbind(). */
-		bind() {
-			this.unsubscribe?.();
-			this.unsubscribe = this.store.onChange(this.onStoreChange);
-			this.closeBtn.addEventListener("click", this.onCloseClick);
-			this.scrim.addEventListener("click", this.onCloseClick);
-			this.downloadBtn.addEventListener("click", this.onDownload);
-			this.prevBtn.addEventListener("click", this.onPrev);
-			this.nextBtn.addEventListener("click", this.onNext);
-			document.addEventListener("keydown", this.onKeyDown);
-		}
-		unbind() {
-			this.unsubscribe?.();
-			this.unsubscribe = null;
-			this.closeBtn.removeEventListener("click", this.onCloseClick);
-			this.scrim.removeEventListener("click", this.onCloseClick);
-			this.downloadBtn.removeEventListener("click", this.onDownload);
-			this.prevBtn.removeEventListener("click", this.onPrev);
-			this.nextBtn.removeEventListener("click", this.onNext);
-			document.removeEventListener("keydown", this.onKeyDown);
-			this.close();
-		}
-		open(take, opener) {
-			this.clearMedia();
-			this.title.textContent = take.filename;
-			this.modal.setAttribute("aria-label", take.filename);
-			if (take.kind === "recording") {
-				const video = document.createElement("video");
-				video.controls = true;
-				video.playsInline = true;
-				if (take.thumbnailUrl) video.poster = take.thumbnailUrl;
-				video.src = take.url;
-				this.mediaSlot.append(video);
-				if (take.thumbnailUrl) {
-					const probe = new Image();
-					probe.addEventListener("load", () => {
-						if (this.currentId === take.id && probe.naturalWidth > 0) setMediaAspect(video, probe.naturalWidth, probe.naturalHeight);
-					});
-					probe.src = take.thumbnailUrl;
-				}
-				video.addEventListener("loadedmetadata", () => {
-					if (video.videoWidth > 0) setMediaAspect(video, video.videoWidth, video.videoHeight);
-				});
-			} else {
-				const img = document.createElement("img");
-				img.src = take.url;
-				img.alt = take.filename;
-				this.mediaSlot.append(img);
-			}
-			this.currentId = take.id;
-			this.opener = opener ?? null;
-			this.setOpen(true);
-			this.updateNav();
-			this.closeBtn.focus();
-		}
-		close() {
-			if (this.currentId === null) return;
-			this.clearMedia();
-			this.currentId = null;
-			this.setOpen(false);
-			this.opener?.focus();
-			this.opener = null;
-		}
-		setOpen(open) {
-			document.body.dataset.preview = open ? "open" : "closed";
-			this.modal.setAttribute("aria-hidden", String(!open));
-		}
-		/**
-		* Detach the media without revoking anything. Clearing `src` stops a
-		* playing clip at once - otherwise closing the dialog leaves its audio
-		* running over the gallery.
-		*/
-		clearMedia() {
-			const video = this.mediaSlot.querySelector("video");
-			if (video) {
-				video.pause();
-				video.removeAttribute("src");
-				video.load();
-			}
-			this.mediaSlot.replaceChildren();
-		}
-		/** Move to a neighbouring take in list order (the gallery is newest-first). */
-		openRelative(offset) {
-			const list = this.store.list();
-			const idx = list.findIndex((t) => t.id === this.currentId);
-			const target = list[idx + offset];
-			if (idx < 0 || !target) return;
-			this.open(target, this.opener ?? void 0);
-		}
-		/** Position in the list, and which way there is left to go. */
-		updateNav() {
-			const list = this.store.list();
-			const idx = list.findIndex((t) => t.id === this.currentId);
-			const total = list.length;
-			const multi = total > 1;
-			this.counter.textContent = multi ? `${idx + 1} / ${total}` : "";
-			this.prevBtn.classList.toggle("hidden", !multi);
-			this.nextBtn.classList.toggle("hidden", !multi);
-			this.prevBtn.disabled = idx <= 0;
-			this.nextBtn.disabled = idx >= total - 1;
-		}
-	};
-	//#endregion
 	//#region src/toast.ts
 	let timer;
 	/**
@@ -1891,6 +1760,218 @@
 			btn.classList.add("hidden");
 		}
 	}
+	//#endregion
+	//#region src/preview-modal.ts
+	/**
+	* The aspect the media box takes. The box itself is sized in CSS from these
+	* variables (falling back to 16:9), so setting them keeps a clip's own shape
+	* even when the element that knows the shape loads late. `--preview-ar-k` is
+	* the same ratio as a plain number, which the width cap multiplies by to fit
+	* the box exactly - a height cap alone would leave black bars wherever the
+	* box ends up wider than its content.
+	*/
+	function setMediaAspect(video, width, height) {
+		video.style.setProperty("--preview-ar", `${width} / ${height}`);
+		video.style.setProperty("--preview-ar-k", String(width / height));
+	}
+	/**
+	* A take shown large: the clip playing, or the still at full size, with the
+	* one action that matters from here - saving it.
+	*
+	* One modal, reused: opening again replaces the content rather than stacking
+	* a second dialog. It watches the store because a take can vanish while it is
+	* on screen (Remove, Clear) - a modal pointing at a revoked blob URL is worse
+	* than no modal, so that is a close, not an error.
+	*
+	* Lifetime rules stay with the store: the media here borrows `take.url` and
+	* `take.thumbnailUrl`, and closing detaches them from the element without
+	* revoking anything.
+	*/
+	var TakePreview = class {
+		constructor(root, store) {
+			this.root = root;
+			this.store = store;
+			this.currentId = null;
+			this.opener = null;
+			this.unsubscribe = null;
+			this.releaseTrap = null;
+			this.suppressAutoClose = false;
+			this.onCloseClick = () => {
+				this.close();
+			};
+			this.onKeyDown = (e) => {
+				if (this.currentId === null) return;
+				if (e.key === "Escape") this.close();
+				else if (e.key === "ArrowLeft") {
+					e.preventDefault();
+					this.openRelative(-1);
+				} else if (e.key === "ArrowRight") {
+					e.preventDefault();
+					this.openRelative(1);
+				}
+			};
+			this.onDownload = () => {
+				const take = this.store.list().find((t) => t.id === this.currentId);
+				if (take) downloadBlob(take.blob, take.filename);
+			};
+			this.onRemove = () => {
+				const list = this.store.list();
+				const idx = list.findIndex((t) => t.id === this.currentId);
+				const take = list[idx];
+				if (!take) return;
+				const opener = this.opener;
+				this.suppressAutoClose = true;
+				const record = this.store.remove(take.id);
+				this.suppressAutoClose = false;
+				showToast(`Removed ${take.filename}`, {
+					label: "Undo",
+					onClick: () => {
+						if (record) this.store.reinsert(record, idx < 0 ? 0 : idx);
+					}
+				});
+				const remaining = this.store.list();
+				const next = remaining[Math.min(idx, remaining.length - 1)];
+				if (next) this.open(next, opener ?? void 0);
+				else this.close();
+			};
+			this.onPrev = () => this.openRelative(-1);
+			this.onNext = () => this.openRelative(1);
+			this.onStoreChange = () => {
+				if (this.suppressAutoClose) return;
+				if (this.currentId === null) return;
+				const take = this.store.list().find((t) => t.id === this.currentId);
+				if (!take) {
+					this.close();
+					return;
+				}
+				const video = this.mediaSlot.querySelector("video");
+				if (video && take.thumbnailUrl) video.poster = take.thumbnailUrl;
+				this.updateNav();
+			};
+			this.scrim = this.require("#previewScrim");
+			this.modal = this.require("#previewModal");
+			this.title = this.require("#previewTitle");
+			this.mediaSlot = this.require("#previewMedia");
+			this.downloadBtn = this.require("#previewDownload");
+			this.closeBtn = this.require("#previewClose");
+			this.counter = this.require("#previewCounter");
+			this.prevBtn = this.require("#previewPrev");
+			this.nextBtn = this.require("#previewNext");
+			this.removeBtn = this.require("#previewRemove");
+		}
+		require(selector) {
+			const el = this.root.querySelector(selector);
+			if (!el) throw new Error(`Preview markup is missing ${selector}`);
+			return el;
+		}
+		/** Wire the chrome. The document-level pieces are undone by unbind(). */
+		bind() {
+			this.unsubscribe?.();
+			this.unsubscribe = this.store.onChange(this.onStoreChange);
+			this.closeBtn.addEventListener("click", this.onCloseClick);
+			this.scrim.addEventListener("click", this.onCloseClick);
+			this.downloadBtn.addEventListener("click", this.onDownload);
+			this.prevBtn.addEventListener("click", this.onPrev);
+			this.nextBtn.addEventListener("click", this.onNext);
+			this.removeBtn.addEventListener("click", this.onRemove);
+			document.addEventListener("keydown", this.onKeyDown);
+		}
+		unbind() {
+			this.unsubscribe?.();
+			this.unsubscribe = null;
+			this.closeBtn.removeEventListener("click", this.onCloseClick);
+			this.scrim.removeEventListener("click", this.onCloseClick);
+			this.downloadBtn.removeEventListener("click", this.onDownload);
+			this.prevBtn.removeEventListener("click", this.onPrev);
+			this.nextBtn.removeEventListener("click", this.onNext);
+			this.removeBtn.removeEventListener("click", this.onRemove);
+			document.removeEventListener("keydown", this.onKeyDown);
+			this.close();
+		}
+		open(take, opener) {
+			this.clearMedia();
+			this.title.textContent = take.filename;
+			this.modal.setAttribute("aria-label", take.filename);
+			if (take.kind === "recording") {
+				const video = document.createElement("video");
+				video.controls = true;
+				video.playsInline = true;
+				if (take.thumbnailUrl) video.poster = take.thumbnailUrl;
+				video.src = take.url;
+				this.mediaSlot.append(video);
+				if (take.thumbnailUrl) {
+					const probe = new Image();
+					probe.addEventListener("load", () => {
+						if (this.currentId === take.id && probe.naturalWidth > 0) setMediaAspect(video, probe.naturalWidth, probe.naturalHeight);
+					});
+					probe.src = take.thumbnailUrl;
+				}
+				video.addEventListener("loadedmetadata", () => {
+					if (video.videoWidth > 0) setMediaAspect(video, video.videoWidth, video.videoHeight);
+				});
+			} else {
+				const img = document.createElement("img");
+				img.src = take.url;
+				img.alt = take.filename;
+				this.mediaSlot.append(img);
+			}
+			this.currentId = take.id;
+			this.opener = opener ?? null;
+			this.setOpen(true);
+			this.updateNav();
+			this.releaseTrap?.();
+			this.releaseTrap = trapFocus(this.modal);
+			this.closeBtn.focus();
+		}
+		close() {
+			if (this.currentId === null) return;
+			this.clearMedia();
+			this.currentId = null;
+			this.setOpen(false);
+			this.releaseTrap?.();
+			this.releaseTrap = null;
+			this.opener?.focus();
+			this.opener = null;
+		}
+		setOpen(open) {
+			document.body.dataset.preview = open ? "open" : "closed";
+			this.modal.setAttribute("aria-hidden", String(!open));
+		}
+		/**
+		* Detach the media without revoking anything. Clearing `src` stops a
+		* playing clip at once - otherwise closing the dialog leaves its audio
+		* running over the gallery.
+		*/
+		clearMedia() {
+			const video = this.mediaSlot.querySelector("video");
+			if (video) {
+				video.pause();
+				video.removeAttribute("src");
+				video.load();
+			}
+			this.mediaSlot.replaceChildren();
+		}
+		/** Move to a neighbouring take in list order (the gallery is newest-first). */
+		openRelative(offset) {
+			const list = this.store.list();
+			const idx = list.findIndex((t) => t.id === this.currentId);
+			const target = list[idx + offset];
+			if (idx < 0 || !target) return;
+			this.open(target, this.opener ?? void 0);
+		}
+		/** Position in the list, and which way there is left to go. */
+		updateNav() {
+			const list = this.store.list();
+			const idx = list.findIndex((t) => t.id === this.currentId);
+			const total = list.length;
+			const multi = total > 1;
+			this.counter.textContent = multi ? `${idx + 1} / ${total}` : "";
+			this.prevBtn.classList.toggle("hidden", !multi);
+			this.nextBtn.classList.toggle("hidden", !multi);
+			this.prevBtn.disabled = idx <= 0;
+			this.nextBtn.disabled = idx >= total - 1;
+		}
+	};
 	//#endregion
 	//#region src/gallery-view.ts
 	/**
