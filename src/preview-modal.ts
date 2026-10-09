@@ -1,5 +1,7 @@
 import { Take, TakeStore } from './takes';
 import { downloadBlob } from './screenshot';
+import { trapFocus } from './focus-trap';
+import { showToast } from './toast';
 
 /**
  * The aspect the media box takes. The box itself is sized in CSS from these
@@ -41,12 +43,21 @@ export class TakePreview {
   private counter: HTMLElement;
   private prevBtn: HTMLButtonElement;
   private nextBtn: HTMLButtonElement;
+  private removeBtn: HTMLButtonElement;
 
   /** Which take is on screen, if any. */
   private currentId: string | null = null;
   /** What had focus before open(), so closing puts the user back. */
   private opener: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
+  /** Teardown for the focus trap, active only while the dialog is open. */
+  private releaseTrap: (() => void) | null = null;
+  /**
+   * Set while the dialog removes a take itself, so the store-change handler
+   * does not also close the dialog out from under the "step to the next take"
+   * curating flow.
+   */
+  private suppressAutoClose = false;
 
   constructor(
     private root: ParentNode,
@@ -61,6 +72,7 @@ export class TakePreview {
     this.counter = this.require('#previewCounter');
     this.prevBtn = this.require('#previewPrev') as HTMLButtonElement;
     this.nextBtn = this.require('#previewNext') as HTMLButtonElement;
+    this.removeBtn = this.require('#previewRemove') as HTMLButtonElement;
   }
 
   private require(selector: string): HTMLElement {
@@ -78,6 +90,7 @@ export class TakePreview {
     this.downloadBtn.addEventListener('click', this.onDownload);
     this.prevBtn.addEventListener('click', this.onPrev);
     this.nextBtn.addEventListener('click', this.onNext);
+    this.removeBtn.addEventListener('click', this.onRemove);
     document.addEventListener('keydown', this.onKeyDown);
   }
 
@@ -89,6 +102,7 @@ export class TakePreview {
     this.downloadBtn.removeEventListener('click', this.onDownload);
     this.prevBtn.removeEventListener('click', this.onPrev);
     this.nextBtn.removeEventListener('click', this.onNext);
+    this.removeBtn.removeEventListener('click', this.onRemove);
     document.removeEventListener('keydown', this.onKeyDown);
     this.close();
   }
@@ -143,6 +157,8 @@ export class TakePreview {
     this.opener = opener ?? null;
     this.setOpen(true);
     this.updateNav();
+    this.releaseTrap?.();
+    this.releaseTrap = trapFocus(this.modal);
     this.closeBtn.focus();
   }
 
@@ -151,6 +167,8 @@ export class TakePreview {
     this.clearMedia();
     this.currentId = null;
     this.setOpen(false);
+    this.releaseTrap?.();
+    this.releaseTrap = null;
     // The opener may itself be gone - the row is rebuilt on every store
     // change - in which case this is a harmless no-op on a detached button.
     this.opener?.focus();
@@ -203,6 +221,35 @@ export class TakePreview {
     if (take) downloadBlob(take.blob, take.filename);
   };
 
+  /**
+   * Remove the take being previewed and step to the next, so several can be
+   * culled without closing the dialog each time. The toast offers Undo.
+   */
+  private onRemove = () => {
+    const list = this.store.list();
+    const idx = list.findIndex((t) => t.id === this.currentId);
+    const take = list[idx];
+    if (!take) return;
+    const opener = this.opener;
+    // Suppress the auto-close so remove() does not shut the dialog before we
+    // pick where to go next.
+    this.suppressAutoClose = true;
+    const record = this.store.remove(take.id);
+    this.suppressAutoClose = false;
+    showToast(`Removed ${take.filename}`, {
+      label: 'Undo',
+      onClick: () => {
+        if (record) this.store.reinsert(record, idx < 0 ? 0 : idx);
+      },
+    });
+    // Step to whatever now sits at the removed position (or the new last one),
+    // or close if that was the only take left.
+    const remaining = this.store.list();
+    const next = remaining[Math.min(idx, remaining.length - 1)];
+    if (next) this.open(next, opener ?? undefined);
+    else this.close();
+  };
+
   private onPrev = () => this.openRelative(-1);
   private onNext = () => this.openRelative(1);
 
@@ -236,6 +283,8 @@ export class TakePreview {
    * clip being previewed) the poster catches up.
    */
   private onStoreChange = () => {
+    // A dialog-driven removal handles its own next step; don't also close here.
+    if (this.suppressAutoClose) return;
     if (this.currentId === null) return;
     const take = this.store.list().find((t) => t.id === this.currentId);
     if (!take) {

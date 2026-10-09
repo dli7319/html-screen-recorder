@@ -8,6 +8,7 @@ const PREVIEW_MARKUP = `
     <div id="previewModal">
       <strong id="previewTitle"></strong>
       <button id="previewDownload"></button>
+      <button id="previewRemove"></button>
       <button id="previewClose"></button>
       <button id="previewPrev"></button>
       <button id="previewNext"></button>
@@ -406,5 +407,32 @@ describe('TakePreview navigation', () => {
 
     ($('previewNext') as HTMLButtonElement).click();
     expect($('previewTitle').textContent).toBe('clip.webm');
+  });
+});
+
+describe('TakePreview remove', () => {
+  it('steps to the next take after removing one', () => {
+    setup();
+    addRecording();
+    const shot = addScreenshot();
+    preview.open(store.list()[0]); // the screenshot is newest
+    expect($('previewTitle').textContent).toBe(shot.filename);
+
+    ($('previewRemove') as HTMLButtonElement).click();
+
+    expect(store.count()).toBe(1);
+    // Curate flow: still open, now showing the remaining take.
+    expect(document.body.dataset.preview).toBe('open');
+    expect($('previewTitle').textContent).toBe('clip.webm');
+  });
+
+  it('closes the dialog when the last take is removed', () => {
+    setup();
+    preview.open(addRecording());
+
+    ($('previewRemove') as HTMLButtonElement).click();
+
+    expect(store.count()).toBe(0);
+    expect(document.body.dataset.preview).toBe('closed');
   });
 });

@@ -1,3 +1,5 @@
+import { trapFocus } from './focus-trap';
+
 /**
  * The transport and status surface: the preview, the share/record/stop/pause
  * controls, and the status row.
@@ -154,18 +156,32 @@ export class UIManager {
     ) as HTMLButtonElement;
     const advBtn = document.getElementById('advToggle') as HTMLButtonElement;
 
-    const setPanel = (open: boolean) => {
+    // The settings drawer is a modal dialog: while open, Tab must stay inside
+    // it, and closing must put focus back on whatever opened it (the header
+    // button or the session-bar chip - not always the button).
+    let releaseTrap: (() => void) | null = null;
+    let invoker: HTMLElement = openBtn;
+
+    const setPanel = (open: boolean, source?: HTMLElement) => {
       shell.dataset.panel = open ? 'open' : 'closed';
       drawer.setAttribute('aria-hidden', String(!open));
       openBtn.setAttribute('aria-expanded', String(open));
-      if (open) closeBtn.focus();
-      else openBtn.focus();
+      if (open) {
+        invoker = source ?? openBtn;
+        releaseTrap?.();
+        releaseTrap = trapFocus(drawer);
+        closeBtn.focus();
+      } else {
+        releaseTrap?.();
+        releaseTrap = null;
+        invoker.focus();
+      }
     };
 
     openBtn.addEventListener('click', () =>
-      setPanel(shell.dataset.panel !== 'open')
+      setPanel(shell.dataset.panel !== 'open', openBtn)
     );
-    chip.addEventListener('click', () => setPanel(true));
+    chip.addEventListener('click', () => setPanel(true, chip));
     closeBtn.addEventListener('click', () => setPanel(false));
     scrim.addEventListener('click', () => setPanel(false));
     document.addEventListener('keydown', (e) => {
