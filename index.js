@@ -1992,6 +1992,8 @@
 			this.unsubscribe = null;
 			this.clearArmed = false;
 			this.clearLabel = "Clear";
+			this.filter = "all";
+			this.sortAsc = false;
 			this.onDownloadAll = () => {
 				const takes = this.store.list();
 				downloadAll(takes);
@@ -2011,11 +2013,30 @@
 					onClick: () => removed.forEach((r, i) => this.store.reinsert(r, i))
 				});
 			};
+			this.onFilterClick = (e) => {
+				const btn = e.currentTarget;
+				const kind = btn.dataset.filter;
+				if (!kind) return;
+				this.filter = kind;
+				for (const b of this.filterBtns) {
+					const active = b === btn;
+					b.classList.toggle("is-active", active);
+					b.setAttribute("aria-pressed", String(active));
+				}
+				this.render();
+			};
+			this.onSortToggle = () => {
+				this.sortAsc = !this.sortAsc;
+				this.sortBtn.textContent = this.sortAsc ? "Oldest first" : "Newest first";
+				this.render();
+			};
 			this.list = this.require("#takeList");
 			this.emptyState = this.require("#takesEmpty");
 			this.count = this.require("#takeCount");
 			this.downloadAllBtn = this.require("#downloadAllBtn");
 			this.clearBtn = this.require("#clearTakesBtn");
+			this.filterBtns = [...this.root.querySelectorAll(".filter-chip")];
+			this.sortBtn = this.require("#sortTakesBtn");
 			this.preview = new TakePreview(document, store);
 		}
 		require(selector) {
@@ -2029,6 +2050,8 @@
 			this.unsubscribe = this.store.onChange(() => this.render());
 			this.downloadAllBtn.addEventListener("click", this.onDownloadAll);
 			this.clearBtn.addEventListener("click", this.onClear);
+			for (const btn of this.filterBtns) btn.addEventListener("click", this.onFilterClick);
+			this.sortBtn.addEventListener("click", this.onSortToggle);
 			this.preview.bind();
 			this.expiryTimer = window.setInterval(() => this.refreshExpiries(), 6e4);
 			this.render();
@@ -2038,6 +2061,8 @@
 			this.unsubscribe = null;
 			this.downloadAllBtn.removeEventListener("click", this.onDownloadAll);
 			this.clearBtn.removeEventListener("click", this.onClear);
+			for (const btn of this.filterBtns) btn.removeEventListener("click", this.onFilterClick);
+			this.sortBtn.removeEventListener("click", this.onSortToggle);
 			this.preview.unbind();
 			if (this.expiryTimer !== void 0) {
 				window.clearInterval(this.expiryTimer);
@@ -2078,13 +2103,18 @@
 			this.clearBtn.textContent = this.clearLabel;
 			this.clearBtn.classList.remove("is-armed");
 		}
+		/** The takes to show: filtered by kind, then ordered by creation time. */
+		visibleTakes() {
+			return [...this.filter === "all" ? this.store.list() : this.store.list().filter((t) => t.kind === this.filter)].sort((a, b) => this.sortAsc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt);
+		}
 		render() {
-			const takes = this.store.list();
-			const has = takes.length > 0;
-			this.emptyState.classList.toggle("hidden", has);
-			this.downloadAllBtn.disabled = !has;
-			this.clearBtn.disabled = !has;
-			this.count.textContent = has ? `${takes.length} · ${formatBytes(this.store.totalBytes())}` : "";
+			const takes = this.visibleTakes();
+			const hasAny = this.store.count() > 0;
+			this.emptyState.classList.toggle("hidden", takes.length > 0);
+			this.emptyState.textContent = hasAny ? "No takes match this filter." : "No takes yet. Recordings and screenshots will show up here.";
+			this.downloadAllBtn.disabled = !hasAny;
+			this.clearBtn.disabled = !hasAny;
+			this.count.textContent = takes.length ? `${takes.length} · ${formatBytes(takes.reduce((n, t) => n + t.size, 0))}` : "";
 			this.list.replaceChildren(...takes.map((take) => this.renderTake(take)));
 		}
 		renderTake(take) {

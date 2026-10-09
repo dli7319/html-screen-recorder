@@ -74,7 +74,7 @@
 	* instead and the user picks the moment.
 	*/
 	const PRECACHE_MANIFEST = ["./index.html","./index.js","./styles.css","./tailwind.css","./icons.svg","./manifest.json","./fonts/roboto-latin.woff2","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-512-maskable.png","./icons/apple-touch-icon.png"];
-	const CACHE_VERSION = "8c77de13e265";
+	const CACHE_VERSION = "0b98eb08a052";
 	const PRECACHE = parsePrecache(PRECACHE_MANIFEST);
 	const CACHE = cacheName(CACHE_VERSION);
 	self.addEventListener("message", (event) => {
