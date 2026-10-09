@@ -194,24 +194,50 @@ export class TakeStore {
     this.emit();
   }
 
-  /** Remove one take and release its blob URLs. */
-  remove(id: string): void {
+  /** Remove one take and release its blob URLs. Returns what was removed (blobs
+   *  intact, object URLs revoked) so a caller can undo the removal. */
+  remove(id: string): TakeRecord | undefined {
     const index = this.takes.findIndex((take) => take.id === id);
-    if (index === -1) return;
+    if (index === -1) return undefined;
 
     const [removed] = this.takes.splice(index, 1);
+    const record = TakeStore.toRecord(removed);
     TakeStore.release(removed);
     this.cache?.delete(id).catch(warnCacheFailure);
     this.emit();
+    return record;
   }
 
-  /** Remove every take, releasing every blob URL. */
-  clear(): void {
+  /** Remove every take, releasing every blob URLs. Returns what was removed so a
+   *  caller can undo the clear. */
+  clear(): TakeRecord[] {
+    const removed = this.takes.map((take) => TakeStore.toRecord(take));
     for (const take of this.takes) TakeStore.release(take);
     const had = this.takes.length > 0;
     this.takes = [];
     this.cache?.clear().catch(warnCacheFailure);
     if (had) this.emit();
+    return removed;
+  }
+
+  /**
+   * Put a take back exactly as it was - same id, timestamp and thumbnail - to
+   * undo a Remove or Clear. `add()` cannot do this: it would mint a fresh id and
+   * today's date, silently resetting the expiry. Re-inserts at `index` so the
+   * list order comes back too.
+   */
+  reinsert(record: TakeRecord, index = 0): Take {
+    const take: Take = {
+      ...record,
+      url: URL.createObjectURL(record.blob),
+      thumbnailUrl: record.thumbnail
+        ? URL.createObjectURL(record.thumbnail)
+        : undefined,
+    };
+    this.takes.splice(index, 0, take);
+    this.cache?.put(TakeStore.toRecord(take)).catch(warnCacheFailure);
+    this.emit();
+    return take;
   }
 
   /**

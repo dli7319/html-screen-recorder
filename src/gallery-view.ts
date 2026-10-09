@@ -123,9 +123,14 @@ export class GalleryView {
       return;
     }
     const n = this.store.list().length;
-    this.store.clear();
+    const removed = this.store.clear();
     this.disarmClear();
-    showToast(`Cleared ${n} ${n === 1 ? 'take' : 'takes'}`);
+    showToast(`Cleared ${n} ${n === 1 ? 'take' : 'takes'}`, {
+      label: 'Undo',
+      // Put every take back where it was - same ids, timestamps and order - so
+      // the restore is exact rather than a fresh re-add with today's date.
+      onClick: () => removed.forEach((r, i) => this.store.reinsert(r, i)),
+    });
   };
 
   /** First click: turn Clear into a danger-tinted "Confirm clear?" for a beat. */
@@ -257,13 +262,19 @@ export class GalleryView {
     remove.textContent = 'Remove';
     remove.title = `Remove ${take.filename} from the gallery`;
     remove.addEventListener('click', () => {
-      this.store.remove(take.id);
-      // The row vanishes instantly; the toast is the only trace it happened.
+      // Capture where it sat so Undo puts it back in place, not at the front.
+      const idx = this.store.list().findIndex((t) => t.id === take.id);
+      const record = this.store.remove(take.id);
       const name =
         take.filename.length > 32
           ? `${take.filename.slice(0, 31)}…`
           : take.filename;
-      showToast(`Removed ${name}`);
+      showToast(`Removed ${name}`, {
+        label: 'Undo',
+        onClick: () => {
+          if (record) this.store.reinsert(record, idx < 0 ? 0 : idx);
+        },
+      });
     });
 
     // Expiry + the two actions ride together so they can drop below the name on

@@ -20,7 +20,7 @@ const GALLERY_MARKUP = `
       <p id="previewCounter"></p>
       <div id="previewMedia"></div>
     </div>
-    <div id="toastHost"><span id="toastText"></span></div>
+    <div id="toastHost"><span id="toastText"></span><button id="toastAction"></button></div>
   </main>
 `;
 
@@ -675,5 +675,66 @@ describe('GalleryView expiry tone', () => {
     expect(
       [...actions.querySelectorAll('button')].map((b) => b.textContent.trim())
     ).toEqual(['Download', 'Remove']);
+  });
+});
+
+describe('GalleryView undo', () => {
+  function addRecording(filename: string) {
+    return store.add({
+      kind: 'recording',
+      blob: new Blob(['x']),
+      filename,
+      formatName: 'VP9',
+    });
+  }
+
+  function clickRemove() {
+    const remove = [...$('takeList').querySelectorAll('button')].find(
+      (b) => b.textContent.trim() === 'Remove'
+    ) as HTMLButtonElement;
+    remove.click();
+  }
+
+  it('Undo puts a removed take back', () => {
+    render();
+    addRecording('one.webm');
+    clickRemove();
+    expect($('takeList').children.length).toBe(0);
+
+    ($('toastAction') as HTMLButtonElement).click();
+
+    expect($('takeList').children.length).toBe(1);
+    expect($('takeList').textContent).toContain('one.webm');
+  });
+
+  it('Undo restores a cleared gallery in the same order', () => {
+    render();
+    addRecording('one.webm');
+    addRecording('two.webm');
+
+    const clear = $('clearTakesBtn') as HTMLButtonElement;
+    clear.click(); // arm
+    clear.click(); // clear
+    expect($('takeList').children.length).toBe(0);
+
+    ($('toastAction') as HTMLButtonElement).click();
+
+    expect($('takeList').children.length).toBe(2);
+    // Newest first: "two.webm" was added last, so it sits at the top again.
+    expect($('takeList').children[0].textContent).toContain('two.webm');
+    expect($('takeList').children[1].textContent).toContain('one.webm');
+  });
+
+  it('the undo toast is offered on both Remove and Clear', () => {
+    render();
+    addRecording('one.webm');
+    clickRemove();
+    expect($('toastAction').textContent).toBe('Undo');
+
+    addRecording('two.webm');
+    const clear = $('clearTakesBtn') as HTMLButtonElement;
+    clear.click();
+    clear.click();
+    expect($('toastAction').textContent).toBe('Undo');
   });
 });

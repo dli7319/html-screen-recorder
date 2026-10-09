@@ -509,3 +509,62 @@ describe('TakeStore thumbnails', () => {
     expect(reborn.list()[0].thumbnailUrl).toBeUndefined();
   });
 });
+
+describe('TakeStore remove/clear/reinsert (undo)', () => {
+  it('remove hands back the removed record so it can be undone', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+
+    const record = store.remove(added.id) as TakeRecord;
+
+    expect(record.id).toBe(added.id);
+    expect(record.blob).toBe(added.blob);
+    expect(record.filename).toBe(added.filename);
+    expect(store.count()).toBe(0);
+  });
+
+  it('clear hands back every removed record in list order', () => {
+    const store = new TakeStore();
+    store.add({ ...take(), filename: 'a.webm' });
+    store.add({ ...take(), filename: 'b.webm' });
+
+    const removed = store.clear();
+
+    expect(removed.map((r) => r.filename)).toEqual(['b.webm', 'a.webm']);
+    expect(store.count()).toBe(0);
+  });
+
+  it('reinsert restores the same id, timestamp and thumbnail', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+    store.setThumbnail(added.id, new Blob(['thumb']));
+    const record = store.remove(added.id) as TakeRecord;
+
+    const restored = store.reinsert(record, 0);
+
+    expect(restored.id).toBe(added.id);
+    expect(restored.createdAt).toBe(added.createdAt);
+    expect(restored.thumbnail).toBeDefined();
+    // A fresh blob URL is minted: the old one was revoked by remove().
+    expect(restored.url).toBeTruthy();
+    expect(restored.thumbnailUrl).toBeTruthy();
+    expect(store.list()[0].id).toBe(added.id);
+  });
+
+  it('reinsert puts a take back at its original position', () => {
+    const store = new TakeStore();
+    store.add({ ...take(), filename: 'a.webm' });
+    const middle = store.add({ ...take(), filename: 'b.webm' });
+    store.add({ ...take(), filename: 'c.webm' });
+    // list is [c, b, a]; remove the middle one.
+    const record = store.remove(middle.id) as TakeRecord;
+    expect(store.list().map((t) => t.filename)).toEqual(['c.webm', 'a.webm']);
+
+    store.reinsert(record, 1);
+    expect(store.list().map((t) => t.filename)).toEqual([
+      'c.webm',
+      'b.webm',
+      'a.webm',
+    ]);
+  });
+});
