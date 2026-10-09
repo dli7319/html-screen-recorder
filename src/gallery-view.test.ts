@@ -10,6 +10,14 @@ const GALLERY_MARKUP = `
     <span id="takeCount"></span>
     <button id="downloadAllBtn" disabled></button>
     <button id="clearTakesBtn" disabled></button>
+    <div class="takes-tools">
+      <div class="filter-group">
+        <button type="button" class="filter-chip is-active" data-filter="all"></button>
+        <button type="button" class="filter-chip" data-filter="recording"></button>
+        <button type="button" class="filter-chip" data-filter="screenshot"></button>
+      </div>
+      <button id="sortTakesBtn" type="button">Newest first</button>
+    </div>
     <div id="previewScrim"></div>
     <div id="previewModal">
       <strong id="previewTitle"></strong>
@@ -737,5 +745,99 @@ describe('GalleryView undo', () => {
     clear.click();
     clear.click();
     expect($('toastAction').textContent).toBe('Undo');
+  });
+});
+
+describe('GalleryView filter and sort', () => {
+  function rows(): HTMLElement[] {
+    return [...$('takeList').querySelectorAll<HTMLElement>('[data-take-id]')];
+  }
+  function clickFilter(kind: string) {
+    document
+      .querySelector<HTMLButtonElement>(`.filter-chip[data-filter="${kind}"]`)
+      ?.click();
+  }
+
+  it('filters the list down to one kind and back', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['c']),
+      filename: 'three.webm',
+      formatName: 'VP9',
+    });
+
+    expect(rows().length).toBe(3);
+
+    clickFilter('recording');
+    expect(rows().length).toBe(2);
+    expect(rows().every((r) => r.textContent?.includes('.webm'))).toBe(true);
+
+    clickFilter('screenshot');
+    expect(rows().length).toBe(1);
+    expect(rows()[0].textContent).toContain('two.png');
+
+    clickFilter('all');
+    expect(rows().length).toBe(3);
+  });
+
+  it('says so when a filter matches nothing, and keeps bulk actions on', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+
+    clickFilter('screenshot');
+
+    expect(rows().length).toBe(0);
+    expect($('takesEmpty').classList.contains('hidden')).toBe(false);
+    expect($('takesEmpty').textContent).toContain('filter');
+    // The bulk actions act on the whole gallery, so they stay enabled.
+    expect(($('downloadAllBtn') as HTMLButtonElement).disabled).toBe(false);
+    expect(($('clearTakesBtn') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('toggles the sort between newest-first and oldest-first', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'early.webm',
+      formatName: 'VP9',
+      createdAt: 1000,
+    });
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['b']),
+      filename: 'late.webm',
+      formatName: 'VP9',
+      createdAt: 3000,
+    });
+
+    // Newest first by default.
+    expect(rows()[0].textContent).toContain('late.webm');
+
+    ($('sortTakesBtn') as HTMLButtonElement).click();
+    expect(rows()[0].textContent).toContain('early.webm');
+    expect($('sortTakesBtn').textContent).toContain('Oldest');
+
+    ($('sortTakesBtn') as HTMLButtonElement).click();
+    expect(rows()[0].textContent).toContain('late.webm');
+    expect($('sortTakesBtn').textContent).toContain('Newest');
   });
 });

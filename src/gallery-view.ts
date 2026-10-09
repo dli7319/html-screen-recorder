@@ -35,6 +35,13 @@ export class GalleryView {
   private clearArmed = false;
   private clearTimer: number | undefined;
   private readonly clearLabel = 'Clear';
+  /** Which kinds the list shows. A view over the store, not a change to it, so
+   *  "Download all" and "Clear" still act on the whole gallery. */
+  private filter: 'all' | 'recording' | 'screenshot' = 'all';
+  /** List order; false = newest first (the default). */
+  private sortAsc = false;
+  private filterBtns: HTMLElement[];
+  private sortBtn: HTMLElement;
   /** The one preview dialog rows open into. Lives at document level - the
    *  markup sits beside the settings drawer, not inside the gallery. */
   private preview: TakePreview;
@@ -48,6 +55,10 @@ export class GalleryView {
     this.count = this.require('#takeCount');
     this.downloadAllBtn = this.require('#downloadAllBtn') as HTMLButtonElement;
     this.clearBtn = this.require('#clearTakesBtn') as HTMLButtonElement;
+    this.filterBtns = [
+      ...this.root.querySelectorAll<HTMLElement>('.filter-chip'),
+    ];
+    this.sortBtn = this.require('#sortTakesBtn');
     this.preview = new TakePreview(document, store);
   }
 
@@ -64,6 +75,10 @@ export class GalleryView {
 
     this.downloadAllBtn.addEventListener('click', this.onDownloadAll);
     this.clearBtn.addEventListener('click', this.onClear);
+    for (const btn of this.filterBtns) {
+      btn.addEventListener('click', this.onFilterClick);
+    }
+    this.sortBtn.addEventListener('click', this.onSortToggle);
     this.preview.bind();
 
     // Expiry labels are the one piece of row text that goes stale on its own:
@@ -80,6 +95,10 @@ export class GalleryView {
     this.unsubscribe = null;
     this.downloadAllBtn.removeEventListener('click', this.onDownloadAll);
     this.clearBtn.removeEventListener('click', this.onClear);
+    for (const btn of this.filterBtns) {
+      btn.removeEventListener('click', this.onFilterClick);
+    }
+    this.sortBtn.removeEventListener('click', this.onSortToggle);
     this.preview.unbind();
     if (this.expiryTimer !== undefined) {
       window.clearInterval(this.expiryTimer);
@@ -150,15 +169,53 @@ export class GalleryView {
     this.clearBtn.classList.remove('is-armed');
   }
 
-  render() {
-    const takes = this.store.list();
-    const has = takes.length > 0;
+  /** Set the list filter from a chip's `data-filter`, then re-render. */
+  private onFilterClick = (e: Event) => {
+    const btn = e.currentTarget as HTMLElement;
+    const kind = btn.dataset.filter as
+      'all' | 'recording' | 'screenshot' | undefined;
+    if (!kind) return;
+    this.filter = kind;
+    for (const b of this.filterBtns) {
+      const active = b === btn;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-pressed', String(active));
+    }
+    this.render();
+  };
 
-    this.emptyState.classList.toggle('hidden', has);
-    this.downloadAllBtn.disabled = !has;
-    this.clearBtn.disabled = !has;
-    this.count.textContent = has
-      ? `${takes.length} · ${formatBytes(this.store.totalBytes())}`
+  private onSortToggle = () => {
+    this.sortAsc = !this.sortAsc;
+    this.sortBtn.textContent = this.sortAsc ? 'Oldest first' : 'Newest first';
+    this.render();
+  };
+
+  /** The takes to show: filtered by kind, then ordered by creation time. */
+  private visibleTakes(): Take[] {
+    const list =
+      this.filter === 'all'
+        ? this.store.list()
+        : this.store.list().filter((t) => t.kind === this.filter);
+    return [...list].sort((a, b) =>
+      this.sortAsc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt
+    );
+  }
+
+  render() {
+    const takes = this.visibleTakes();
+    const hasAny = this.store.count() > 0;
+
+    this.emptyState.classList.toggle('hidden', takes.length > 0);
+    this.emptyState.textContent = hasAny
+      ? 'No takes match this filter.'
+      : 'No takes yet. Recordings and screenshots will show up here.';
+
+    // The buttons act on the whole gallery, so they follow the total rather
+    // than what happens to be filtered in.
+    this.downloadAllBtn.disabled = !hasAny;
+    this.clearBtn.disabled = !hasAny;
+    this.count.textContent = takes.length
+      ? `${takes.length} · ${formatBytes(takes.reduce((n, t) => n + t.size, 0))}`
       : '';
 
     // Rebuild wholesale. The lists are small and this is far harder to get out

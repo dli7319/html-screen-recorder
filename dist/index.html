@@ -232,6 +232,28 @@
           </button>
         </div>
 
+        <!--
+          Filter and sort for a long gallery. This is a view over the takes,
+          not a change to them: "Download all" and "Clear" still act on the
+          whole gallery regardless of what is filtered in.
+        -->
+        <div class="takes-tools">
+          <div class="filter-group" role="group" aria-label="Filter takes">
+            <button type="button" class="filter-chip is-active" data-filter="all" aria-pressed="true">
+              All
+            </button>
+            <button type="button" class="filter-chip" data-filter="recording" aria-pressed="false">
+              Recordings
+            </button>
+            <button type="button" class="filter-chip" data-filter="screenshot" aria-pressed="false">
+              Screenshots
+            </button>
+          </div>
+          <button id="sortTakesBtn" type="button" class="sort-btn" aria-label="Toggle sort order">
+            Newest first
+          </button>
+        </div>
+
         <div id="takeList"></div>
 
         <p id="takesEmpty" class="takes-empty">
