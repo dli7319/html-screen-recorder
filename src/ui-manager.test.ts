@@ -467,3 +467,36 @@ describe('UIManager.bindEvents', () => {
     expect(onPip).toHaveBeenCalledOnce();
   });
 });
+
+describe('UIManager tab title', () => {
+  it('marks the tab while recording', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    expect(document.title).toContain('Recording');
+    expect(document.title).toContain('Screen Recorder');
+  });
+
+  it('shows the running time in the tab', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.updateStats('00:36', '1.2 MB');
+    expect(document.title).toContain('Recording');
+    expect(document.title).toContain('00:36');
+  });
+
+  it('marks the tab as paused', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.setPausedState(true);
+    expect(document.title).toContain('Paused');
+    expect(document.title).toContain('Screen Recorder');
+  });
+
+  it('clears the marker once the take stops', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    ui.updateStats('00:10', '1 KB');
+    ui.setRecordingState(false);
+    expect(document.title).toBe('Screen Recorder');
+  });
+});
