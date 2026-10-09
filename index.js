@@ -1497,22 +1497,45 @@
 			this.takes = [...this.takes, ...restored].sort((a, b) => b.createdAt - a.createdAt);
 			this.emit();
 		}
-		/** Remove one take and release its blob URLs. */
+		/** Remove one take and release its blob URLs. Returns what was removed (blobs
+		*  intact, object URLs revoked) so a caller can undo the removal. */
 		remove(id) {
 			const index = this.takes.findIndex((take) => take.id === id);
-			if (index === -1) return;
+			if (index === -1) return void 0;
 			const [removed] = this.takes.splice(index, 1);
+			const record = TakeStore.toRecord(removed);
 			TakeStore.release(removed);
 			this.cache?.delete(id).catch(warnCacheFailure);
 			this.emit();
+			return record;
 		}
-		/** Remove every take, releasing every blob URL. */
+		/** Remove every take, releasing every blob URLs. Returns what was removed so a
+		*  caller can undo the clear. */
 		clear() {
+			const removed = this.takes.map((take) => TakeStore.toRecord(take));
 			for (const take of this.takes) TakeStore.release(take);
 			const had = this.takes.length > 0;
 			this.takes = [];
 			this.cache?.clear().catch(warnCacheFailure);
 			if (had) this.emit();
+			return removed;
+		}
+		/**
+		* Put a take back exactly as it was - same id, timestamp and thumbnail - to
+		* undo a Remove or Clear. `add()` cannot do this: it would mint a fresh id and
+		* today's date, silently resetting the expiry. Re-inserts at `index` so the
+		* list order comes back too.
+		*/
+		reinsert(record, index = 0) {
+			const take = {
+				...record,
+				url: URL.createObjectURL(record.blob),
+				thumbnailUrl: record.thumbnail ? URL.createObjectURL(record.thumbnail) : void 0
+			};
+			this.takes.splice(index, 0, take);
+			this.cache?.put(TakeStore.toRecord(take)).catch(warnCacheFailure);
+			this.emit();
+			return take;
 		}
 		/**
 		* Release everything. The store is unusable afterwards.
@@ -1821,31 +1844,52 @@
 	};
 	//#endregion
 	//#region src/toast.ts
-	/**
-	* A single transient confirmation shown bottom-centre for a few seconds.
-	*
-	* Every take action used to fire silently: "Download all" kicked off N downloads,
-	* "Remove" made a row vanish, "Clear" wiped the gallery - each with no trace that
-	* it happened. This is the one shared way an action says "it worked" (or what it
-	* did), so a click never leaves you wondering.
-	*
-	* It doubles as a live region (`role="status" aria-live="polite"` on the host in
-	* index.html), so a screen reader hears the same confirmation everyone else sees.
-	* One host element is reused and re-timed; a burst of actions shows the latest
-	* message rather than stacking a pile of toasts.
-	*/
 	let timer;
-	/** Show `message` bottom-centre for a few seconds, replacing any current one. */
-	function showToast(message) {
+	/**
+	* Show `message` bottom-centre, replacing any current one. With `action`, an
+	* Undo-style button rides along and the toast lingers a little longer so it can
+	* actually be reached.
+	*/
+	function showToast(message, action) {
 		const host = document.getElementById("toastHost");
 		const text = document.getElementById("toastText");
+		const btn = document.getElementById("toastAction");
 		if (!host || !text) return;
 		text.textContent = message;
+		if (btn) {
+			if (action) {
+				btn.textContent = action.label;
+				btn.classList.remove("hidden");
+				btn.onclick = () => {
+					action.onClick();
+					hideToast();
+				};
+			} else {
+				btn.classList.add("hidden");
+				btn.onclick = null;
+			}
+		}
 		host.classList.add("is-visible");
+		const duration = action ? 5200 : 3200;
 		window.clearTimeout(timer);
 		timer = window.setTimeout(() => {
 			host.classList.remove("is-visible");
-		}, 3200);
+			if (btn) {
+				btn.onclick = null;
+				btn.classList.add("hidden");
+			}
+		}, duration);
+	}
+	/** Drop the toast immediately (used on teardown/tests, not by actions). */
+	function hideToast() {
+		window.clearTimeout(timer);
+		timer = void 0;
+		document.getElementById("toastHost")?.classList.remove("is-visible");
+		const btn = document.getElementById("toastAction");
+		if (btn) {
+			btn.onclick = null;
+			btn.classList.add("hidden");
+		}
 	}
 	//#endregion
 	//#region src/gallery-view.ts
@@ -1879,9 +1923,12 @@
 					return;
 				}
 				const n = this.store.list().length;
-				this.store.clear();
+				const removed = this.store.clear();
 				this.disarmClear();
-				showToast(`Cleared ${n} ${n === 1 ? "take" : "takes"}`);
+				showToast(`Cleared ${n} ${n === 1 ? "take" : "takes"}`, {
+					label: "Undo",
+					onClick: () => removed.forEach((r, i) => this.store.reinsert(r, i))
+				});
 			};
 			this.list = this.require("#takeList");
 			this.emptyState = this.require("#takesEmpty");
@@ -2019,8 +2066,14 @@
 			remove.textContent = "Remove";
 			remove.title = `Remove ${take.filename} from the gallery`;
 			remove.addEventListener("click", () => {
-				this.store.remove(take.id);
-				showToast(`Removed ${take.filename.length > 32 ? `${take.filename.slice(0, 31)}…` : take.filename}`);
+				const idx = this.store.list().findIndex((t) => t.id === take.id);
+				const record = this.store.remove(take.id);
+				showToast(`Removed ${take.filename.length > 32 ? `${take.filename.slice(0, 31)}…` : take.filename}`, {
+					label: "Undo",
+					onClick: () => {
+						if (record) this.store.reinsert(record, idx < 0 ? 0 : idx);
+					}
+				});
 			});
 			const actions = document.createElement("div");
 			actions.className = "take-actions";
