@@ -17,6 +17,7 @@ import { TakeCache } from './take-cache';
 import { GalleryView } from './gallery-view';
 import { downscaleImage, extractVideoThumbnail } from './thumbnail';
 import { registerServiceWorker } from './pwa';
+import { installUnloadGuard } from './unload-guard';
 
 const ui = new UIManager();
 const settings = new SettingsPanel();
@@ -66,6 +67,18 @@ let currentGains: { system?: GainNode; mic?: GainNode } = {};
  * one that is still counting.
  */
 let activeCountdown: CountdownHandle | null = null;
+
+/**
+ * True from the moment a take starts recording until its blob is safely in the
+ * store. The unload guard keys off this rather than `recorder.isActive()`,
+ * because a reload in the instant between the recorder stopping and the take
+ * being written would still lose the clip.
+ */
+let captureInFlight = false;
+
+// A refresh or tab close mid-take would silently destroy the recording. This is
+// the one action that actually loses data, so it is worth a native prompt.
+installUnloadGuard(() => captureInFlight);
 
 function applyVolume(source: 'system' | 'mic') {
   const gain = source === 'system' ? currentGains.system : currentGains.mic;
@@ -396,6 +409,7 @@ async function startCapture() {
     return;
   }
 
+  captureInFlight = true;
   ui.setRecordingState(true);
   ui.clearStats();
   stopwatch.start((time) => {
@@ -433,6 +447,8 @@ async function onRecordingStop(blob: Blob, ext: string) {
   );
 
   ui.setRecordingState(false);
+  // The take is in the store now, so a reload at this point is safe.
+  captureInFlight = false;
 }
 
 async function stopRecording() {

@@ -99,6 +99,29 @@ export class UIManager {
     if (phase === 'recording') this.statusText.textContent = 'Recording';
   }
 
+  // Live tab-title reflection (see syncTabTitle). Tracked separately from the
+  // pill because the title has to keep saying "Recording" across a pause too.
+  private recordingActive = false;
+  private pausedActive = false;
+  private runDuration = '';
+
+  /**
+   * Reflect a live capture in the tab title, so a backgrounded tab still shows
+   * the recorder is running - the one cue that survives switching away. The
+   * pill is only visible while you are looking at the app; the title is not.
+   */
+  private syncTabTitle() {
+    const BASE = 'Screen Recorder';
+    if (this.recordingActive && this.pausedActive) {
+      document.title = `⏸ Paused — ${BASE}`;
+    } else if (this.recordingActive) {
+      const run = this.runDuration ? ` ${this.runDuration}` : '';
+      document.title = `● Recording${run} — ${BASE}`;
+    } else {
+      document.title = BASE;
+    }
+  }
+
   bindEvents(callbacks: {
     onShare: () => void;
     onRecord: () => void;
@@ -181,6 +204,7 @@ export class UIManager {
    * indicator (amber and still rather than red and pulsing).
    */
   setPausedState(isPaused: boolean) {
+    this.pausedActive = isPaused;
     this.statusText.textContent = isPaused ? 'Paused' : 'Recording...';
     this.pauseBtnText.textContent = isPaused ? 'Resume' : 'Pause';
     this.pauseBtn.title = isPaused
@@ -193,6 +217,7 @@ export class UIManager {
       );
     }
     this.statusDot.classList.toggle('is-paused', isPaused);
+    this.syncTabTitle();
   }
 
   /**
@@ -200,7 +225,9 @@ export class UIManager {
    * Both are interim figures until the capture stops.
    */
   updateStats(duration: string, size: string) {
+    this.runDuration = duration;
     this.statsText.textContent = `${duration} · ${size}`;
+    this.syncTabTitle();
   }
 
   clearStats() {
@@ -274,6 +301,8 @@ export class UIManager {
 
   setRecordingState(isRecording: boolean) {
     const icon = this.recordBtn.querySelector('svg') as unknown as HTMLElement;
+    this.recordingActive = isRecording;
+    if (!isRecording) this.runDuration = '';
 
     if (isRecording) {
       this.setPhase('recording');
@@ -299,6 +328,7 @@ export class UIManager {
       this.shareBtn.disabled = false;
       this.cropCheckbox.disabled = false;
     }
+    this.syncTabTitle();
   }
 
   updateStopwatch(text: string) {
