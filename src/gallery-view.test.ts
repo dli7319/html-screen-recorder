@@ -14,6 +14,7 @@ const GALLERY_MARKUP = `
     <div id="previewModal">
       <strong id="previewTitle"></strong>
       <button id="previewDownload"></button>
+      <button id="previewRemove"></button>
       <button id="previewClose"></button>
       <button id="previewPrev"></button>
       <button id="previewNext"></button>

@@ -1369,6 +1369,38 @@ kbd {
     display: none;
 }
 
+/* Download and Remove sit as one centred row under the viewer. */
+.preview-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+/* The destructive sibling of Download. The themed `btn--danger` assumes a page
+   surface behind it and would be near-invisible on the modal's dark scrim, so
+   this is tuned for that backdrop and sized to match `btn--sm` so the two line
+   up as one row. */
+.preview-remove {
+    height: 32px;
+    padding: 0 15px;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.92);
+    font: 500 13px var(--font);
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.preview-remove:hover {
+    background: rgba(217, 48, 37, 0.9);
+    border-color: transparent;
+    color: #fff;
+}
+
 /* The thumbnail slot in a take row: a fixed small box so rows stay aligned
    whether the take has a picture yet or not. Clicking it previews the take,
    so it is a real button - keyboard users get the same path as a click.
@@ -1777,5 +1809,24 @@ kbd {
 @media (prefers-color-scheme: dark) {
     .drawer select {
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    }
+}
+
+/*
+   Respect reduced-motion.
+
+   The thumbnail shimmer, toast slide, countdown pulse and status-dot blink are
+   all decorative: none carries information that motion alone conveys - each has
+   a text or static counterpart. Under `prefers-reduced-motion: reduce` they
+   collapse to effectively instant instead of animating.
+*/
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }
