@@ -103,6 +103,10 @@ body {
     /* Soft halo for the pulsing recording dot (the dot stays solid). */
     --danger-halo: rgba(217, 48, 37, 0.22);
 
+    /* A visible band for the loading shimmer (a touch darker than
+       --surface-sunken, so it reads as motion instead of a flat box). */
+    --shimmer-band: #e8ecf0;
+
     /* One horizontal inset for every full-width region (app bar, session bar,
        takes). A single token keeps their right edges - and the actions pinned
        to them - on the same vertical line. */
@@ -146,6 +150,8 @@ body {
         --inverse-on-surface: #e8eaed;
 
         --danger-halo: rgba(242, 139, 130, 0.28);
+
+        --shimmer-band: #2b2d30;
 
         --elev-1: 0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
         --elev-2: 0 2px 6px 2px rgba(0, 0, 0, 0.5);
@@ -1183,9 +1189,9 @@ kbd {
 
 .takes-empty {
     font-size: 13px;
-    color: var(--ink-disabled);
+    color: var(--ink-muted);
     margin: 0;
-    padding: 18px;
+    padding: 24px 18px;
     border: 1px dashed var(--border);
     border-radius: var(--radius-control);
     text-align: center;
@@ -1617,6 +1623,14 @@ kbd {
     height: 100%;
     object-fit: cover;
     display: block;
+    /* Crossfade in once frames render, so a hover doesn't pop a black box over
+       the still before the first frame decodes. */
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.take-thumb.is-playing video {
+    opacity: 1;
 }
 
 .take-thumb:hover {
@@ -1649,8 +1663,13 @@ kbd {
     display: block;
 }
 
-.take-thumb:hover .thumb-cue {
+/* The badge holds until the clip is actually playing, then yields to it. */
+.take-thumb.is-playing .thumb-cue {
     opacity: 0;
+}
+
+.take-thumb:hover .thumb-cue {
+    opacity: 0.92;
 }
 
 /* No thumbnail yet: the box shimmers so the gap reads as "loading", not
@@ -1661,11 +1680,11 @@ kbd {
         linear-gradient(
             100deg,
             var(--surface-sunken) 32%,
-            var(--surface) 50%,
+            var(--shimmer-band) 50%,
             var(--surface-sunken) 68%
         );
     background-size: 220% 100%;
-    animation: thumb-shimmer 1.4s ease-in-out infinite;
+    animation: thumb-shimmer 1.9s ease-in-out infinite;
     /* keep the glyph a touch quieter while it is a placeholder */
     color: var(--ink-disabled);
 }
@@ -2005,5 +2024,11 @@ kbd {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+
+    /* The shimmer would otherwise freeze at its end keyframe - an accidental
+       position. Park it on a static band that still reads as a skeleton. */
+    .take-thumb.is-loading {
+        background-position: 35% 0;
     }
 }

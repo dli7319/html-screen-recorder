@@ -368,6 +368,11 @@ export class GalleryView {
     video.playsInline = true;
     video.src = take.url;
     thumb.append(video);
+    // Only reveal the video (and drop the play badge) once frames render - the
+    // crossfade in the CSS keys off this, so a hover never pops a black box.
+    video.addEventListener('playing', () => thumb.classList.add('is-playing'), {
+      once: true,
+    });
     void Promise.resolve(video.play()).catch(() => {});
   }
 
@@ -375,6 +380,7 @@ export class GalleryView {
   private stopHoverPlay(thumb: HTMLElement) {
     const video = thumb.querySelector('video');
     if (!video) return;
+    thumb.classList.remove('is-playing');
     video.pause();
     video.removeAttribute('src');
     video.remove();
