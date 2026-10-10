@@ -528,11 +528,14 @@
 			default: return null;
 		}
 	}
+	/** The actions that must not fire while a dialog is open. */
+	const DIALOG_GATED = /* @__PURE__ */ new Set(["record", "screenshot"]);
 	/** Bind the shortcuts and return an unsubscribe function. */
-	function bindShortcuts(handlers) {
+	function bindShortcuts(handlers, options = {}) {
 		const onKeyDown = (event) => {
 			const action = matchShortcut(event);
 			if (!action) return;
+			if (DIALOG_GATED.has(action) && options.isDialogOpen?.()) return;
 			event.preventDefault();
 			switch (action) {
 				case "record":
@@ -2512,6 +2515,7 @@
 			pip.toggle();
 		}
 	});
+	const dialogIsOpen = () => document.body.dataset.preview === "open" || document.body.dataset.panel === "open";
 	bindShortcuts({
 		onRecord: toggleRecord,
 		onPause: togglePause,
@@ -2520,7 +2524,7 @@
 		},
 		onScreenshot: captureScreenshot,
 		onCancel: cancelCountdown
-	});
+	}, { isDialogOpen: dialogIsOpen });
 	const updateBanner = document.getElementById("updateBanner");
 	const updateReloadBtn = document.getElementById("updateReloadBtn");
 	const updateDismissBtn = document.getElementById("updateDismissBtn");
