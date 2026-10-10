@@ -632,7 +632,7 @@ kbd {
 
 .stage {
     flex: 1;
-    padding: 22px 22px 0;
+    padding: var(--gutter) var(--gutter) 0;
     display: flex;
 }
 
@@ -800,7 +800,7 @@ kbd {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 14px var(--gutter);
+    padding: 12px var(--gutter) 8px;
     flex-wrap: nowrap;
 }
 
@@ -1061,7 +1061,7 @@ kbd {
 }
 
 .error {
-    margin: 14px 22px 0;
+    margin: 14px var(--gutter) 0;
     text-align: center;
     color: var(--danger);
     font-size: 13px;
@@ -1071,14 +1071,14 @@ kbd {
 /* ---------- takes ---------- */
 
 .takes {
-    padding: 6px var(--gutter) 26px;
+    padding: 14px var(--gutter) 26px;
 }
 
 .takes-head {
     display: flex;
     align-items: center;
-    gap: 9px;
-    margin-bottom: 11px;
+    gap: 10px;
+    margin-bottom: 12px;
 }
 
 .takes-head h2 {
@@ -1112,7 +1112,15 @@ kbd {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 2px 0 13px;
+    margin: 0 0 12px;
+    /* Stay reachable when the list grows past a screenful - filter/sort should
+       not need a scroll back to the top. The bar masks rows sliding under it. */
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: var(--surface);
+    padding: 6px 0;
+    box-shadow: 0 1px 0 var(--border);
 }
 
 .filter-group {
@@ -1200,6 +1208,9 @@ kbd {
    turns amber then red so it is not missed among the rows. Colour is the only
    change - the wording already carries the time. */
 .take-expiry {
+    min-width: 112px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
     color: var(--ink-muted);
 }
 
@@ -1211,12 +1222,23 @@ kbd {
     color: var(--danger);
 }
 
+/* Row surface: a hover/focus wash so the eye can track across a wide row and the
+   row reads as one interactive item (it holds a clickable thumbnail). */
+.take-row {
+    transition: background-color 0.12s ease;
+}
+
+.take-row:hover,
+.take-row:focus-within {
+    background-color: var(--surface-sunken);
+}
+
 /* Expiry + the two actions ride together as one group, so on a narrow row the
    group can drop below the name instead of squeezing it. */
 .take-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex: none;
 }
 
@@ -1232,7 +1254,7 @@ kbd {
         flex-basis: 100%;
         margin-left: auto;
         justify-content: flex-end;
-        padding-left: 76px; /* clear the thumbnail column */
+        padding-left: 92px; /* clear the thumbnail column (80px thumb + 12px gap) */
     }
 }
 
@@ -1339,7 +1361,11 @@ kbd {
    is a media stage, and a near-black field is what makes the picture read as
    the subject instead of one element among many. */
 .preview-scrim {
-    background: rgba(15, 16, 18, 0.88);
+    background: rgba(15, 16, 18, 0.93);
+    /* Blur the app behind the viewer so the take is the subject, not one element
+       among the competing chrome (the settings scrim stays a light dim). */
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 
 /*
@@ -1433,12 +1459,22 @@ kbd {
     aspect-ratio: var(--preview-ar, 16 / 9);
     background: #000;
     object-fit: contain;
+    /* A hairline edge and a lift: dark clips used to bleed straight into the
+       dark scrim and lose their rectangle. Still no card behind the media. */
+    border-radius: var(--radius-control);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 24px 64px rgba(0, 0, 0, 0.45);
 }
 
 .preview-media img {
     max-width: min(92vw, 1120px);
     max-height: 72vh;
     object-fit: contain;
+    border-radius: var(--radius-control);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 24px 64px rgba(0, 0, 0, 0.45);
 }
 
 .preview-actions {
@@ -1500,8 +1536,10 @@ kbd {
 /* "2 / 5" over the viewer - only shown when there is somewhere to navigate. */
 .preview-counter {
     margin: 0;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.72);
+    font-size: 13px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .preview-counter:empty {
@@ -1547,8 +1585,8 @@ kbd {
 .take-thumb {
     position: relative;
     flex: none;
-    width: 64px;
-    height: 36px;
+    width: 80px;
+    height: 45px;
     padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
