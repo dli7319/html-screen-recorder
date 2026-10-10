@@ -10,7 +10,7 @@ import { defineConfig } from 'rolldown';
  *
  * dist/sw.js is a build artefact (gitignored via dist/*.js). It still carries
  * the __PRECACHE_MANIFEST__ / __CACHE_VERSION__ placeholders when this finishes;
- * scripts/build-sw.mjs substitutes real values afterwards, once the rest of
+ * scripts/build-sw.ts substitutes real values afterwards, once the rest of
  * dist/ exists and can be hashed.
  */
 export default defineConfig({

@@ -13,7 +13,7 @@
  * deletes every other one, and the new worker has already fetched fresh copies
  * into its own. Old and new content never mix.
  *
- * scripts/build-sw.mjs computes the hash and swaps the two placeholders below
+ * scripts/build-sw.ts computes the hash and swaps the two placeholders below
  * after rolldown has compiled this file. They are string literals rather than
  * free identifiers so no minifier can rename them away.
  *
