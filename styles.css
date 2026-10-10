@@ -38,6 +38,11 @@
 
 body {
     font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    /* One line-height regime: Tailwind's text utilities bring 1.33–1.43 and the
+       custom rules fall back to `normal` (~1.17), so the same block of copy set
+       either way read tighter or looser depending on which wrote it. Fixed
+       heights on every pill/row control keep their geometry unchanged. */
+    line-height: 1.4;
 }
 
 /*
@@ -59,6 +64,11 @@ body {
  * saturated ones), so contrast survives any future palette change.
  */
 :root {
+    /* Resolved by every `font:` shorthand below. Defining it here also means a
+       shorthand can no longer be silently invalidated (and the size/weight lost)
+       by an unresolved variable. */
+    --font: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
     --surface: #ffffff;
     --surface-sunken: #f8f9fa;
     --border: #dadce0;
@@ -66,7 +76,10 @@ body {
 
     --ink: #202124;
     --ink-muted: #5f6368;
-    --ink-disabled: #80868b;
+    /* Informational text that is meant to be quiet, but must still clear 4.5:1
+       (the house rule: hierarchy comes from size and weight, never from making
+       text hard to read). #6c7074 = 5.06:1 on --surface. */
+    --ink-disabled: #6c7074;
 
     --accent: #1a73e8;
     --accent-hover: #1b66c9;
@@ -80,6 +93,19 @@ body {
     --on-danger: #ffffff;
 
     --warning: #b45309;
+    --warning-container: #fef7e0;
+
+    /* Inverted surface for the toast snackbar: a dark pill on a light page and
+       a dark pill on a dark page (never a white slab in dark mode). */
+    --inverse-surface: #202124;
+    --inverse-on-surface: #ffffff;
+
+    /* Soft halo for the pulsing recording dot (the dot stays solid). */
+    --danger-halo: rgba(217, 48, 37, 0.22);
+
+    /* A visible band for the loading shimmer (a touch darker than
+       --surface-sunken, so it reads as motion instead of a flat box). */
+    --shimmer-band: #e8ecf0;
 
     /* One horizontal inset for every full-width region (app bar, session bar,
        takes). A single token keeps their right edges - and the actions pinned
@@ -99,11 +125,12 @@ body {
         --surface: #1e1f20;
         --surface-sunken: #202124;
         --border: #3c4043;
-        --border-strong: #5f6368;
+        --border-strong: #6b7075;
 
         --ink: #e8eaed;
         --ink-muted: #9aa0a6;
-        --ink-disabled: #7a7f84;
+        /* 5.2:1 on --surface, matching the light value's role. */
+        --ink-disabled: #868b91;
 
         --accent: #8ab4f8;
         --accent-hover: #aecbfa;
@@ -117,6 +144,14 @@ body {
         --on-danger: #1e1f20;
 
         --warning: #fbbf24;
+        --warning-container: #3f3108;
+
+        --inverse-surface: #35373a;
+        --inverse-on-surface: #e8eaed;
+
+        --danger-halo: rgba(242, 139, 130, 0.28);
+
+        --shimmer-band: #2b2d30;
 
         --elev-1: 0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
         --elev-2: 0 2px 6px 2px rgba(0, 0, 0, 0.5);
@@ -141,9 +176,11 @@ body {
     display: none;
 }
 
+/* The recording dot stays solid and breathes a soft halo (rather than blinking
+   its own body away), so "live" is carried by a continuous glow. */
 @keyframes pulse {
     50% {
-    opacity: 0.5;
+        box-shadow: 0 0 0 5px var(--danger-halo);
     }
 }
 
@@ -365,7 +402,7 @@ kbd {
     border-radius: var(--radius-pill);
     background: var(--surface-sunken);
     border: 1px solid var(--border);
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ink-muted);
     white-space: nowrap;
@@ -380,7 +417,7 @@ kbd {
 
 .status-pill .stats {
     font-variant-numeric: tabular-nums;
-    color: var(--ink-disabled);
+    color: var(--ink-muted);
 }
 
 .status-pill[data-state='sharing'] {
@@ -404,10 +441,26 @@ kbd {
     animation: pulse 1.5s ease-in-out infinite;
 }
 
-/* Paused is a held state, not a live one: no pulse, and the dot goes quiet. */
+/* Paused is a held state, not a live one: the pill turns amber and the dot goes
+   still instead of pulsing red. */
+.status-pill[data-state='recording']:has(.dot.is-paused) {
+    background: var(--warning-container);
+    color: var(--warning);
+}
+
 .status-pill .dot.is-paused {
-    background: var(--ink-disabled);
+    background: var(--warning);
     animation: none;
+}
+
+/* In-page cue that a capture is live: a soft red ring around the preview, so
+   the recording is visible right where the action is - not only in the tab
+   title and the corner status pill. */
+.preview-video.is-recording {
+    border-radius: var(--radius-control);
+    box-shadow:
+        0 0 0 2px var(--danger),
+        0 0 0 6px var(--danger-halo);
 }
 
 .icon-btn {
@@ -491,6 +544,7 @@ kbd {
 
 .btn--outline:hover:not([disabled]) {
     background: var(--surface-sunken);
+    border-color: var(--border-strong);
 }
 
 .btn--quiet {
@@ -540,8 +594,21 @@ kbd {
 .icon-btn:focus-visible,
 .settings-chip:focus-visible,
 .take-thumb:focus-visible,
+.filter-chip:focus-visible,
+.sort-btn:focus-visible,
+.preview-remove:focus-visible,
+.preview-nav:focus-visible,
+.pip-btn:focus-visible,
+.source .level:focus-visible,
 .source:focus-within {
     outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* The toast inverts its own colours (a light pill on a dark page), so its ring
+   does too - an accent ring would vanish against the pill. */
+.toast-action:focus-visible {
+    outline: 2px solid var(--inverse-on-surface);
     outline-offset: 2px;
 }
 
@@ -571,7 +638,7 @@ kbd {
 
 .stage {
     flex: 1;
-    padding: 22px 22px 0;
+    padding: var(--gutter) var(--gutter) 0;
     display: flex;
 }
 
@@ -654,7 +721,7 @@ kbd {
 }
 
 .placeholder .hint-sub {
-    font-size: 12.5px;
+    font-size: 13px;
     margin: 0 0 14px;
     color: var(--ink-muted);
     max-width: 42ch;
@@ -739,7 +806,7 @@ kbd {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 14px var(--gutter);
+    padding: 12px var(--gutter) 8px;
     flex-wrap: nowrap;
 }
 
@@ -760,7 +827,7 @@ kbd {
     display: inline-flex;
     align-items: center;
     gap: 9px;
-    height: 36px;
+    height: 40px;
     padding: 0 12px 0 8px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
@@ -780,7 +847,7 @@ kbd {
     align-items: center;
     gap: 7px;
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ink-muted);
     white-space: nowrap;
@@ -827,8 +894,8 @@ kbd {
     content: '';
     width: 8px;
     height: 4.5px;
-    border-left: 2px solid #fff;
-    border-bottom: 2px solid #fff;
+    border-left: 2px solid var(--on-accent);
+    border-bottom: 2px solid var(--on-accent);
     transform: rotate(-45deg) translate(1px, -1px);
 }
 
@@ -845,7 +912,7 @@ kbd {
     font-variant-numeric: tabular-nums;
     width: 30px;
     text-align: right;
-    color: var(--ink-disabled);
+    color: var(--ink-muted);
     flex: none;
 }
 
@@ -944,13 +1011,14 @@ kbd {
     border: 1px solid var(--border);
     background: var(--surface);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 400;
     color: var(--ink-muted);
     cursor: pointer;
 }
 
 .settings-chip:hover {
     background: var(--surface-sunken);
+    border-color: var(--border-strong);
     color: var(--ink);
 }
 
@@ -999,7 +1067,7 @@ kbd {
 }
 
 .error {
-    margin: 14px 22px 0;
+    margin: 14px var(--gutter) 0;
     text-align: center;
     color: var(--danger);
     font-size: 13px;
@@ -1009,18 +1077,18 @@ kbd {
 /* ---------- takes ---------- */
 
 .takes {
-    padding: 6px var(--gutter) 26px;
+    padding: 14px var(--gutter) 26px;
 }
 
 .takes-head {
     display: flex;
     align-items: center;
-    gap: 9px;
-    margin-bottom: 11px;
+    gap: 10px;
+    margin-bottom: 12px;
 }
 
 .takes-head h2 {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     margin: 0;
     color: var(--ink);
@@ -1033,8 +1101,9 @@ kbd {
 }
 
 .takes-head .count {
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
     background: var(--surface-sunken);
     border: 1px solid var(--border);
     color: var(--ink-muted);
@@ -1049,7 +1118,15 @@ kbd {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 2px 0 13px;
+    margin: 0 0 12px;
+    /* Stay reachable when the list grows past a screenful - filter/sort should
+       not need a scroll back to the top. The bar masks rows sliding under it. */
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: var(--surface);
+    padding: 6px 0;
+    box-shadow: 0 1px 0 var(--border);
 }
 
 .filter-group {
@@ -1065,7 +1142,10 @@ kbd {
     border: 0;
     background: transparent;
     border-radius: var(--radius-pill);
-    padding: 4px 11px;
+    padding: 0 14px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
     font: 500 12px var(--font);
     color: var(--ink-muted);
     cursor: pointer;
@@ -1079,9 +1159,9 @@ kbd {
 }
 
 .filter-chip.is-active {
-    background: var(--surface);
-    color: var(--ink);
-    box-shadow: var(--elev-1);
+    background: var(--accent-container);
+    color: var(--accent-ink);
+    box-shadow: none;
 }
 
 .sort-btn {
@@ -1089,7 +1169,10 @@ kbd {
     border: 1px solid var(--border);
     background: transparent;
     border-radius: var(--radius-pill);
-    padding: 5px 12px;
+    padding: 0 14px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
     font: 500 12px var(--font);
     color: var(--ink-muted);
     cursor: pointer;
@@ -1100,14 +1183,15 @@ kbd {
 
 .sort-btn:hover {
     background: var(--surface-sunken);
+    border-color: var(--border-strong);
     color: var(--ink);
 }
 
 .takes-empty {
     font-size: 13px;
-    color: var(--ink-disabled);
+    color: var(--ink-muted);
     margin: 0;
-    padding: 18px;
+    padding: 24px 18px;
     border: 1px dashed var(--border);
     border-radius: var(--radius-control);
     text-align: center;
@@ -1130,6 +1214,9 @@ kbd {
    turns amber then red so it is not missed among the rows. Colour is the only
    change - the wording already carries the time. */
 .take-expiry {
+    min-width: 112px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
     color: var(--ink-muted);
 }
 
@@ -1141,12 +1228,23 @@ kbd {
     color: var(--danger);
 }
 
+/* Row surface: a hover/focus wash so the eye can track across a wide row and the
+   row reads as one interactive item (it holds a clickable thumbnail). */
+.take-row {
+    transition: background-color 0.12s ease;
+}
+
+.take-row:hover,
+.take-row:focus-within {
+    background-color: var(--surface-sunken);
+}
+
 /* Expiry + the two actions ride together as one group, so on a narrow row the
    group can drop below the name instead of squeezing it. */
 .take-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex: none;
 }
 
@@ -1162,7 +1260,7 @@ kbd {
         flex-basis: 100%;
         margin-left: auto;
         justify-content: flex-end;
-        padding-left: 76px; /* clear the thumbnail column */
+        padding-left: 92px; /* clear the thumbnail column (80px thumb + 12px gap) */
     }
 }
 
@@ -1185,8 +1283,8 @@ kbd {
         transform 0.18s ease;
     padding: 10px 18px;
     border-radius: var(--radius-pill);
-    background: var(--ink);
-    color: var(--surface);
+    background: var(--inverse-surface);
+    color: var(--inverse-on-surface);
     font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
@@ -1207,11 +1305,11 @@ kbd {
     padding: 3px 12px;
     border: none;
     border-radius: var(--radius-pill);
-    background: var(--surface);
-    color: var(--ink);
+    background: var(--inverse-on-surface);
+    color: var(--inverse-surface);
     font: inherit;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
     pointer-events: auto;
 }
@@ -1269,7 +1367,11 @@ kbd {
    is a media stage, and a near-black field is what makes the picture read as
    the subject instead of one element among many. */
 .preview-scrim {
-    background: rgba(15, 16, 18, 0.88);
+    background: rgba(15, 16, 18, 0.93);
+    /* Blur the app behind the viewer so the take is the subject, not one element
+       among the competing chrome (the settings scrim stays a light dim). */
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 
 /*
@@ -1314,16 +1416,20 @@ kbd {
 
 .preview-close {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 20px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.08);
     pointer-events: auto;
     /* The chrome floats over the dark viewer scrim in both themes, so it is
        fixed light ink rather than a theme token. */
     color: rgba(255, 255, 255, 0.9);
 }
 
-.preview-close:hover {
+.preview-close:hover:not([disabled]) {
     background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .preview-stage {
@@ -1359,12 +1465,22 @@ kbd {
     aspect-ratio: var(--preview-ar, 16 / 9);
     background: #000;
     object-fit: contain;
+    /* A hairline edge and a lift: dark clips used to bleed straight into the
+       dark scrim and lose their rectangle. Still no card behind the media. */
+    border-radius: var(--radius-control);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 24px 64px rgba(0, 0, 0, 0.45);
 }
 
 .preview-media img {
     max-width: min(92vw, 1120px);
     max-height: 72vh;
     object-fit: contain;
+    border-radius: var(--radius-control);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 24px 64px rgba(0, 0, 0, 0.45);
 }
 
 .preview-actions {
@@ -1395,24 +1511,28 @@ kbd {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.08);
     pointer-events: auto;
     color: rgba(255, 255, 255, 0.9);
 }
 
 .preview-nav--prev {
-    left: 14px;
+    left: 20px;
 }
 
 .preview-nav--next {
-    right: 14px;
+    right: 20px;
 }
 
-.preview-nav:hover {
+.preview-nav:hover:not([disabled]) {
     background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .preview-nav[disabled] {
-    opacity: 0.3;
+    opacity: 0.45;
 }
 
 .preview-nav.hidden {
@@ -1422,8 +1542,10 @@ kbd {
 /* "2 / 5" over the viewer - only shown when there is somewhere to navigate. */
 .preview-counter {
     margin: 0;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.72);
+    font-size: 13px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .preview-counter:empty {
@@ -1469,8 +1591,8 @@ kbd {
 .take-thumb {
     position: relative;
     flex: none;
-    width: 64px;
-    height: 36px;
+    width: 80px;
+    height: 45px;
     padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
@@ -1501,6 +1623,14 @@ kbd {
     height: 100%;
     object-fit: cover;
     display: block;
+    /* Crossfade in once frames render, so a hover doesn't pop a black box over
+       the still before the first frame decodes. */
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.take-thumb.is-playing video {
+    opacity: 1;
 }
 
 .take-thumb:hover {
@@ -1533,8 +1663,13 @@ kbd {
     display: block;
 }
 
-.take-thumb:hover .thumb-cue {
+/* The badge holds until the clip is actually playing, then yields to it. */
+.take-thumb.is-playing .thumb-cue {
     opacity: 0;
+}
+
+.take-thumb:hover .thumb-cue {
+    opacity: 0.92;
 }
 
 /* No thumbnail yet: the box shimmers so the gap reads as "loading", not
@@ -1545,11 +1680,11 @@ kbd {
         linear-gradient(
             100deg,
             var(--surface-sunken) 32%,
-            var(--surface) 50%,
+            var(--shimmer-band) 50%,
             var(--surface-sunken) 68%
         );
     background-size: 220% 100%;
-    animation: thumb-shimmer 1.4s ease-in-out infinite;
+    animation: thumb-shimmer 1.9s ease-in-out infinite;
     /* keep the glyph a touch quieter while it is a placeholder */
     color: var(--ink-disabled);
 }
@@ -1640,7 +1775,7 @@ kbd {
     -webkit-appearance: none;
     height: 36px;
     padding: 0 34px 0 12px;
-    font: 500 13.5px var(--font);
+    font: 500 13px var(--font);
     color: var(--ink);
     background-color: var(--surface);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -1670,7 +1805,7 @@ kbd {
    with the text for the same space. */
 .row3 .field select {
     padding: 0 32px 0 9px;
-    font-size: 12.5px;
+    font-size: 12px;
 }
 
 .toggle-row {
@@ -1682,7 +1817,7 @@ kbd {
 }
 
 .toggle-row .lab {
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ink);
 }
@@ -1783,7 +1918,7 @@ kbd {
     border-radius: var(--radius-control);
     background: var(--accent-container);
     color: var(--accent-ink);
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.55;
     margin-bottom: 6px;
 }
@@ -1889,5 +2024,11 @@ kbd {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+
+    /* The shimmer would otherwise freeze at its end keyframe - an accidental
+       position. Park it on a static band that still reads as a skeleton. */
+    .take-thumb.is-loading {
+        background-position: 35% 0;
     }
 }

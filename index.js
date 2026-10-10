@@ -1118,7 +1118,8 @@
 		*/
 		setPausedState(isPaused) {
 			this.pausedActive = isPaused;
-			this.statusText.textContent = isPaused ? "Paused" : "Recording...";
+			if (isPaused) this.statusText.textContent = "Paused";
+			else if (this.recordingActive) this.statusText.textContent = "Recording...";
 			this.pauseBtnText.textContent = isPaused ? "Resume" : "Pause";
 			this.pauseBtn.title = isPaused ? "Resume recording (P)" : "Pause recording (P)";
 			if (this.pauseBtnIcon) this.pauseBtnIcon.setAttribute("href", isPaused ? "./icons.svg#icon-record" : "./icons.svg#icon-pause");
@@ -1195,6 +1196,7 @@
 		setRecordingState(isRecording) {
 			const icon = this.recordBtn.querySelector("svg");
 			this.recordingActive = isRecording;
+			this.videoPreview.classList.toggle("is-recording", isRecording);
 			if (!isRecording) this.runDuration = "";
 			if (isRecording) {
 				this.setPhase("recording");
@@ -2213,12 +2215,14 @@
 			video.playsInline = true;
 			video.src = take.url;
 			thumb.append(video);
+			video.addEventListener("playing", () => thumb.classList.add("is-playing"), { once: true });
 			Promise.resolve(video.play()).catch(() => {});
 		}
 		/** Take the hover video back out, leaving the thumbnail as it was. */
 		stopHoverPlay(thumb) {
 			const video = thumb.querySelector("video");
 			if (!video) return;
+			thumb.classList.remove("is-playing");
 			video.pause();
 			video.removeAttribute("src");
 			video.remove();
