@@ -39,7 +39,7 @@ describe('cacheName', () => {
   });
 
   it('refuses a version that was never injected', () => {
-    // A worker built without build-sw.mjs would otherwise cache under a name
+    // A worker built without build-sw.ts would otherwise cache under a name
     // shared by every build, which is exactly the stale-forever failure.
     expect(() => cacheName('')).toThrow(/not injected/);
     expect(() => cacheName('__CACHE_VERSION__')).toThrow(/not injected/);

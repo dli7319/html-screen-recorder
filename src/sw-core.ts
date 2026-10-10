@@ -28,10 +28,10 @@ export function parsePrecache(input: unknown): string[] {
  */
 export function cacheName(version: string): string {
   // A real version is a hex digest, so any double underscore means
-  // build-sw.mjs never substituted the placeholder. Written as a pattern
+  // build-sw.ts never substituted the placeholder. Written as a pattern
   // rather than the literal token so it cannot trip that script's own check.
   if (!version || version.includes('__')) {
-    throw new Error('cache version was not injected by build-sw.mjs');
+    throw new Error('cache version was not injected by build-sw.ts');
   }
   return `screen-recorder-${version}`;
 }
