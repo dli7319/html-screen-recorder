@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "build": "tailwindcss -i src/tailwind.css -o dist/tailwind.css --minify && rolldown -c && rolldown -c rolldown.sw.config.ts && node scripts/build-sw.ts",
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",
@@ -15,6 +16,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/cli": "^4.3.3",
     "@types/node": "^26.6.4",
     "fake-indexeddb": "^6.2.5",
