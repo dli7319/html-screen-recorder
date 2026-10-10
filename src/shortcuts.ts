@@ -10,6 +10,12 @@
  *
  * Plain letters only - modifiers are ignored so browser and OS shortcuts keep
  * working - and nothing fires while the user is typing in a form control.
+ *
+ * Two things can own the keyboard ahead of these shortcuts: a form control
+ * being typed into, and a modal dialog being open. The dialog gate covers the
+ * actions that would start something new (record, screenshot) so a review of
+ * an old take cannot fire up a capture behind the dialog; the keys that only
+ * steer a capture already in flight (pause, stop, cancel) stay live.
  */
 
 export type ShortcutAction =
@@ -77,11 +83,37 @@ export interface ShortcutHandlers {
   onCancel?: () => void;
 }
 
+export interface ShortcutOptions {
+  /**
+   * True while a modal dialog owns the screen. Record and Screenshot - the
+   * shortcuts that would start something new - go inert while it does, and
+   * the keystroke is left untouched for the dialog. Pause, Stop and Cancel
+   * are deliberately NOT gated: they only act on a capture already in flight
+   * (or nothing at all), and a take must stay controllable from the keyboard
+   * even while a dialog is up.
+   */
+  isDialogOpen?: () => boolean;
+}
+
+/** The actions that must not fire while a dialog is open. */
+const DIALOG_GATED: ReadonlySet<ShortcutAction> = new Set([
+  'record',
+  'screenshot',
+]);
+
 /** Bind the shortcuts and return an unsubscribe function. */
-export function bindShortcuts(handlers: ShortcutHandlers): () => void {
+export function bindShortcuts(
+  handlers: ShortcutHandlers,
+  options: ShortcutOptions = {}
+): () => void {
   const onKeyDown = (event: KeyboardEvent) => {
     const action = matchShortcut(event);
     if (!action) return;
+
+    // A dialog is reviewing something already made; the keys that would make
+    // something new belong to it until it closes. Returning before
+    // preventDefault() keeps the keystroke behaving normally in the dialog.
+    if (DIALOG_GATED.has(action) && options.isDialogOpen?.()) return;
 
     // The letter must not also end up in a focused control.
     event.preventDefault();

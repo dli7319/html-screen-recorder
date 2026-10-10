@@ -119,7 +119,21 @@ describe('isTypingTarget', () => {
 });
 
 describe('bindShortcuts', () => {
+  // Every binding is tracked and torn down: these bind to `window`, and a
+  // leaked listener from an earlier test would fire (and preventDefault) in a
+  // later one, making the assertions lie about which handler did what.
+  const bound: Array<() => void> = [];
+  const bind = (
+    handlers: Parameters<typeof bindShortcuts>[0],
+    options?: Parameters<typeof bindShortcuts>[1]
+  ) => {
+    const off = bindShortcuts(handlers, options);
+    bound.push(off);
+    return off;
+  };
+
   afterEach(() => {
+    while (bound.length) bound.pop()?.();
     document.body.innerHTML = '';
     vi.restoreAllMocks();
   });
@@ -135,7 +149,7 @@ describe('bindShortcuts', () => {
       onStop: vi.fn(),
       onScreenshot: vi.fn(),
     };
-    bindShortcuts(handlers);
+    bind(handlers);
 
     press({ key: 'r' });
     press({ key: 'p' });
@@ -149,7 +163,7 @@ describe('bindShortcuts', () => {
   });
 
   it('prevents default so the letter is not typed into the page', () => {
-    bindShortcuts({ onRecord: vi.fn() });
+    bind({ onRecord: vi.fn() });
     const event = new KeyboardEvent('keydown', { key: 'r', cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
@@ -157,7 +171,7 @@ describe('bindShortcuts', () => {
 
   it('ignores a modifier chord entirely', () => {
     const handlers = { onRecord: vi.fn(), onStop: vi.fn() };
-    bindShortcuts(handlers);
+    bind(handlers);
 
     press({ key: 'r', ctrlKey: true });
     press({ key: 's', metaKey: true });
@@ -168,7 +182,7 @@ describe('bindShortcuts', () => {
 
   it('tolerates handlers that were not supplied', () => {
     expect(() => {
-      bindShortcuts({ onRecord: vi.fn() });
+      bind({ onRecord: vi.fn() });
       press({ key: 'p' });
       press({ key: 's' });
       press({ key: 'S', shiftKey: true });
@@ -177,12 +191,62 @@ describe('bindShortcuts', () => {
 
   it('stops listening once unsubscribed', () => {
     const onRecord = vi.fn();
-    const off = bindShortcuts({ onRecord });
+    const off = bind({ onRecord });
 
     press({ key: 'r' });
     expect(onRecord).toHaveBeenCalledOnce();
 
     off();
+    press({ key: 'r' });
+    expect(onRecord).toHaveBeenCalledOnce();
+  });
+
+  it('goes inert for Record and Screenshot while a dialog is open', () => {
+    const handlers = { onRecord: vi.fn(), onScreenshot: vi.fn() };
+    let dialogOpen = true;
+    bind(handlers, { isDialogOpen: () => dialogOpen });
+
+    press({ key: 'r' });
+    press({ key: 'S', shiftKey: true });
+    expect(handlers.onRecord).not.toHaveBeenCalled();
+    expect(handlers.onScreenshot).not.toHaveBeenCalled();
+
+    // ...and picks right back up once the dialog is gone.
+    dialogOpen = false;
+    press({ key: 'r' });
+    press({ key: 'S', shiftKey: true });
+    expect(handlers.onRecord).toHaveBeenCalledOnce();
+    expect(handlers.onScreenshot).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the in-flight transport keys live while a dialog is open', () => {
+    // Pause, Stop and Cancel only steer a capture that is already running (or
+    // do nothing at all), so a dialog must not cut the user off from it.
+    const handlers = { onPause: vi.fn(), onStop: vi.fn(), onCancel: vi.fn() };
+    bind(handlers, { isDialogOpen: () => true });
+
+    press({ key: 'p' });
+    press({ key: 's' });
+    press({ key: 'Escape' });
+    expect(handlers.onPause).toHaveBeenCalledOnce();
+    expect(handlers.onStop).toHaveBeenCalledOnce();
+    expect(handlers.onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('leaves a declined keystroke untouched for the dialog', () => {
+    // The dialog still needs the key (and its default) - swallowing it here
+    // would break whatever the dialog itself binds.
+    bind({ onRecord: vi.fn() }, { isDialogOpen: () => true });
+    const event = new KeyboardEvent('keydown', { key: 'r', cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('works with no dialog gate supplied', () => {
+    // The single-argument call shape must keep behaving exactly as before.
+    const onRecord = vi.fn();
+    bind({ onRecord });
+
     press({ key: 'r' });
     expect(onRecord).toHaveBeenCalledOnce();
   });

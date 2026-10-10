@@ -134,15 +134,27 @@ ui.bindEvents({
 });
 
 // R / P / S / Shift+S drive the same actions as the buttons.
-bindShortcuts({
-  onRecord: toggleRecord,
-  onPause: togglePause,
-  onStop: () => {
-    if (recorder.isActive()) stopRecording();
+//
+// While a modal dialog (the preview, the settings drawer) is open, the keys
+// that would start a new capture go inert: reviewing an old take must not fire
+// up a recording or drop a stray screenshot behind the dialog. The dialog
+// state lives on <body> as data-preview / data-panel.
+const dialogIsOpen = () =>
+  document.body.dataset.preview === 'open' ||
+  document.body.dataset.panel === 'open';
+
+bindShortcuts(
+  {
+    onRecord: toggleRecord,
+    onPause: togglePause,
+    onStop: () => {
+      if (recorder.isActive()) stopRecording();
+    },
+    onScreenshot: captureScreenshot,
+    onCancel: cancelCountdown,
   },
-  onScreenshot: captureScreenshot,
-  onCancel: cancelCountdown,
-});
+  { isDialogOpen: dialogIsOpen }
+);
 
 /*
  * Offline support and installability.
