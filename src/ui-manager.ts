@@ -221,7 +221,15 @@ export class UIManager {
    */
   setPausedState(isPaused: boolean) {
     this.pausedActive = isPaused;
-    this.statusText.textContent = isPaused ? 'Paused' : 'Recording...';
+    // Only claim a recording while one is live. When nothing is capturing, the
+    // label belongs to setPhase() (Ready / Sharing) - writing here would
+    // overwrite it, which is how the pill came to read "Recording..." while it
+    // was styled as the blue sharing state.
+    if (isPaused) {
+      this.statusText.textContent = 'Paused';
+    } else if (this.recordingActive) {
+      this.statusText.textContent = 'Recording...';
+    }
     this.pauseBtnText.textContent = isPaused ? 'Resume' : 'Pause';
     this.pauseBtn.title = isPaused
       ? 'Resume recording (P)'
@@ -318,6 +326,7 @@ export class UIManager {
   setRecordingState(isRecording: boolean) {
     const icon = this.recordBtn.querySelector('svg') as unknown as HTMLElement;
     this.recordingActive = isRecording;
+    this.videoPreview.classList.toggle('is-recording', isRecording);
     if (!isRecording) this.runDuration = '';
 
     if (isRecording) {

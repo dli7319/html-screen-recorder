@@ -162,6 +162,18 @@ describe('UIManager.setRecordingState', () => {
     expect(ui.cropBox.classList.contains('is-recording')).toBe(false);
   });
 
+  it('keeps the status label in step with the phase after stopping', () => {
+    const ui = renderUI();
+    ui.setRecordingState(true);
+    expect($('statusText').textContent).toBe('Recording...');
+
+    ui.setRecordingState(false);
+    // Sharing again - the words must not still claim "Recording" while the
+    // pill is styled as the blue sharing state.
+    expect($('status').dataset.state).toBe('sharing');
+    expect($('statusText').textContent).toBe('Sharing');
+  });
+
   it('only marks the crop box while cropping is on', () => {
     const ui = renderUI();
     ui.setRecordingState(true);
