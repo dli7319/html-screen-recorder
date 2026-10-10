@@ -38,6 +38,11 @@
 
 body {
     font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    /* One line-height regime: Tailwind's text utilities bring 1.33–1.43 and the
+       custom rules fall back to `normal` (~1.17), so the same block of copy set
+       either way read tighter or looser depending on which wrote it. Fixed
+       heights on every pill/row control keep their geometry unchanged. */
+    line-height: 1.4;
 }
 
 /*
@@ -391,7 +396,7 @@ kbd {
     border-radius: var(--radius-pill);
     background: var(--surface-sunken);
     border: 1px solid var(--border);
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ink-muted);
     white-space: nowrap;
@@ -406,7 +411,7 @@ kbd {
 
 .status-pill .stats {
     font-variant-numeric: tabular-nums;
-    color: var(--ink-disabled);
+    color: var(--ink-muted);
 }
 
 .status-pill[data-state='sharing'] {
@@ -583,8 +588,21 @@ kbd {
 .icon-btn:focus-visible,
 .settings-chip:focus-visible,
 .take-thumb:focus-visible,
+.filter-chip:focus-visible,
+.sort-btn:focus-visible,
+.preview-remove:focus-visible,
+.preview-nav:focus-visible,
+.pip-btn:focus-visible,
+.source .level:focus-visible,
 .source:focus-within {
     outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* The toast inverts its own colours (a light pill on a dark page), so its ring
+   does too - an accent ring would vanish against the pill. */
+.toast-action:focus-visible {
+    outline: 2px solid var(--inverse-on-surface);
     outline-offset: 2px;
 }
 
@@ -697,7 +715,7 @@ kbd {
 }
 
 .placeholder .hint-sub {
-    font-size: 12.5px;
+    font-size: 13px;
     margin: 0 0 14px;
     color: var(--ink-muted);
     max-width: 42ch;
@@ -803,7 +821,7 @@ kbd {
     display: inline-flex;
     align-items: center;
     gap: 9px;
-    height: 36px;
+    height: 40px;
     padding: 0 12px 0 8px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
@@ -823,7 +841,7 @@ kbd {
     align-items: center;
     gap: 7px;
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ink-muted);
     white-space: nowrap;
@@ -888,7 +906,7 @@ kbd {
     font-variant-numeric: tabular-nums;
     width: 30px;
     text-align: right;
-    color: var(--ink-disabled);
+    color: var(--ink-muted);
     flex: none;
 }
 
@@ -987,7 +1005,7 @@ kbd {
     border: 1px solid var(--border);
     background: var(--surface);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 400;
     color: var(--ink-muted);
     cursor: pointer;
 }
@@ -1064,7 +1082,7 @@ kbd {
 }
 
 .takes-head h2 {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     margin: 0;
     color: var(--ink);
@@ -1077,8 +1095,9 @@ kbd {
 }
 
 .takes-head .count {
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
     background: var(--surface-sunken);
     border: 1px solid var(--border);
     color: var(--ink-muted);
@@ -1109,7 +1128,10 @@ kbd {
     border: 0;
     background: transparent;
     border-radius: var(--radius-pill);
-    padding: 4px 11px;
+    padding: 0 14px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
     font: 500 12px var(--font);
     color: var(--ink-muted);
     cursor: pointer;
@@ -1133,7 +1155,10 @@ kbd {
     border: 1px solid var(--border);
     background: transparent;
     border-radius: var(--radius-pill);
-    padding: 5px 12px;
+    padding: 0 14px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
     font: 500 12px var(--font);
     color: var(--ink-muted);
     cursor: pointer;
@@ -1255,8 +1280,8 @@ kbd {
     background: var(--inverse-on-surface);
     color: var(--inverse-surface);
     font: inherit;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
     pointer-events: auto;
 }
@@ -1359,8 +1384,11 @@ kbd {
 
 .preview-close {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 20px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.08);
     pointer-events: auto;
     /* The chrome floats over the dark viewer scrim in both themes, so it is
        fixed light ink rather than a theme token. */
@@ -1441,16 +1469,19 @@ kbd {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.08);
     pointer-events: auto;
     color: rgba(255, 255, 255, 0.9);
 }
 
 .preview-nav--prev {
-    left: 14px;
+    left: 20px;
 }
 
 .preview-nav--next {
-    right: 14px;
+    right: 20px;
 }
 
 .preview-nav:hover:not([disabled]) {
@@ -1459,7 +1490,7 @@ kbd {
 }
 
 .preview-nav[disabled] {
-    opacity: 0.3;
+    opacity: 0.45;
 }
 
 .preview-nav.hidden {
@@ -1687,7 +1718,7 @@ kbd {
     -webkit-appearance: none;
     height: 36px;
     padding: 0 34px 0 12px;
-    font: 500 13.5px var(--font);
+    font: 500 13px var(--font);
     color: var(--ink);
     background-color: var(--surface);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -1717,7 +1748,7 @@ kbd {
    with the text for the same space. */
 .row3 .field select {
     padding: 0 32px 0 9px;
-    font-size: 12.5px;
+    font-size: 12px;
 }
 
 .toggle-row {
@@ -1729,7 +1760,7 @@ kbd {
 }
 
 .toggle-row .lab {
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ink);
 }
@@ -1830,7 +1861,7 @@ kbd {
     border-radius: var(--radius-control);
     background: var(--accent-container);
     color: var(--accent-ink);
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.55;
     margin-bottom: 6px;
 }
