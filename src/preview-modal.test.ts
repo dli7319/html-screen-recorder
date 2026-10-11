@@ -15,6 +15,7 @@ const PREVIEW_MARKUP = `
       <p id="previewCounter"></p>
       <div id="previewMedia"></div>
     </div>
+    <div id="toastHost"><span id="toastText"></span><button id="toastAction"></button></div>
   </main>
 `;
 
@@ -431,8 +432,108 @@ describe('TakePreview remove', () => {
     preview.open(addRecording());
 
     ($('previewRemove') as HTMLButtonElement).click();
-
     expect(store.count()).toBe(0);
     expect(document.body.dataset.preview).toBe('closed');
+  });
+});
+
+describe('TakePreview view order', () => {
+  /**
+   * The gallery can show a filtered, re-sorted slice of the store. The dialog
+   * is handed that slice so prev/next and the counter follow the rows the
+   * user is actually paging through - these tests pin that the navigation
+   * never leaks into takes the view does not show, in an order it did not
+   * ask for.
+   */
+  function addTake(
+    kind: 'recording' | 'screenshot',
+    filename: string,
+    createdAt: number
+  ): Take {
+    return store.add({
+      kind,
+      blob: new Blob([filename]),
+      filename,
+      formatName: kind === 'recording' ? 'VP9' : 'PNG',
+      createdAt,
+    });
+  }
+
+  function setupOrdered(order: () => readonly Take[]) {
+    store = new TakeStore();
+    preview = new TakePreview(document, store, order);
+    preview.bind();
+  }
+
+  // The gallery view orders by creation time, so the test's slice does too.
+  const screenshots = () =>
+    store
+      .list()
+      .filter((t) => t.kind === 'screenshot')
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+  it('counts and steps within a filtered view, ignoring takes outside it', () => {
+    setupOrdered(screenshots);
+    const shotB = addTake('screenshot', 'shot-b.png', 200);
+    addTake('recording', 'clip.webm', 300);
+    addTake('screenshot', 'shot-c.png', 100);
+
+    preview.open(shotB);
+
+    expect($('previewTitle').textContent).toBe('shot-b.png');
+    expect($('previewCounter').textContent).toBe('1 / 2');
+    ($('previewNext') as HTMLButtonElement).click();
+    expect($('previewTitle').textContent).toBe('shot-c.png');
+    expect($('previewCounter').textContent).toBe('2 / 2');
+    // clip.webm is outside the view, so the walk stops at its edge.
+    expect(($('previewNext') as HTMLButtonElement).disabled).toBe(true);
+    ($('previewNext') as HTMLButtonElement).click();
+    expect($('previewTitle').textContent).toBe('shot-c.png');
+  });
+
+  it('steps in the view order, not the store order', () => {
+    // The store is newest-first; the view sorts the other way.
+    setupOrdered(() => [...store.list()].reverse());
+    const older = addTake('screenshot', 'older.png', 100);
+    addTake('screenshot', 'newer.png', 200);
+
+    preview.open(older);
+
+    expect($('previewCounter').textContent).toBe('1 / 2');
+    ($('previewNext') as HTMLButtonElement).click();
+    expect($('previewTitle').textContent).toBe('newer.png');
+  });
+
+  it('steps to the next take in view after a remove, and closes when the view empties', () => {
+    setupOrdered(screenshots);
+    const shotB = addTake('screenshot', 'shot-b.png', 200);
+    addTake('recording', 'clip.webm', 300);
+    addTake('screenshot', 'shot-c.png', 100);
+
+    preview.open(shotB);
+    ($('previewRemove') as HTMLButtonElement).click();
+
+    // The curation flow stays inside the view: clip.webm is never shown.
+    expect($('previewTitle').textContent).toBe('shot-c.png');
+    expect(document.body.dataset.preview).toBe('open');
+    expect(store.count()).toBe(2);
+
+    ($('previewRemove') as HTMLButtonElement).click();
+    expect(document.body.dataset.preview).toBe('closed');
+    expect(store.count()).toBe(1);
+  });
+
+  it('undo restores the take to its store position even when the view order differs', () => {
+    setupOrdered(() => [...store.list()].reverse());
+    addTake('recording', 'clip.webm', 300);
+    const shotB = addTake('screenshot', 'shot-b.png', 200);
+    addTake('screenshot', 'shot-c.png', 100);
+    const before = store.list().map((t) => t.id);
+
+    preview.open(shotB);
+    ($('previewRemove') as HTMLButtonElement).click();
+    ($('toastAction') as HTMLButtonElement).click();
+
+    expect(store.list().map((t) => t.id)).toEqual(before);
   });
 });
