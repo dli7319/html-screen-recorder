@@ -59,7 +59,9 @@ export class GalleryView {
       ...this.root.querySelectorAll<HTMLElement>('.filter-chip'),
     ];
     this.sortBtn = this.require('#sortTakesBtn');
-    this.preview = new TakePreview(document, store);
+    // The preview pages through what is on screen - same filter, same sort -
+    // so arrow keys and the counter follow the rows the user is looking at.
+    this.preview = new TakePreview(document, store, () => this.visibleTakes());
   }
 
   private require(selector: string): HTMLElement {

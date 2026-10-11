@@ -59,10 +59,21 @@ export class TakePreview {
    */
   private suppressAutoClose = false;
 
+  /**
+   * Which takes the dialog walks, and in what order. Handed in by the gallery
+   * so prev/next and the counter follow the rows actually on screen - the
+   * store is always newest-first and unfiltered, and navigation that steps
+   * through takes the user cannot see (or in an order they did not ask for)
+   * reads as broken. Optional so a bare dialog still works against the store.
+   */
+  private orderFn?: () => readonly Take[];
+
   constructor(
     private root: ParentNode,
-    private store: TakeStore
+    private store: TakeStore,
+    order?: () => readonly Take[]
   ) {
+    this.orderFn = order;
     this.scrim = this.require('#previewScrim');
     this.modal = this.require('#previewModal');
     this.title = this.require('#previewTitle');
@@ -79,6 +90,11 @@ export class TakePreview {
     const el = this.root.querySelector<HTMLElement>(selector);
     if (!el) throw new Error(`Preview markup is missing ${selector}`);
     return el;
+  }
+
+  /** The takes to navigate: the gallery's current view, or the store alone. */
+  private order(): readonly Take[] {
+    return this.orderFn ? this.orderFn() : this.store.list();
   }
 
   /** Wire the chrome. The document-level pieces are undone by unbind(). */
@@ -226,10 +242,14 @@ export class TakePreview {
    * culled without closing the dialog each time. The toast offers Undo.
    */
   private onRemove = () => {
-    const list = this.store.list();
-    const idx = list.findIndex((t) => t.id === this.currentId);
-    const take = list[idx];
+    // Undo goes back at the take's position in the STORE (that list has its
+    // own order); stepping to the next take happens in the VIEW, which is
+    // what the user is actually paging through.
+    const storeList = this.store.list();
+    const storeIdx = storeList.findIndex((t) => t.id === this.currentId);
+    const take = storeList[storeIdx];
     if (!take) return;
+    const viewIdx = this.order().findIndex((t) => t.id === this.currentId);
     const opener = this.opener;
     // Suppress the auto-close so remove() does not shut the dialog before we
     // pick where to go next.
@@ -239,13 +259,14 @@ export class TakePreview {
     showToast(`Removed ${take.filename}`, {
       label: 'Undo',
       onClick: () => {
-        if (record) this.store.reinsert(record, idx < 0 ? 0 : idx);
+        if (record) this.store.reinsert(record, storeIdx < 0 ? 0 : storeIdx);
       },
     });
     // Step to whatever now sits at the removed position (or the new last one),
-    // or close if that was the only take left.
-    const remaining = this.store.list();
-    const next = remaining[Math.min(idx, remaining.length - 1)];
+    // or close if that was the only take left in view.
+    const remaining = this.order();
+    const at = viewIdx < 0 ? 0 : viewIdx;
+    const next = remaining[Math.min(at, remaining.length - 1)];
     if (next) this.open(next, opener ?? undefined);
     else this.close();
   };
@@ -253,9 +274,12 @@ export class TakePreview {
   private onPrev = () => this.openRelative(-1);
   private onNext = () => this.openRelative(1);
 
-  /** Move to a neighbouring take in list order (the gallery is newest-first). */
+  /**
+   * Move to a neighbouring take in the gallery's view order - the rows as the
+   * user sorted and filtered them, not the store's fixed newest-first list.
+   */
   private openRelative(offset: number) {
-    const list = this.store.list();
+    const list = this.order();
     const idx = list.findIndex((t) => t.id === this.currentId);
     const target = list[idx + offset];
     if (idx < 0 || !target) return;
@@ -264,9 +288,9 @@ export class TakePreview {
     this.open(target, this.opener ?? undefined);
   }
 
-  /** Position in the list, and which way there is left to go. */
+  /** Position in the view, and which way there is left to go. */
   private updateNav() {
-    const list = this.store.list();
+    const list = this.order();
     const idx = list.findIndex((t) => t.id === this.currentId);
     const total = list.length;
     const multi = total > 1;

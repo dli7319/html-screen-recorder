@@ -841,3 +841,61 @@ describe('GalleryView filter and sort', () => {
     expect($('sortTakesBtn').textContent).toContain('Newest');
   });
 });
+
+describe('GalleryView preview follows the visible rows', () => {
+  /** The dialog pages through what is on screen - same filter, same sort. */
+  function rows(): HTMLElement[] {
+    return [...$('takeList').querySelectorAll<HTMLElement>('[data-take-id]')];
+  }
+  function clickFilter(kind: string) {
+    document
+      .querySelector<HTMLButtonElement>(`.filter-chip[data-filter="${kind}"]`)
+      ?.click();
+  }
+  function add(
+    kind: 'recording' | 'screenshot',
+    filename: string,
+    createdAt: number
+  ) {
+    return store.add({
+      kind,
+      blob: new Blob([filename]),
+      filename,
+      formatName: kind === 'recording' ? 'VP9' : 'PNG',
+      createdAt,
+    });
+  }
+
+  it('pages through the filtered rows and counts only them', () => {
+    render();
+    add('screenshot', 'shot-a.png', 300);
+    add('recording', 'clip-b.webm', 200);
+    add('screenshot', 'shot-c.png', 100);
+
+    clickFilter('screenshot');
+    rows()[0].querySelector<HTMLButtonElement>('.take-thumb')?.click();
+
+    expect($('previewTitle').textContent).toBe('shot-a.png');
+    expect($('previewCounter').textContent).toBe('1 / 2');
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+    );
+    expect($('previewTitle').textContent).toBe('shot-c.png');
+    expect($('previewCounter').textContent).toBe('2 / 2');
+  });
+
+  it('follows the sort order the rows are in', () => {
+    render();
+    add('screenshot', 'early.png', 100);
+    add('screenshot', 'late.png', 300);
+    ($('sortTakesBtn') as HTMLButtonElement).click(); // oldest first
+
+    rows()[0].querySelector<HTMLButtonElement>('.take-thumb')?.click();
+    expect($('previewTitle').textContent).toBe('early.png');
+
+    ($('previewNext') as HTMLButtonElement).click();
+    expect($('previewTitle').textContent).toBe('late.png');
+    expect($('previewCounter').textContent).toBe('2 / 2');
+  });
+});
