@@ -1793,7 +1793,7 @@
 	* revoking anything.
 	*/
 	var TakePreview = class {
-		constructor(root, store) {
+		constructor(root, store, order) {
 			this.root = root;
 			this.store = store;
 			this.currentId = null;
@@ -1820,10 +1820,11 @@
 				if (take) downloadBlob(take.blob, take.filename);
 			};
 			this.onRemove = () => {
-				const list = this.store.list();
-				const idx = list.findIndex((t) => t.id === this.currentId);
-				const take = list[idx];
+				const storeList = this.store.list();
+				const storeIdx = storeList.findIndex((t) => t.id === this.currentId);
+				const take = storeList[storeIdx];
 				if (!take) return;
+				const viewIdx = this.order().findIndex((t) => t.id === this.currentId);
 				const opener = this.opener;
 				this.suppressAutoClose = true;
 				const record = this.store.remove(take.id);
@@ -1831,11 +1832,11 @@
 				showToast(`Removed ${take.filename}`, {
 					label: "Undo",
 					onClick: () => {
-						if (record) this.store.reinsert(record, idx < 0 ? 0 : idx);
+						if (record) this.store.reinsert(record, storeIdx < 0 ? 0 : storeIdx);
 					}
 				});
-				const remaining = this.store.list();
-				const next = remaining[Math.min(idx, remaining.length - 1)];
+				const remaining = this.order();
+				const next = remaining[Math.min(viewIdx < 0 ? 0 : viewIdx, remaining.length - 1)];
 				if (next) this.open(next, opener ?? void 0);
 				else this.close();
 			};
@@ -1853,6 +1854,7 @@
 				if (video && take.thumbnailUrl) video.poster = take.thumbnailUrl;
 				this.updateNav();
 			};
+			this.orderFn = order;
 			this.scrim = this.require("#previewScrim");
 			this.modal = this.require("#previewModal");
 			this.title = this.require("#previewTitle");
@@ -1868,6 +1870,10 @@
 			const el = this.root.querySelector(selector);
 			if (!el) throw new Error(`Preview markup is missing ${selector}`);
 			return el;
+		}
+		/** The takes to navigate: the gallery's current view, or the store alone. */
+		order() {
+			return this.orderFn ? this.orderFn() : this.store.list();
 		}
 		/** Wire the chrome. The document-level pieces are undone by unbind(). */
 		bind() {
@@ -1956,17 +1962,20 @@
 			}
 			this.mediaSlot.replaceChildren();
 		}
-		/** Move to a neighbouring take in list order (the gallery is newest-first). */
+		/**
+		* Move to a neighbouring take in the gallery's view order - the rows as the
+		* user sorted and filtered them, not the store's fixed newest-first list.
+		*/
 		openRelative(offset) {
-			const list = this.store.list();
+			const list = this.order();
 			const idx = list.findIndex((t) => t.id === this.currentId);
 			const target = list[idx + offset];
 			if (idx < 0 || !target) return;
 			this.open(target, this.opener ?? void 0);
 		}
-		/** Position in the list, and which way there is left to go. */
+		/** Position in the view, and which way there is left to go. */
 		updateNav() {
-			const list = this.store.list();
+			const list = this.order();
 			const idx = list.findIndex((t) => t.id === this.currentId);
 			const total = list.length;
 			const multi = total > 1;
@@ -2042,7 +2051,7 @@
 			this.clearBtn = this.require("#clearTakesBtn");
 			this.filterBtns = [...this.root.querySelectorAll(".filter-chip")];
 			this.sortBtn = this.require("#sortTakesBtn");
-			this.preview = new TakePreview(document, store);
+			this.preview = new TakePreview(document, store, () => this.visibleTakes());
 		}
 		require(selector) {
 			const el = this.root.querySelector(selector);
