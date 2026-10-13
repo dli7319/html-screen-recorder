@@ -596,7 +596,7 @@ kbd {
 .take-thumb:focus-visible,
 .filter-chip:focus-visible,
 .sort-btn:focus-visible,
-.preview-remove:focus-visible,
+.preview-ghost:focus-visible,
 .preview-nav:focus-visible,
 .pip-btn:focus-visible,
 .source .level:focus-visible,
@@ -1560,11 +1560,11 @@ kbd {
     justify-content: center;
 }
 
-/* The destructive sibling of Download. The themed `btn--danger` assumes a page
-   surface behind it and would be near-invisible on the modal's dark scrim, so
-   this is tuned for that backdrop and sized to match `btn--sm` so the two line
-   up as one row. */
-.preview-remove {
+/* Secondary actions of the preview dialog. The themed `btn--danger` assumes a
+   page surface behind it and would be near-invisible on the modal's dark scrim,
+   so these are tuned for that backdrop and sized to match `btn--sm` so the row
+   lines up. Shared by Copy and Remove - Remove adds the danger hover below. */
+.preview-ghost {
     height: 32px;
     padding: 0 15px;
     border: 1px solid rgba(255, 255, 255, 0.34);
@@ -1578,6 +1578,14 @@ kbd {
         border-color 0.15s ease;
 }
 
+.preview-ghost:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff;
+}
+
+/* The destructive sibling: hover turns danger. Listed after the shared hover
+   so it wins for Remove (same specificity). */
 .preview-remove:hover {
     background: rgba(217, 48, 37, 0.9);
     border-color: transparent;
