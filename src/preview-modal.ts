@@ -1,5 +1,9 @@
 import { Take, TakeStore } from './takes';
-import { downloadBlob } from './screenshot';
+import {
+  canCopyImages,
+  copyImageToClipboard,
+  downloadBlob,
+} from './screenshot';
 import { trapFocus } from './focus-trap';
 import { showToast } from './toast';
 
@@ -22,7 +26,8 @@ function setMediaAspect(
 
 /**
  * A take shown large: the clip playing, or the still at full size, with the
- * one action that matters from here - saving it.
+ * actions that matter from here - saving it, and for a still, copying it to
+ * the clipboard.
  *
  * One modal, reused: opening again replaces the content rather than stacking
  * a second dialog. It watches the store because a take can vanish while it is
@@ -39,6 +44,7 @@ export class TakePreview {
   private title: HTMLElement;
   private mediaSlot: HTMLElement;
   private downloadBtn: HTMLButtonElement;
+  private copyBtn: HTMLButtonElement;
   private closeBtn: HTMLButtonElement;
   private counter: HTMLElement;
   private prevBtn: HTMLButtonElement;
@@ -79,6 +85,7 @@ export class TakePreview {
     this.title = this.require('#previewTitle');
     this.mediaSlot = this.require('#previewMedia');
     this.downloadBtn = this.require('#previewDownload') as HTMLButtonElement;
+    this.copyBtn = this.require('#previewCopy') as HTMLButtonElement;
     this.closeBtn = this.require('#previewClose') as HTMLButtonElement;
     this.counter = this.require('#previewCounter');
     this.prevBtn = this.require('#previewPrev') as HTMLButtonElement;
@@ -104,6 +111,7 @@ export class TakePreview {
     this.closeBtn.addEventListener('click', this.onCloseClick);
     this.scrim.addEventListener('click', this.onCloseClick);
     this.downloadBtn.addEventListener('click', this.onDownload);
+    this.copyBtn.addEventListener('click', this.onCopy);
     this.prevBtn.addEventListener('click', this.onPrev);
     this.nextBtn.addEventListener('click', this.onNext);
     this.removeBtn.addEventListener('click', this.onRemove);
@@ -116,6 +124,7 @@ export class TakePreview {
     this.closeBtn.removeEventListener('click', this.onCloseClick);
     this.scrim.removeEventListener('click', this.onCloseClick);
     this.downloadBtn.removeEventListener('click', this.onDownload);
+    this.copyBtn.removeEventListener('click', this.onCopy);
     this.prevBtn.removeEventListener('click', this.onPrev);
     this.nextBtn.removeEventListener('click', this.onNext);
     this.removeBtn.removeEventListener('click', this.onRemove);
@@ -171,6 +180,12 @@ export class TakePreview {
 
     this.currentId = take.id;
     this.opener = opener ?? null;
+    // Copy is for stills only (the clipboard takes an image) and only where
+    // the browser can do it - a button that cannot work is worse than none.
+    this.copyBtn.classList.toggle(
+      'hidden',
+      take.kind !== 'screenshot' || !canCopyImages()
+    );
     this.setOpen(true);
     this.updateNav();
     this.releaseTrap?.();
@@ -235,6 +250,22 @@ export class TakePreview {
     // have been rebuilt since. A gone take downloads nothing.
     const take = this.store.list().find((t) => t.id === this.currentId);
     if (take) downloadBlob(take.blob, take.filename);
+  };
+
+  /**
+   * Put a still on the clipboard so it can be pasted straight into a chat or
+   * doc - the other way to "keep" a screenshot besides a file download.
+   * Clips stay out of it: the clipboard takes an image, not a video. Failure
+   * is reported, not thrown - the blob is still there to download.
+   */
+  private onCopy = () => {
+    const take = this.store.list().find((t) => t.id === this.currentId);
+    if (!take) return;
+    void copyImageToClipboard(take.blob).then((ok) => {
+      showToast(
+        ok ? 'Copied image to clipboard' : 'Could not copy to clipboard'
+      );
+    });
   };
 
   /**

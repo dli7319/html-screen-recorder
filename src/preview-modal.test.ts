@@ -7,6 +7,7 @@ const PREVIEW_MARKUP = `
     <div id="previewScrim"></div>
     <div id="previewModal">
       <strong id="previewTitle"></strong>
+      <button id="previewCopy"></button>
       <button id="previewDownload"></button>
       <button id="previewRemove"></button>
       <button id="previewClose"></button>
@@ -535,5 +536,100 @@ describe('TakePreview view order', () => {
     ($('toastAction') as HTMLButtonElement).click();
 
     expect(store.list().map((t) => t.id)).toEqual(before);
+  });
+});
+
+describe('TakePreview copy', () => {
+  /** What the fake ClipboardItem was handed, one entry per construction. */
+  let handed: Record<string, Blob>[];
+
+  /**
+   * jsdom has no clipboard at all, which is exactly the "unsupported" case;
+   * the supported cases install a recording stub so the wiring can be
+   * asserted without a real clipboard.
+   */
+  function stubClipboard(mode: 'ok' | 'reject' = 'ok') {
+    handed = [];
+    const write = vi.fn(async () => {
+      if (mode === 'reject') throw new Error('denied');
+    });
+    class FakeClipboardItem {
+      constructor(readonly items: Record<string, Blob>) {
+        handed.push(items);
+      }
+    }
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { write },
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+    });
+  });
+
+  it('copies a screenshot to the clipboard and confirms it', async () => {
+    stubClipboard();
+    setup();
+    const take = addScreenshot();
+    preview.open(take);
+
+    expect($('previewCopy').classList.contains('hidden')).toBe(false);
+    ($('previewCopy') as HTMLButtonElement).click();
+
+    await vi.waitFor(() =>
+      expect($('toastText').textContent).toBe('Copied image to clipboard')
+    );
+    // The blob goes on as an image, keyed by its type (screenshots have no
+    // type of their own, so PNG stands in).
+    expect(handed).toHaveLength(1);
+    expect(Object.keys(handed[0])).toEqual(['image/png']);
+    expect(handed[0]['image/png']).toBe(take.blob);
+  });
+
+  it('offers no Copy for a recording - the clipboard takes an image', () => {
+    stubClipboard();
+    setup();
+
+    preview.open(addRecording());
+
+    expect($('previewCopy').classList.contains('hidden')).toBe(true);
+  });
+
+  it('hides Copy when the browser cannot take an image on the clipboard', () => {
+    // No stub: jsdom is the unsupported case (no ClipboardItem, no clipboard).
+    setup();
+
+    preview.open(addScreenshot());
+
+    expect($('previewCopy').classList.contains('hidden')).toBe(true);
+  });
+
+  it('reports a refused clipboard write instead of throwing', async () => {
+    stubClipboard('reject');
+    setup();
+    preview.open(addScreenshot());
+    ($('previewCopy') as HTMLButtonElement).click();
+
+    await vi.waitFor(() =>
+      expect($('toastText').textContent).toBe('Could not copy to clipboard')
+    );
+  });
+
+  it('follows the open take: Copy shows for a still and hides for a clip', () => {
+    stubClipboard();
+    setup();
+    addRecording();
+    const shot = addScreenshot(); // newest first: the shot is at the top
+    preview.open(shot);
+    expect($('previewCopy').classList.contains('hidden')).toBe(false);
+
+    ($('previewNext') as HTMLButtonElement).click();
+
+    expect($('previewCopy').classList.contains('hidden')).toBe(true);
   });
 });
