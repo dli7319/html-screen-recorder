@@ -560,8 +560,9 @@
 	//#region src/screenshot.ts
 	/**
 	* Still-frame capture. Grabs the preview's current frame as a PNG, and the
-	* download plumbing it needs (which the recording path does not, since a
-	* recording is offered as a link the user clicks).
+	* output plumbing it needs (a download, a clipboard copy) - which the
+	* recording path does not, since a recording is offered as a link the user
+	* clicks.
 	*/
 	/**
 	* The pixel size to capture at: the frame's own decoded dimensions.
@@ -592,6 +593,33 @@
 		return new Promise((resolve) => {
 			canvas.toBlob((blob) => resolve(blob), "image/png");
 		});
+	}
+	/**
+	* Whether this browser can take an image on the clipboard from a script.
+	*
+	* ClipboardItem and clipboard.write are both absent in insecure contexts and
+	* in some embedded webviews, so the Copy affordance is offered only where it
+	* can actually do something.
+	*/
+	function canCopyImages() {
+		return typeof ClipboardItem !== "undefined" && typeof navigator.clipboard?.write === "function";
+	}
+	/**
+	* Put an image blob on the clipboard. Reports whether it landed.
+	*
+	* Callers run this straight from a click - the clipboard write needs
+	* transient user activation - and treat false as "tell the user", not an
+	* error to propagate: the blob is still downloadable either way.
+	*/
+	async function copyImageToClipboard(blob) {
+		if (!canCopyImages()) return false;
+		try {
+			const type = blob.type || "image/png";
+			await navigator.clipboard.write([new ClipboardItem({ [type]: blob })]);
+			return true;
+		} catch {
+			return false;
+		}
 	}
 	/** Save a blob to the user's downloads under the given name. */
 	function downloadBlob(blob, filename) {
@@ -1863,7 +1891,8 @@
 	}
 	/**
 	* A take shown large: the clip playing, or the still at full size, with the
-	* one action that matters from here - saving it.
+	* actions that matter from here - saving it, and for a still, copying it to
+	* the clipboard.
 	*
 	* One modal, reused: opening again replaces the content rather than stacking
 	* a second dialog. It watches the store because a take can vanish while it is
@@ -1900,6 +1929,13 @@
 			this.onDownload = () => {
 				const take = this.store.list().find((t) => t.id === this.currentId);
 				if (take) downloadBlob(take.blob, take.filename);
+			};
+			this.onCopy = () => {
+				const take = this.store.list().find((t) => t.id === this.currentId);
+				if (!take) return;
+				copyImageToClipboard(take.blob).then((ok) => {
+					showToast(ok ? "Copied image to clipboard" : "Could not copy to clipboard");
+				});
 			};
 			this.onRemove = () => {
 				const storeList = this.store.list();
@@ -1942,6 +1978,7 @@
 			this.title = this.require("#previewTitle");
 			this.mediaSlot = this.require("#previewMedia");
 			this.downloadBtn = this.require("#previewDownload");
+			this.copyBtn = this.require("#previewCopy");
 			this.closeBtn = this.require("#previewClose");
 			this.counter = this.require("#previewCounter");
 			this.prevBtn = this.require("#previewPrev");
@@ -1964,6 +2001,7 @@
 			this.closeBtn.addEventListener("click", this.onCloseClick);
 			this.scrim.addEventListener("click", this.onCloseClick);
 			this.downloadBtn.addEventListener("click", this.onDownload);
+			this.copyBtn.addEventListener("click", this.onCopy);
 			this.prevBtn.addEventListener("click", this.onPrev);
 			this.nextBtn.addEventListener("click", this.onNext);
 			this.removeBtn.addEventListener("click", this.onRemove);
@@ -1975,6 +2013,7 @@
 			this.closeBtn.removeEventListener("click", this.onCloseClick);
 			this.scrim.removeEventListener("click", this.onCloseClick);
 			this.downloadBtn.removeEventListener("click", this.onDownload);
+			this.copyBtn.removeEventListener("click", this.onCopy);
 			this.prevBtn.removeEventListener("click", this.onPrev);
 			this.nextBtn.removeEventListener("click", this.onNext);
 			this.removeBtn.removeEventListener("click", this.onRemove);
@@ -2010,6 +2049,7 @@
 			}
 			this.currentId = take.id;
 			this.opener = opener ?? null;
+			this.copyBtn.classList.toggle("hidden", take.kind !== "screenshot" || !canCopyImages());
 			this.setOpen(true);
 			this.updateNav();
 			this.releaseTrap?.();
