@@ -42,6 +42,10 @@ let store: TakeStore;
 let preview: TakePreview;
 
 function setup() {
+  // Unbind the previous test's dialog first. Its keydown handler is on
+  // `document` and outlives the test's DOM, so a stale instance would still
+  // answer events for this test (including preventDefault-ing the arrows).
+  preview?.unbind();
   store = new TakeStore();
   preview = new TakePreview(document, store);
   preview.bind();
@@ -387,6 +391,65 @@ describe('TakePreview navigation', () => {
       new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })
     );
     expect($('previewCounter').textContent).toBe('1 / 2');
+  });
+
+  it('leaves the arrow keys to the player while it has focus', () => {
+    // The player's own use for the arrows is seeking; navigating away from a
+    // clip mid-seek made the preview unwatchable from the keyboard.
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[1]);
+    const video = media().querySelector('video') as HTMLVideoElement;
+
+    const press = (key: string) => {
+      const event = new KeyboardEvent('keydown', {
+        key,
+        bubbles: true,
+        cancelable: true,
+      });
+      video.dispatchEvent(event);
+      return event;
+    };
+
+    expect(press('ArrowRight').defaultPrevented).toBe(false);
+    expect(press('ArrowLeft').defaultPrevented).toBe(false);
+    // Neither press moved the dialog: the clip is still the open take.
+    expect($('previewCounter').textContent).toBe('2 / 2');
+    expect($('previewTitle').textContent).toBe('clip.webm');
+  });
+
+  it('still navigates when focus is on a still', () => {
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[0]);
+    const img = media().querySelector('img') as HTMLImageElement;
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+    });
+    img.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect($('previewCounter').textContent).toBe('2 / 2');
+    expect($('previewTitle').textContent).toBe('clip.webm');
+  });
+
+  it('closes on Escape from the player too', () => {
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[1]);
+    const video = media().querySelector('video') as HTMLVideoElement;
+
+    video.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+
+    expect($('previewModal').getAttribute('aria-hidden')).toBe('true');
   });
 
   it('reports the open take at its own position', () => {

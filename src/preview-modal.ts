@@ -236,14 +236,28 @@ export class TakePreview {
     if (this.currentId === null) return;
     if (e.key === 'Escape') {
       this.close();
-    } else if (e.key === 'ArrowLeft') {
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // While the clip's own player has focus the arrows belong to it: they
+      // are how a keyboard seeks inside the video, and swallowing them here
+      // (with preventDefault, no less) made seeking impossible in the one
+      // dialog that plays video. The gallery is steered from anywhere else -
+      // and the Prev/Next buttons work regardless of focus.
+      if (this.isPlayerTarget(e.target)) return;
       e.preventDefault();
-      this.openRelative(-1);
-    } else if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      this.openRelative(1);
+      this.openRelative(e.key === 'ArrowLeft' ? -1 : 1);
     }
   };
+
+  /**
+   * True when the keystroke came from the previewed clip's player - the
+   * <video> itself or its controls, which retarget to it across the shadow
+   * DOM. A still (or anything outside the media) is not a player: arrows
+   * there keep navigating.
+   */
+  private isPlayerTarget(target: EventTarget | null): boolean {
+    const video = this.mediaSlot.querySelector('video');
+    return video !== null && target instanceof Node && video.contains(target);
+  }
 
   private onDownload = () => {
     // Re-read the take rather than holding the one from open(): the row may
