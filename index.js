@@ -1918,12 +1918,10 @@
 			this.onKeyDown = (e) => {
 				if (this.currentId === null) return;
 				if (e.key === "Escape") this.close();
-				else if (e.key === "ArrowLeft") {
+				else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+					if (this.isPlayerTarget(e.target)) return;
 					e.preventDefault();
-					this.openRelative(-1);
-				} else if (e.key === "ArrowRight") {
-					e.preventDefault();
-					this.openRelative(1);
+					this.openRelative(e.key === "ArrowLeft" ? -1 : 1);
 				}
 			};
 			this.onDownload = () => {
@@ -2083,6 +2081,16 @@
 				video.load();
 			}
 			this.mediaSlot.replaceChildren();
+		}
+		/**
+		* True when the keystroke came from the previewed clip's player - the
+		* <video> itself or its controls, which retarget to it across the shadow
+		* DOM. A still (or anything outside the media) is not a player: arrows
+		* there keep navigating.
+		*/
+		isPlayerTarget(target) {
+			const video = this.mediaSlot.querySelector("video");
+			return video !== null && target instanceof Node && video.contains(target);
 		}
 		/**
 		* Move to a neighbouring take in the gallery's view order - the rows as the
