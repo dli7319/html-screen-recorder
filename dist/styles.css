@@ -64,6 +64,14 @@ body {
  * saturated ones), so contrast survives any future palette change.
  */
 :root {
+    /* Which scheme the browser's OWN widgets render in: scrollbars, the
+       dropdown lists behind the selects, text fields. They read this property,
+       not the background colour, so without it a dark page ships a white
+       scrollbar and white popups. Declaring it per scheme keeps the native
+       parts in step with the tokens below (and asks for dark form controls and
+       dark canvas in the dark block). */
+    color-scheme: light;
+
     /* Resolved by every `font:` shorthand below. Defining it here also means a
        shorthand can no longer be silently invalidated (and the size/weight lost)
        by an unresolved variable. */
@@ -122,6 +130,10 @@ body {
 
 @media (prefers-color-scheme: dark) {
     :root {
+        /* Dark render for the browser's own widgets (scrollbars, select
+           popups, form fields) - see the note in the light block. */
+        color-scheme: dark;
+
         --surface: #1e1f20;
         --surface-sunken: #202124;
         --border: #3c4043;
