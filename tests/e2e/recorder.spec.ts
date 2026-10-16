@@ -82,3 +82,95 @@ test('opens a take in the preview modal', async ({ page }) => {
   await expect(page.locator('#previewClose')).toBeVisible();
   await expect(page.locator('body')).toHaveAttribute('data-preview', 'open');
 });
+
+/** Row ids in the order the gallery currently renders them. */
+function rowIds(page: Page) {
+  return page
+    .locator('#takeList [data-take-id]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-take-id')));
+}
+
+test('filters the gallery down to one kind of take', async ({ page }) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  await page.click('#recordBtn');
+  await page.waitForTimeout(1500);
+  await page.click('#stopBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  const clipId = (await rowIds(page))[0];
+
+  // A beat between captures keeps their timestamps - and so the sort - apart.
+  await page.click('#screenshotBtn');
+  await expect(rows).toHaveCount(2);
+  await page.waitForTimeout(25);
+  await page.click('#screenshotBtn');
+  await expect(rows).toHaveCount(3);
+  const stillIds = (await rowIds(page)).filter((id) => id !== clipId);
+  expect(stillIds).toHaveLength(2);
+
+  // Recordings only: just the clip row, and the pressed chip follows along.
+  await page.click('.filter-chip[data-filter="recording"]');
+  await expect(rows).toHaveCount(1);
+  expect(await rowIds(page)).toEqual([clipId]);
+  await expect(
+    page.locator('.filter-chip[data-filter="recording"]')
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.locator('.filter-chip[data-filter="screenshot"]')
+  ).toHaveAttribute('aria-pressed', 'false');
+
+  // Screenshots only: the two stills.
+  await page.click('.filter-chip[data-filter="screenshot"]');
+  await expect(rows).toHaveCount(2);
+  expect(new Set(await rowIds(page))).toEqual(new Set(stillIds));
+  await expect(
+    page.locator('.filter-chip[data-filter="screenshot"]')
+  ).toHaveAttribute('aria-pressed', 'true');
+
+  // Back to the whole gallery.
+  await page.click('.filter-chip[data-filter="all"]');
+  await expect(rows).toHaveCount(3);
+  await expect(page.locator('.filter-chip[data-filter="all"]')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+});
+
+test('toggles the gallery between newest-first and oldest-first', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  // Capture in a known order: clip, then two stills.
+  await page.click('#shareBtn');
+  await page.click('#recordBtn');
+  await page.waitForTimeout(1500);
+  await page.click('#stopBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  const createdIds = [(await rowIds(page))[0]];
+  for (let i = 0; i < 2; i++) {
+    await page.waitForTimeout(25);
+    await page.click('#screenshotBtn');
+    await expect(rows).toHaveCount(createdIds.length + 1);
+    const id = (await rowIds(page)).find((x) => !createdIds.includes(x));
+    expect(id).toBeTruthy();
+    createdIds.push(id as string);
+  }
+
+  // The default is newest first, so the creation order runs backwards.
+  await expect(page.locator('#sortTakesBtn')).toHaveText('Newest first');
+  expect(await rowIds(page)).toEqual([...createdIds].reverse());
+
+  await page.click('#sortTakesBtn');
+  await expect(page.locator('#sortTakesBtn')).toHaveText('Oldest first');
+  expect(await rowIds(page)).toEqual(createdIds);
+
+  await page.click('#sortTakesBtn');
+  await expect(page.locator('#sortTakesBtn')).toHaveText('Newest first');
+  expect(await rowIds(page)).toEqual([...createdIds].reverse());
+});
