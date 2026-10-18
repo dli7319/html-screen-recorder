@@ -1,4 +1,5 @@
 import { Take, TakeStore } from './takes';
+import { renameFilename } from './filename';
 import {
   canCopyImages,
   copyImageToClipboard,
@@ -50,9 +51,14 @@ export class TakePreview {
   private prevBtn: HTMLButtonElement;
   private nextBtn: HTMLButtonElement;
   private removeBtn: HTMLButtonElement;
+  private renameBtn: HTMLButtonElement;
+  /** Shown in place of the title while a rename is being typed. */
+  private renameInput: HTMLInputElement;
 
   /** Which take is on screen, if any. */
   private currentId: string | null = null;
+  /** True while the rename field is showing and owns the title's slot. */
+  private renaming = false;
   /** What had focus before open(), so closing puts the user back. */
   private opener: HTMLElement | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -91,6 +97,8 @@ export class TakePreview {
     this.prevBtn = this.require('#previewPrev') as HTMLButtonElement;
     this.nextBtn = this.require('#previewNext') as HTMLButtonElement;
     this.removeBtn = this.require('#previewRemove') as HTMLButtonElement;
+    this.renameBtn = this.require('#previewRename') as HTMLButtonElement;
+    this.renameInput = this.require('#previewRenameInput') as HTMLInputElement;
   }
 
   private require(selector: string): HTMLElement {
@@ -115,6 +123,11 @@ export class TakePreview {
     this.prevBtn.addEventListener('click', this.onPrev);
     this.nextBtn.addEventListener('click', this.onNext);
     this.removeBtn.addEventListener('click', this.onRemove);
+    this.renameBtn.addEventListener('click', this.onRenameClick);
+    this.renameInput.addEventListener('keydown', this.onRenameKeyDown);
+    // Clicking away commits: the name is typed by then, and a rename that
+    // evaporates on a stray click is worse than one that saves.
+    this.renameInput.addEventListener('blur', this.onRenameBlur);
     document.addEventListener('keydown', this.onKeyDown);
   }
 
@@ -128,6 +141,9 @@ export class TakePreview {
     this.prevBtn.removeEventListener('click', this.onPrev);
     this.nextBtn.removeEventListener('click', this.onNext);
     this.removeBtn.removeEventListener('click', this.onRemove);
+    this.renameBtn.removeEventListener('click', this.onRenameClick);
+    this.renameInput.removeEventListener('keydown', this.onRenameKeyDown);
+    this.renameInput.removeEventListener('blur', this.onRenameBlur);
     document.removeEventListener('keydown', this.onKeyDown);
     this.close();
   }
@@ -137,6 +153,9 @@ export class TakePreview {
     // contents. Tearing down the old media first means only one <video> can
     // ever be attached.
     this.clearMedia();
+    // A rename in flight belongs to the take being replaced; drop its field
+    // before the new take's name is written into the title.
+    this.cancelRename();
 
     this.title.textContent = take.filename;
     this.modal.setAttribute('aria-label', take.filename);
@@ -196,6 +215,7 @@ export class TakePreview {
   close() {
     if (this.currentId === null) return;
     this.clearMedia();
+    this.cancelRename();
     this.currentId = null;
     this.setOpen(false);
     this.releaseTrap?.();
@@ -234,6 +254,10 @@ export class TakePreview {
 
   private onKeyDown = (e: KeyboardEvent) => {
     if (this.currentId === null) return;
+    // While a rename is being typed the dialog's keys belong to the field -
+    // its own handler settles Enter and Escape, and arrows must not page
+    // through takes mid-edit.
+    if (this.renaming) return;
     if (e.key === 'Escape') {
       this.close();
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -281,6 +305,70 @@ export class TakePreview {
       );
     });
   };
+
+  /**
+   * Swap the caption for a text field naming the take, with the base name
+   * selected - renaming is about the name, and typing should not have to
+   * fight the extension to replace it.
+   */
+  private onRenameClick = () => {
+    const take = this.store.list().find((t) => t.id === this.currentId);
+    if (!take) return;
+    this.renaming = true;
+    this.title.classList.add('hidden');
+    this.renameInput.classList.remove('hidden');
+    this.renameInput.value = take.filename;
+    this.renameInput.focus();
+    const dot = take.filename.lastIndexOf('.');
+    this.renameInput.setSelectionRange(0, dot > 0 ? dot : take.filename.length);
+  };
+
+  /**
+   * Enter saves, Escape abandons the edit. Every key is stopped here: the
+   * document handler pages through takes on arrows and the window shortcuts
+   * fire on bare letters, and both must be blind while a name is being typed.
+   * Escape in particular must NOT reach the document handler, which would
+   * close the whole dialog instead of just the edit.
+   */
+  private onRenameKeyDown = (e: KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      this.commitRename();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      this.cancelRename();
+      this.renameBtn.focus();
+    }
+  };
+
+  /** Clicking away saves the name that is typed. */
+  private onRenameBlur = () => this.commitRename();
+
+  /** Apply the typed name to the take, or leave it be when it is empty. */
+  private commitRename() {
+    if (!this.renaming) return;
+    const take = this.store.list().find((t) => t.id === this.currentId);
+    const typed = this.renameInput.value;
+    this.cancelRename();
+    if (!take) return;
+    // An empty name is refused, not applied: `renameFilename` returns null and
+    // the old name simply stays. A name identical to the old one is a no-op
+    // worth skipping so no toast claims something did not happen.
+    const filename = renameFilename(take.filename, typed);
+    if (filename === null || filename === take.filename) return;
+    this.store.rename(take.id, filename);
+    this.title.textContent = filename;
+    this.modal.setAttribute('aria-label', filename);
+    showToast(`Renamed to ${filename}`);
+  }
+
+  /** Put the caption back and drop the field without touching the take. */
+  private cancelRename() {
+    this.renaming = false;
+    this.renameInput.classList.add('hidden');
+    this.title.classList.remove('hidden');
+  }
 
   /**
    * Remove the take being previewed and step to the next, so several can be

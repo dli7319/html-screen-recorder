@@ -152,6 +152,24 @@ export class TakeStore {
     return true;
   }
 
+  /**
+   * Rename a take. The blob is untouched - this is the name downloads save as
+   * - and the new name is written through to the cache so it survives a
+   * refresh alongside the take. Reports whether the take was still there to
+   * rename.
+   */
+  rename(id: string, filename: string): boolean {
+    const take = this.takes.find((candidate) => candidate.id === id);
+    if (!take) return false;
+
+    const updated: Take = { ...take, filename };
+    this.takes[this.takes.indexOf(take)] = updated;
+
+    this.cache?.put(TakeStore.toRecord(updated)).catch(warnCacheFailure);
+    this.emit();
+    return true;
+  }
+
   private nextId(): string {
     return `take-${this.sessionTag}-${(++this.counter).toString(36)}`;
   }

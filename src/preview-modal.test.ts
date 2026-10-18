@@ -7,8 +7,10 @@ const PREVIEW_MARKUP = `
     <div id="previewScrim"></div>
     <div id="previewModal">
       <strong id="previewTitle"></strong>
+      <input id="previewRenameInput" />
       <button id="previewCopy"></button>
       <button id="previewDownload"></button>
+      <button id="previewRename"></button>
       <button id="previewRemove"></button>
       <button id="previewClose"></button>
       <button id="previewPrev"></button>
@@ -694,5 +696,114 @@ describe('TakePreview copy', () => {
     ($('previewNext') as HTMLButtonElement).click();
 
     expect($('previewCopy').classList.contains('hidden')).toBe(true);
+  });
+});
+
+describe('TakePreview rename', () => {
+  const input = () => $('previewRenameInput') as HTMLInputElement;
+  const press = (key: string) =>
+    input().dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+    );
+
+  it('opens the field over the caption with the base name selected', () => {
+    setup();
+    preview.open(addScreenshot()); // 'shot.png'
+
+    ($('previewRename') as HTMLButtonElement).click();
+
+    expect(input().classList.contains('hidden')).toBe(false);
+    expect($('previewTitle').classList.contains('hidden')).toBe(true);
+    expect(input().value).toBe('shot.png');
+    expect(input().selectionStart).toBe(0);
+    expect(input().selectionEnd).toBe(4); // "shot", not the ".png"
+  });
+
+  it('renames the take on Enter and keeps its extension', () => {
+    setup();
+    preview.open(addScreenshot());
+
+    ($('previewRename') as HTMLButtonElement).click();
+    input().value = 'demo';
+    press('Enter');
+
+    expect(store.list()[0].filename).toBe('demo.png');
+    expect($('previewTitle').textContent).toBe('demo.png');
+    expect($('previewModal').getAttribute('aria-label')).toBe('demo.png');
+    expect(input().classList.contains('hidden')).toBe(true);
+    expect($('previewTitle').classList.contains('hidden')).toBe(false);
+    expect($('toastText').textContent).toBe('Renamed to demo.png');
+  });
+
+  it('saves the name when the field loses focus', () => {
+    setup();
+    preview.open(addRecording()); // 'clip.webm'
+
+    ($('previewRename') as HTMLButtonElement).click();
+    input().value = 'demo';
+    input().dispatchEvent(new FocusEvent('blur'));
+
+    expect(store.list()[0].filename).toBe('demo.webm');
+    expect($('previewTitle').textContent).toBe('demo.webm');
+  });
+
+  it('Escape abandons the edit without closing the dialog', () => {
+    setup();
+    preview.open(addScreenshot());
+
+    ($('previewRename') as HTMLButtonElement).click();
+    input().value = 'demo';
+    press('Escape');
+
+    expect(store.list()[0].filename).toBe('shot.png');
+    expect(input().classList.contains('hidden')).toBe(true);
+    // The keystroke is the field's, not the dialog's: it must not bubble up
+    // to the handler that closes on Escape.
+    expect(document.body.dataset.preview).toBe('open');
+  });
+
+  it('refuses an empty name and keeps the old one', () => {
+    setup();
+    preview.open(addScreenshot());
+
+    ($('previewRename') as HTMLButtonElement).click();
+    input().value = '   ';
+    press('Enter');
+
+    expect(store.list()[0].filename).toBe('shot.png');
+    expect(input().classList.contains('hidden')).toBe(true);
+    expect($('toastText').textContent).toBe('');
+  });
+
+  it('does not page through takes on arrows while renaming', () => {
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[0]);
+    expect($('previewCounter').textContent).toBe('1 / 2');
+
+    ($('previewRename') as HTMLButtonElement).click();
+    press('ArrowRight');
+
+    expect($('previewCounter').textContent).toBe('1 / 2');
+    expect($('previewTitle').textContent).toBe('shot.png');
+  });
+
+  it('drops a rename in flight when stepping to another take', () => {
+    setup();
+    addRecording();
+    addScreenshot();
+    preview.open(store.list()[0]);
+
+    ($('previewRename') as HTMLButtonElement).click();
+    input().value = 'demo';
+    ($('previewNext') as HTMLButtonElement).click();
+
+    // The half-typed name belongs to the take being left behind: it is
+    // neither applied to the old take nor carried into the new one.
+    expect(store.list()[0].filename).toBe('shot.png');
+    expect(store.list()[1].filename).toBe('clip.webm');
+    expect(input().classList.contains('hidden')).toBe(true);
+    expect($('previewTitle').textContent).toBe('clip.webm');
   });
 });

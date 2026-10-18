@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timestampFilename } from './filename';
+import { renameFilename, timestampFilename } from './filename';
 
 describe('timestampFilename', () => {
   it('produces a sortable YYYYMMDDHHmmss stamp', () => {
@@ -43,5 +43,45 @@ describe('timestampFilename', () => {
   it('zero-pads every field', () => {
     const at = new Date('2026-03-04T05:06:07Z');
     expect(timestampFilename('webm', at)).toBe('20260304050607.webm');
+  });
+});
+
+describe('renameFilename', () => {
+  it('appends the take extension to a plain name', () => {
+    expect(renameFilename('shot.png', 'demo')).toBe('demo.png');
+    expect(renameFilename('20261004134507.webm', 'demo')).toBe('demo.webm');
+  });
+
+  it('keeps a name that spells out its own suffix', () => {
+    // The user named the whole file; a dot-bearing name is left as typed
+    // rather than stacked onto the real extension.
+    expect(renameFilename('shot.png', 'demo.png')).toBe('demo.png');
+    expect(renameFilename('shot.png', 'my.clip')).toBe('my.clip');
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(renameFilename('shot.png', '  demo  ')).toBe('demo.png');
+  });
+
+  it('strips trailing dots before deciding', () => {
+    expect(renameFilename('shot.png', 'demo.')).toBe('demo.png');
+    expect(renameFilename('shot.png', 'demo...')).toBe('demo.png');
+  });
+
+  it('refuses an empty name', () => {
+    expect(renameFilename('shot.png', '')).toBeNull();
+    expect(renameFilename('shot.png', '   ')).toBeNull();
+    expect(renameFilename('shot.png', '...')).toBeNull();
+  });
+
+  it('returns the name verbatim when the take has no extension', () => {
+    expect(renameFilename('README', 'demo')).toBe('demo');
+    expect(renameFilename('README', 'demo.txt')).toBe('demo.txt');
+  });
+
+  it('does not read a leading-dot name as an extension', () => {
+    // ".draft" is a base name, not an extension - there is nothing to append.
+    expect(renameFilename('.draft', 'demo')).toBe('demo');
+    expect(renameFilename('.draft', 'demo.x')).toBe('demo.x');
   });
 });

@@ -510,6 +510,61 @@ describe('TakeStore thumbnails', () => {
   });
 });
 
+describe('TakeStore.rename', () => {
+  it('changes the name without touching the blob or its URLs', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+
+    expect(store.rename(added.id, 'demo.webm')).toBe(true);
+
+    const renamed = store.list()[0];
+    expect(renamed.filename).toBe('demo.webm');
+    expect(renamed.blob).toBe(added.blob);
+    expect(renamed.url).toBe(added.url);
+    expect(revoked).toEqual([]);
+  });
+
+  it('reports false for an id that is not in the store', () => {
+    const store = new TakeStore();
+
+    expect(store.rename('nope', 'demo.webm')).toBe(false);
+  });
+
+  it('notifies listeners so the views re-render', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+    const listener = vi.fn();
+    store.onChange(listener);
+
+    store.rename(added.id, 'demo.webm');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes the new name through to the cache so it survives a refresh', async () => {
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    const added = store.add(take());
+
+    store.rename(added.id, 'demo.webm');
+    await vi.waitFor(() => expect(cache.put).toHaveBeenCalledTimes(2));
+    expect(cache.records.get(added.id)?.filename).toBe('demo.webm');
+  });
+
+  it('keeps the name when the cache refuses the write', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cache = new FakeCache();
+    cache.put.mockRejectedValue(new Error('quota'));
+    const store = new TakeStore(cache);
+    const added = store.add(take());
+
+    store.rename(added.id, 'demo.webm');
+
+    expect(store.list()[0].filename).toBe('demo.webm');
+    warn.mockRestore();
+  });
+});
+
 describe('TakeStore remove/clear/reinsert (undo)', () => {
   it('remove hands back the removed record so it can be undone', () => {
     const store = new TakeStore();

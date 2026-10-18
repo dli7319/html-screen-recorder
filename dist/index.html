@@ -380,8 +380,9 @@
     <!--
       Take preview. A click on a gallery thumbnail shows the clip or still
       large, with Download - the fastest path from "what was that?" to having
-      the file, without leaving the page - and, for a still, Copy to put the
-      image on the clipboard instead.
+      the file, without leaving the page - for a still, Copy to put the image
+      on the clipboard instead, and Rename so a take can shake off its
+      timestamp name.
 
       Layout: a full-screen scrim with the media centered on it, close
       top-right, and the actions centered below the media. No card. One dialog,
@@ -414,6 +415,10 @@
             <button id="previewCopy" type="button" class="preview-ghost hidden">
               Copy
             </button>
+            <button id="previewRename" type="button" class="preview-ghost"
+              title="Rename this take">
+              Rename
+            </button>
             <button id="previewDownload" type="button" class="btn btn--primary btn--sm">
               Download
             </button>
@@ -421,7 +426,11 @@
               Remove
             </button>
           </div>
+          <!-- The rename field takes the caption's exact slot while it is up,
+               so the actions below never jump. -->
           <p id="previewTitle" class="preview-title"></p>
+          <input id="previewRenameInput" class="preview-rename hidden" type="text"
+            aria-label="Take filename" autocomplete="off" spellcheck="false" />
         </div>
       </div>
     </div>
