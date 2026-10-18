@@ -610,6 +610,7 @@ kbd {
 .sort-btn:focus-visible,
 .preview-ghost:focus-visible,
 .preview-nav:focus-visible,
+.preview-rename:focus-visible,
 .pip-btn:focus-visible,
 .source .level:focus-visible,
 .source:focus-within {
@@ -1514,6 +1515,24 @@ kbd {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* The rename field standing in for the caption it edits. Same type and slot
+   as .preview-title so nothing below it moves when the edit starts; the
+   surface is the same translucent light-on-scrim treatment as .preview-ghost.
+   The class toggles `hidden` - this rule must never declare `display`, or it
+   would override the utility (see the .hidden contract above). */
+.preview-rename {
+    margin: 0;
+    font-size: 12px;
+    color: #fff;
+    max-width: min(92vw, 720px);
+    width: min(320px, 70vw);
+    padding: 4px 10px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-control);
 }
 
 /* Prev/next chevrons, lightbox-style at the sides of the viewer. They float over
