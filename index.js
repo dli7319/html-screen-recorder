@@ -429,6 +429,28 @@
 	function timestampFilename(ext, at = /* @__PURE__ */ new Date()) {
 		return `${at.toISOString().replace(/[-:T.]/g, "").slice(0, 14)}.${ext}`;
 	}
+	/**
+	* The download name for a renamed take: the typed text, kept as spelled, with
+	* the take's own extension appended when the name has none.
+	*
+	* The extension states the file's format and the blob cannot change format by
+	* being renamed - an mp4 renamed "demo" would download as an extensionless
+	* file the OS cannot open. So a plain name gets the real extension; anything
+	* the user spelled with a dot is kept verbatim, because they named the whole
+	* file, not just its base. Trailing dots are stripped first so "demo." is
+	* treated as the plain name it is.
+	*
+	* Empty (after trimming) refuses the rename: null rather than a silent keep or
+	* a nameless download.
+	*/
+	function renameFilename(currentFilename, typed) {
+		const name = typed.trim().replace(/\.+$/, "");
+		if (!name) return null;
+		const dot = currentFilename.lastIndexOf(".");
+		const ext = dot > 0 ? currentFilename.slice(dot + 1) : "";
+		if (!ext || name.includes(".")) return name;
+		return `${name}.${ext}`;
+	}
 	//#endregion
 	//#region src/format.ts
 	/**
@@ -1554,6 +1576,24 @@
 			this.emit();
 			return true;
 		}
+		/**
+		* Rename a take. The blob is untouched - this is the name downloads save as
+		* - and the new name is written through to the cache so it survives a
+		* refresh alongside the take. Reports whether the take was still there to
+		* rename.
+		*/
+		rename(id, filename) {
+			const take = this.takes.find((candidate) => candidate.id === id);
+			if (!take) return false;
+			const updated = {
+				...take,
+				filename
+			};
+			this.takes[this.takes.indexOf(take)] = updated;
+			this.cache?.put(TakeStore.toRecord(updated)).catch(warnCacheFailure);
+			this.emit();
+			return true;
+		}
 		nextId() {
 			return `take-${this.sessionTag}-${(++this.counter).toString(36)}`;
 		}
@@ -1908,6 +1948,7 @@
 			this.root = root;
 			this.store = store;
 			this.currentId = null;
+			this.renaming = false;
 			this.opener = null;
 			this.unsubscribe = null;
 			this.releaseTrap = null;
@@ -1917,6 +1958,7 @@
 			};
 			this.onKeyDown = (e) => {
 				if (this.currentId === null) return;
+				if (this.renaming) return;
 				if (e.key === "Escape") this.close();
 				else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
 					if (this.isPlayerTarget(e.target)) return;
@@ -1935,6 +1977,29 @@
 					showToast(ok ? "Copied image to clipboard" : "Could not copy to clipboard");
 				});
 			};
+			this.onRenameClick = () => {
+				const take = this.store.list().find((t) => t.id === this.currentId);
+				if (!take) return;
+				this.renaming = true;
+				this.title.classList.add("hidden");
+				this.renameInput.classList.remove("hidden");
+				this.renameInput.value = take.filename;
+				this.renameInput.focus();
+				const dot = take.filename.lastIndexOf(".");
+				this.renameInput.setSelectionRange(0, dot > 0 ? dot : take.filename.length);
+			};
+			this.onRenameKeyDown = (e) => {
+				e.stopPropagation();
+				if (e.key === "Enter") {
+					e.preventDefault();
+					this.commitRename();
+				} else if (e.key === "Escape") {
+					e.preventDefault();
+					this.cancelRename();
+					this.renameBtn.focus();
+				}
+			};
+			this.onRenameBlur = () => this.commitRename();
 			this.onRemove = () => {
 				const storeList = this.store.list();
 				const storeIdx = storeList.findIndex((t) => t.id === this.currentId);
@@ -1982,6 +2047,8 @@
 			this.prevBtn = this.require("#previewPrev");
 			this.nextBtn = this.require("#previewNext");
 			this.removeBtn = this.require("#previewRemove");
+			this.renameBtn = this.require("#previewRename");
+			this.renameInput = this.require("#previewRenameInput");
 		}
 		require(selector) {
 			const el = this.root.querySelector(selector);
@@ -2003,6 +2070,9 @@
 			this.prevBtn.addEventListener("click", this.onPrev);
 			this.nextBtn.addEventListener("click", this.onNext);
 			this.removeBtn.addEventListener("click", this.onRemove);
+			this.renameBtn.addEventListener("click", this.onRenameClick);
+			this.renameInput.addEventListener("keydown", this.onRenameKeyDown);
+			this.renameInput.addEventListener("blur", this.onRenameBlur);
 			document.addEventListener("keydown", this.onKeyDown);
 		}
 		unbind() {
@@ -2015,11 +2085,15 @@
 			this.prevBtn.removeEventListener("click", this.onPrev);
 			this.nextBtn.removeEventListener("click", this.onNext);
 			this.removeBtn.removeEventListener("click", this.onRemove);
+			this.renameBtn.removeEventListener("click", this.onRenameClick);
+			this.renameInput.removeEventListener("keydown", this.onRenameKeyDown);
+			this.renameInput.removeEventListener("blur", this.onRenameBlur);
 			document.removeEventListener("keydown", this.onKeyDown);
 			this.close();
 		}
 		open(take, opener) {
 			this.clearMedia();
+			this.cancelRename();
 			this.title.textContent = take.filename;
 			this.modal.setAttribute("aria-label", take.filename);
 			if (take.kind === "recording") {
@@ -2057,6 +2131,7 @@
 		close() {
 			if (this.currentId === null) return;
 			this.clearMedia();
+			this.cancelRename();
 			this.currentId = null;
 			this.setOpen(false);
 			this.releaseTrap?.();
@@ -2091,6 +2166,26 @@
 		isPlayerTarget(target) {
 			const video = this.mediaSlot.querySelector("video");
 			return video !== null && target instanceof Node && video.contains(target);
+		}
+		/** Apply the typed name to the take, or leave it be when it is empty. */
+		commitRename() {
+			if (!this.renaming) return;
+			const take = this.store.list().find((t) => t.id === this.currentId);
+			const typed = this.renameInput.value;
+			this.cancelRename();
+			if (!take) return;
+			const filename = renameFilename(take.filename, typed);
+			if (filename === null || filename === take.filename) return;
+			this.store.rename(take.id, filename);
+			this.title.textContent = filename;
+			this.modal.setAttribute("aria-label", filename);
+			showToast(`Renamed to ${filename}`);
+		}
+		/** Put the caption back and drop the field without touching the take. */
+		cancelRename() {
+			this.renaming = false;
+			this.renameInput.classList.add("hidden");
+			this.title.classList.remove("hidden");
 		}
 		/**
 		* Move to a neighbouring take in the gallery's view order - the rows as the
