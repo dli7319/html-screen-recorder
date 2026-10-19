@@ -376,6 +376,12 @@ export class UIManager {
     } else {
       this.countdownNumber.textContent = '';
       this.recordBtn.title = 'Start Recording (R)';
+      // The "Cancel" label must not outlive the countdown. The button's action
+      // is a fresh recording again the moment the countdown is gone - ended or
+      // cancelled - and a stale "Cancel" over a Record action sends the next
+      // click looking for something to abort. Same label as after a stop, so
+      // the button reads the same thing wherever a recording can be started.
+      this.recordBtnText.textContent = 'Start Recording';
     }
   }
 

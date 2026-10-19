@@ -430,6 +430,19 @@ describe('UIManager countdown presentation', () => {
     expect($('countdownOverlay').classList.contains('hidden')).toBe(true);
     expect($('countdownNumber').textContent).toBe('');
     expect($('recordBtn').title).toContain('Start Recording');
+    expect($('recordBtnText').textContent).toBe('Start Recording');
+  });
+
+  it('offers a fresh recording again once the countdown is cancelled', () => {
+    const ui = renderUI();
+    ui.setCountdownState(true);
+    // The cancel path is the same two calls index.ts makes on Escape or on the
+    // button: the button's action is a recording again, so it must not keep
+    // reading "Cancel" - a label that promises an abort the click will not do.
+    ui.setCountdownState(false);
+    ui.hideCountdown();
+
+    expect($('recordBtnText').textContent).toBe('Start Recording');
   });
 
   it('is safe to hide when nothing is counting', () => {
