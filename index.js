@@ -1293,6 +1293,7 @@
 			} else {
 				this.countdownNumber.textContent = "";
 				this.recordBtn.title = "Start Recording (R)";
+				this.recordBtnText.textContent = "Start Recording";
 			}
 		}
 		showCountdown(remaining) {
