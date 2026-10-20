@@ -174,3 +174,33 @@ test('toggles the gallery between newest-first and oldest-first', async ({
   await expect(page.locator('#sortTakesBtn')).toHaveText('Newest first');
   expect(await rowIds(page)).toEqual([...createdIds].reverse());
 });
+
+test('the preview frame hugs the shared surface instead of letterboxing', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  await page.waitForFunction(() => {
+    const v = document.getElementById(
+      'videoPreview'
+    ) as HTMLVideoElement | null;
+    return Boolean(v && v.videoWidth === 640);
+  });
+
+  // The stub shares a 640x360 canvas, so the frame must take exactly that
+  // shape. It used to stretch to the stage width and letterbox the picture
+  // inside, leaving a band of empty frame on either side.
+  const boxRatio = async (): Promise<number> => {
+    const box = await page.locator('#videoContainer').boundingBox();
+    if (!box) throw new Error('preview frame has no box');
+    return box.width / box.height;
+  };
+  expect(await boxRatio()).toBeCloseTo(640 / 360, 1);
+
+  // On a narrow viewport the width binds instead of the height. Same shape.
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.waitForTimeout(250);
+  expect(await boxRatio()).toBeCloseTo(640 / 360, 1);
+});

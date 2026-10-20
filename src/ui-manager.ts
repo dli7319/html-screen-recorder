@@ -274,16 +274,27 @@ export class UIManager {
 
   /**
    * Match the preview container's aspect ratio to the shared screen so the
-   * preview is never cropped or letterboxed. The container is `aspect-video`
-   * (16:9) by default, which is wrong for any screen that is not 16:9.
+   * preview is never cropped or letterboxed. Until it lands, styles.css holds
+   * a 16:9 stand-in - wrong for any screen that is not 16:9, and the reason
+   * the frame cannot just fill the stage.
+   *
+   * `--preview-ar-k` carries the same ratio as a plain number, because the CSS
+   * that shrinks the frame to the height cap has to multiply by it - the
+   * `aspect-ratio` string cannot be read back into a `calc()`. It is the knob
+   * the preview modal already uses for the same job.
    */
   setPreviewAspect(width: number, height: number) {
     if (!width || !height) return;
     this.videoContainer.style.aspectRatio = `${width} / ${height}`;
+    this.videoContainer.style.setProperty(
+      '--preview-ar-k',
+      String(width / height)
+    );
   }
 
   resetPreviewAspect() {
     this.videoContainer.style.removeProperty('aspect-ratio');
+    this.videoContainer.style.removeProperty('--preview-ar-k');
   }
 
   setSharingState(isSharing: boolean) {

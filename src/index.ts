@@ -347,8 +347,7 @@ async function handleShareScreen() {
  * fires whenever the shared surface changes shape (e.g. the recorded window is
  * resized).
  *
- * The markup defaults to `aspect-video` (16:9) purely as an empty-state
- * placeholder.
+ * Until it lands, styles.css holds a 16:9 stand-in purely as a placeholder.
  */
 function syncPreviewAspect() {
   const w = ui.videoPreview.videoWidth;
