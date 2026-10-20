@@ -120,6 +120,10 @@ body {
        to them - on the same vertical line. */
     --gutter: 22px;
 
+    /* The width of the centred app column. Referenced by the preview fit as
+       well, which has to know the stage's real width. */
+    --app-max: 1120px;
+
     --radius-card: 12px;
     --radius-control: 8px;
     --radius-pill: 100px;
@@ -172,13 +176,39 @@ body {
 
 /* Preview sizing.
  *
- * Cap the preview's height so a tall shared surface cannot push the controls
- * below it off screen. The aspect ratio is set inline from the shared surface,
- * and CSS shrinks the width to match, so the preview stays centred and never
- * distorts or letterboxes.
+ * The frame hugs the shared surface's own shape. It used to stretch across the
+ * whole stage while only its height was capped, so the picture letterboxed
+ * inside it with two empty margins - the wider the stage, the wider the gaps.
+ *
+ * While a surface is shared the box is sized from its ratio (`--preview-ar-k`,
+ * written inline by setPreviewAspect alongside the `aspect-ratio` string,
+ * which a calc() cannot read): the height is the smaller of the height cap and
+ * the stage's width divided by the ratio, and the width that follows from the
+ * ratio is then always the largest that fits. The height cap is load-bearing:
+ * a tall shared surface must not push the controls below it off screen.
+ *
+ * The width term stands in for the stage's real width (the app column caps at
+ * --app-max; `100vw` overshoots it by the scrollbar, which the `max-width`
+ * clamp absorbs). A percentage cannot stand in for it here: the stage's height
+ * is content-sized, so percentages against it do not resolve - a `height: 50%`
+ * probe in the stage computes to 0.
  */
 #videoContainer {
-    max-height: min(500px, 56vh);
+    --preview-hcap: min(500px, 56vh);
+    flex: 0 1 auto;
+    align-self: center;
+    /* Stand-in ratio until the shared surface reports its real one (inline
+       style wins over this as soon as it lands). */
+    aspect-ratio: 16 / 9;
+    height: min(
+        var(--preview-hcap),
+        calc(
+            min(100vw - 2 * var(--gutter), var(--app-max) - 2 * var(--gutter)) /
+                var(--preview-ar-k, 1.7778)
+        )
+    );
+    width: auto;
+    max-width: 100%;
     margin-inline: auto;
 }
 
@@ -345,7 +375,7 @@ kbd {
 }
 
 .app {
-    max-width: 1120px;
+    max-width: var(--app-max);
     margin: 0 auto;
     min-height: 100vh;
     background: var(--surface);
@@ -665,7 +695,6 @@ kbd {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 340px;
     margin-inline: auto;
 }
 
@@ -676,17 +705,22 @@ kbd {
    the area legible as a preview target while matching the empty Takes state,
    which is dashed for the same reason. The solid frame returns the moment
    there is something to frame.
+
+   This is also the one state that does not hug anything: with no shared
+   surface to size to, the box goes back to filling the whole region (the flex
+   growth and stretch the fitted sizing above turns off), and the 340px floor
+   here is what keeps the stage from collapsing before a share reports its
+   shape.
 */
-.stage-inner:has(> .placeholder:not(.hidden)) {
+#videoContainer:has(> .placeholder:not(.hidden)) {
     background: transparent;
     border-style: dashed;
-}
-
-/* Height cap is load-bearing: a tall shared surface must not push the controls
-   below it off screen. The aspect ratio is set inline from the shared surface
-   and the width shrinks to match, so the preview never distorts. */
-#videoContainer {
-    max-height: min(500px, 56vh);
+    flex: 1;
+    align-self: stretch;
+    width: auto;
+    height: auto;
+    min-height: 340px;
+    aspect-ratio: auto;
 }
 
 .preview-video {
