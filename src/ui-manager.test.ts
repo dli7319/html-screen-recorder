@@ -70,6 +70,11 @@ describe('UIManager preview aspect ratio', () => {
     ui.setPreviewAspect(3456, 2234);
 
     expect(ui.videoContainer.style.aspectRatio).toBe('3456 / 2234');
+    // The same ratio as a plain number: the CSS that fits the frame to the
+    // stage multiplies by it, and cannot read it out of the string above.
+    expect(ui.videoContainer.style.getPropertyValue('--preview-ar-k')).toBe(
+      String(3456 / 2234)
+    );
   });
 
   it('ignores degenerate dimensions instead of corrupting the ratio', () => {
@@ -79,6 +84,7 @@ describe('UIManager preview aspect ratio', () => {
     ui.setPreviewAspect(NaN, NaN);
 
     expect(ui.videoContainer.style.aspectRatio).toBe('');
+    expect(ui.videoContainer.style.getPropertyValue('--preview-ar-k')).toBe('');
   });
 
   it('falls back to the markup default when sharing stops', () => {
@@ -87,8 +93,9 @@ describe('UIManager preview aspect ratio', () => {
     expect(ui.videoContainer.style.aspectRatio).toBe('900 / 1600');
 
     ui.resetPreviewAspect();
-    // Removing the inline property lets `aspect-video` take over again.
+    // Removing the inline properties lets `aspect-video` take over again.
     expect(ui.videoContainer.style.aspectRatio).toBe('');
+    expect(ui.videoContainer.style.getPropertyValue('--preview-ar-k')).toBe('');
   });
 });
 
@@ -115,6 +122,7 @@ describe('UIManager.setSharingState', () => {
 
     expect(ui.videoPreview.srcObject).toBeNull();
     expect(ui.videoContainer.style.aspectRatio).toBe('');
+    expect(ui.videoContainer.style.getPropertyValue('--preview-ar-k')).toBe('');
     expect($('placeholder').classList.contains('hidden')).toBe(false);
     expect(($('recordBtn') as HTMLButtonElement).disabled).toBe(true);
     expect(($('stopBtn') as HTMLButtonElement).disabled).toBe(true);
