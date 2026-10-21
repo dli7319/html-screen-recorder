@@ -204,3 +204,49 @@ test('the preview frame hugs the shared surface instead of letterboxing', async 
   await page.waitForTimeout(250);
   expect(await boxRatio()).toBeCloseTo(640 / 360, 1);
 });
+
+test('renames a take from the preview dialog', async ({ page }) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  await page.click('#screenshotBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+
+  await page.click('#takeList .take-thumb');
+  await expect(page.locator('#previewModal')).toBeVisible();
+  const title = page.locator('#previewTitle');
+  const original = (await title.textContent()) ?? '';
+  expect(original).toMatch(/\.png$/);
+
+  // Commit a rename without typing an extension: the dialog title, the toast,
+  // and the gallery row all follow, and the extension is kept.
+  await page.click('#previewRename');
+  await page.fill('#previewRenameInput', 'demo');
+  await page.press('#previewRenameInput', 'Enter');
+  await expect(title).toHaveText('demo.png');
+  await expect(page.locator('#toastText')).toHaveText('Renamed to demo.png');
+  await expect(rows.first()).toContainText('demo.png');
+  await expect(page.locator('#takeList .take-thumb')).toHaveAttribute(
+    'aria-label',
+    'Preview demo.png'
+  );
+  await expect(page.locator('#previewRenameInput')).toBeHidden();
+
+  // Escape backs out of a rename without touching the take.
+  await page.click('#previewRename');
+  await page.fill('#previewRenameInput', 'nope');
+  await page.press('#previewRenameInput', 'Escape');
+  await expect(title).toHaveText('demo.png');
+  await expect(rows.first()).toContainText('demo.png');
+  await expect(page.locator('#previewRenameInput')).toBeHidden();
+
+  // The new name is written through to the on-device cache, so it survives a
+  // reload - in the row and in the reopened dialog.
+  await page.reload();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('demo.png');
+  await page.click('#takeList .take-thumb');
+  await expect(page.locator('#previewTitle')).toHaveText('demo.png');
+});
