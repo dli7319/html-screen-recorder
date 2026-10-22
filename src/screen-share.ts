@@ -25,6 +25,12 @@ export interface ShareResult {
    * this from what it asked for, only from what arrived.
    */
   hasSystemAudio: boolean;
+  /**
+   * Whether the returned mix actually carries a microphone track. False both
+   * when the mic was left off and when the browser refused it - the same
+   * distinction `hasSystemAudio` draws for the display's audio.
+   */
+  hasMic: boolean;
   analysers: {
     system?: AnalyserNode;
     mic?: AnalyserNode;
@@ -70,8 +76,14 @@ export async function shareScreen(
         },
       });
     } catch (micErr) {
+      // The microphone is an add-on, not the point of a screen share: if the
+      // browser refuses it (permission denied, no device, already in use) the
+      // share goes on without it instead of dying with it. This used to throw -
+      // under a message promising "Continuing without it" - which aborted the
+      // capture the message said was continuing, and left the display tracks
+      // it had already acquired running with no UI pointing at them. The
+      // caller learns about the missing mic through `hasMic` and says so.
       console.error('Could not get microphone:', micErr);
-      throw new Error('Could not access microphone. Continuing without it.');
     }
   }
 
@@ -116,6 +128,7 @@ export async function shareScreen(
   return {
     stream: finalStream,
     hasSystemAudio: Boolean(systemTrack),
+    hasMic: Boolean(micTrack),
     analysers,
     gains,
     audioContext,

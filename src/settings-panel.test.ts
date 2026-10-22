@@ -23,12 +23,14 @@ function renderSettings(): SettingsPanel {
       <input type="range" id="systemVolume" min="0" max="100" value="100" />
       <span id="systemVolumeValue"></span>
     </div>
-    <input type="checkbox" id="micAudioToggle" />
+    <div class="source">
+      <input type="checkbox" id="micAudioToggle" />
+      <input type="range" id="micVolume" min="0" max="100" value="100" />
+      <span id="micVolumeValue"></span>
+    </div>
     <input type="checkbox" id="micNoiseSuppression" checked />
     <input type="checkbox" id="micEchoCancellation" checked />
     <input type="checkbox" id="micAutoGain" checked />
-    <input type="range" id="micVolume" min="0" max="100" value="100" />
-    <span id="micVolumeValue"></span>
   `;
   return new SettingsPanel();
 }
@@ -369,5 +371,55 @@ describe('SettingsPanel system audio availability', () => {
     // The fader is deliberately outside the lock - it drives live gains - so
     // only the missing track can disable it.
     expect(($('systemVolume') as HTMLInputElement).disabled).toBe(false);
+  });
+});
+
+describe('SettingsPanel microphone availability', () => {
+  it('disables the chip when the share came back without a microphone', () => {
+    const settings = renderSettings();
+    settings.setMicAvailable(false);
+
+    expect(($('micAudioToggle') as HTMLInputElement).disabled).toBe(true);
+    expect(($('micVolume') as HTMLInputElement).disabled).toBe(true);
+
+    const chip = $('micAudioToggle').closest('.source') as HTMLElement;
+    expect(chip.hasAttribute('data-unavailable')).toBe(true);
+    expect(chip.title).toContain('not part of this share');
+  });
+
+  it('restores the chip when the microphone is there', () => {
+    const settings = renderSettings();
+    settings.setMicAvailable(false);
+    settings.setMicAvailable(true);
+
+    expect(($('micAudioToggle') as HTMLInputElement).disabled).toBe(false);
+    expect(($('micVolume') as HTMLInputElement).disabled).toBe(false);
+
+    const chip = $('micAudioToggle').closest('.source') as HTMLElement;
+    expect(chip.hasAttribute('data-unavailable')).toBe(false);
+    expect(chip.hasAttribute('title')).toBe(false);
+  });
+
+  it('keeps the toggle disabled after the lock lifts if the share has no mic', () => {
+    // Two independent reasons to disable: the lock (a share is live) and the
+    // missing track (this share records without a microphone). Lifting one
+    // must not re-enable the control while the other still stands.
+    const settings = renderSettings();
+    settings.setMicAvailable(false);
+    settings.setLocked(true);
+    settings.setLocked(false);
+
+    expect(($('micAudioToggle') as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('stays locked when the mic is back but the share is live', () => {
+    const settings = renderSettings();
+    settings.setLocked(true);
+    settings.setMicAvailable(true);
+
+    expect(($('micAudioToggle') as HTMLInputElement).disabled).toBe(true);
+    // The fader is deliberately outside the lock - it drives live gains - so
+    // only the missing track can disable it.
+    expect(($('micVolume') as HTMLInputElement).disabled).toBe(false);
   });
 });

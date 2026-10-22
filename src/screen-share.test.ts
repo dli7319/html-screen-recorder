@@ -195,16 +195,53 @@ describe('shareScreen display constraints', () => {
     });
   });
 
-  it('reports a friendly error when the microphone is denied', async () => {
+  it('keeps the share alive when the microphone is denied', async () => {
+    // The mic is an add-on, not the point of a screen share: refusing it must
+    // not abort the capture - this used to throw and kill the whole share,
+    // leaving the display tracks it had acquired running with no UI.
     getUserMedia.mockRejectedValueOnce(
       Object.assign(new Error('denied'), {
         name: 'NotAllowedError',
       })
     );
 
-    await expect(shareScreen(false, mic({ enabled: true }))).rejects.toThrow(
-      /Could not access microphone/
+    const result = await shareScreen(false, mic({ enabled: true }));
+    expect(result.hasMic).toBe(false);
+    expect(result.stream.getVideoTracks()).toHaveLength(1);
+    expect(result.gains).toEqual({});
+  });
+
+  it('still mixes the display audio when the microphone is refused', async () => {
+    getDisplayMedia.mockResolvedValue(fakeStream(true, 1));
+    getUserMedia.mockRejectedValueOnce(
+      Object.assign(new Error('denied'), {
+        name: 'NotAllowedError',
+      })
     );
+    const ctx = makeAudioContext();
+    vi.stubGlobal('AudioContext', function () {
+      return ctx;
+    });
+
+    const result = await shareScreen(true, mic({ enabled: true }));
+    expect(result.hasSystemAudio).toBe(true);
+    expect(result.hasMic).toBe(false);
+    expect(result.gains.system).toBeDefined();
+    expect(result.gains.mic).toBeUndefined();
+  });
+
+  it('reports whether the share carries a microphone', async () => {
+    getUserMedia.mockResolvedValue(fakeStream(false, 1));
+    const ctx = makeAudioContext();
+    vi.stubGlobal('AudioContext', function () {
+      return ctx;
+    });
+
+    const withMic = await shareScreen(false, mic({ enabled: true }));
+    expect(withMic.hasMic).toBe(true);
+
+    const withoutMic = await shareScreen(false, mic({ enabled: false }));
+    expect(withoutMic.hasMic).toBe(false);
   });
 });
 

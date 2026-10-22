@@ -47,12 +47,13 @@ A browser with:
 Modern Chrome, Edge and Firefox all qualify. Safari supports the core APIs but
 not every codec.
 
-Two optional behaviours degrade gracefully:
+Three optional behaviours degrade gracefully:
 
 | Capability                      | If unavailable                                        |
 | ------------------------------- | ----------------------------------------------------- |
 | `CropTarget` / `track.cropTo()` | cropping falls back to a `canvas` re-encode           |
 | system audio capture            | the checkbox yields no system audio — mic still works |
+| microphone capture              | the share continues without it                        |
 
 > **Note on system audio:** whether it is offered depends on both the browser and
 > the OS. Chromium on Windows and ChromeOS supports it broadly; macOS support is
