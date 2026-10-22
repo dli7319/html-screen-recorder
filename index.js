@@ -126,7 +126,6 @@
 			} });
 		} catch (micErr) {
 			console.error("Could not get microphone:", micErr);
-			throw new Error("Could not access microphone. Continuing without it.");
 		}
 		const analysers = {};
 		const gains = {};
@@ -155,6 +154,7 @@
 		return {
 			stream: finalStream,
 			hasSystemAudio: Boolean(systemTrack),
+			hasMic: Boolean(micTrack),
 			analysers,
 			gains,
 			audioContext
@@ -1350,6 +1350,7 @@
 			this.micVolumeValue = document.getElementById("micVolumeValue");
 			this.locked = false;
 			this.systemAudioUnavailable = false;
+			this.micUnavailable = false;
 		}
 		populateFormats(formats) {
 			formats.forEach((format) => {
@@ -1479,11 +1480,11 @@
 			this.formatSelect.disabled = locked;
 			this.resolutionSelect.disabled = locked;
 			this.frameRateSelect.disabled = locked;
-			this.micAudioToggle.disabled = locked;
 			this.micNoiseSuppression.disabled = locked;
 			this.micEchoCancellation.disabled = locked;
 			this.micAutoGain.disabled = locked;
 			this.syncSystemAudioChip();
+			this.syncMicChip();
 		}
 		/**
 		* A share can come back without system audio - the picker's "Share tab
@@ -1505,6 +1506,26 @@
 			if (!chip) return;
 			chip.toggleAttribute("data-unavailable", unavailable);
 			if (unavailable) chip.title = "System audio was not part of this share";
+			else chip.removeAttribute("title");
+		}
+		/**
+		* The same for the microphone: a share can end up without one - the toggle
+		* was off, or the browser refused permission - and the chip then has no
+		* track to feed. It goes disabled and says why on hover rather than
+		* accepting a fader that silently moves nothing. Restored by the next share.
+		*/
+		setMicAvailable(available) {
+			this.micUnavailable = !available;
+			this.syncMicChip();
+		}
+		syncMicChip() {
+			const unavailable = this.micUnavailable;
+			const chip = this.micAudioToggle.closest(".source");
+			this.micAudioToggle.disabled = this.locked || unavailable;
+			this.micVolume.disabled = unavailable;
+			if (!chip) return;
+			chip.toggleAttribute("data-unavailable", unavailable);
+			if (unavailable) chip.title = "Microphone was not part of this share";
 			else chip.removeAttribute("title");
 		}
 	};
@@ -2862,7 +2883,8 @@
 	async function handleShareScreen() {
 		ui.hideError();
 		try {
-			const shareResult = await shareScreen(settings.getAudioConfig().systemAudio, settings.getMicOptions(), settings.getQuality());
+			const audioConfig = settings.getAudioConfig();
+			const shareResult = await shareScreen(audioConfig.systemAudio, settings.getMicOptions(), settings.getQuality());
 			currentGains = shareResult.gains;
 			applyVolume("system");
 			applyVolume("mic");
@@ -2870,12 +2892,14 @@
 			analysers = shareResult.analysers;
 			audioContext = shareResult.audioContext;
 			settings.setSystemAudioAvailable(shareResult.hasSystemAudio);
+			settings.setMicAvailable(shareResult.hasMic);
 			ui.videoPreview.srcObject = stream;
 			await ui.videoPreview.play();
 			ui.setSharingState(true);
 			const [videoTrack] = stream.getVideoTracks();
 			syncPreviewAspect();
 			videoTrack.addEventListener("ended", stopSharing);
+			if (audioConfig.micAudio && !shareResult.hasMic) ui.showError("Could not access microphone. Continuing without it.");
 			visualizeAudio();
 		} catch (err) {
 			console.error("Error sharing screen:", err);
@@ -2999,6 +3023,7 @@
 		}
 		ui.setSharingState(false);
 		settings.setSystemAudioAvailable(true);
+		settings.setMicAvailable(true);
 		cropper.hide();
 	}
 	function visualizeAudio() {
