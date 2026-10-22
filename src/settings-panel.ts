@@ -64,6 +64,7 @@ export class SettingsPanel {
   ) as HTMLSpanElement;
   private locked = false;
   private systemAudioUnavailable = false;
+  private micUnavailable = false;
 
   populateFormats(formats: RecordingFormat[]) {
     formats.forEach((format) => {
@@ -223,11 +224,11 @@ export class SettingsPanel {
     this.formatSelect.disabled = locked;
     this.resolutionSelect.disabled = locked;
     this.frameRateSelect.disabled = locked;
-    this.micAudioToggle.disabled = locked;
     this.micNoiseSuppression.disabled = locked;
     this.micEchoCancellation.disabled = locked;
     this.micAutoGain.disabled = locked;
     this.syncSystemAudioChip();
+    this.syncMicChip();
   }
 
   /**
@@ -254,6 +255,31 @@ export class SettingsPanel {
     chip.toggleAttribute('data-unavailable', unavailable);
     if (unavailable) {
       chip.title = 'System audio was not part of this share';
+    } else {
+      chip.removeAttribute('title');
+    }
+  }
+
+  /**
+   * The same for the microphone: a share can end up without one - the toggle
+   * was off, or the browser refused permission - and the chip then has no
+   * track to feed. It goes disabled and says why on hover rather than
+   * accepting a fader that silently moves nothing. Restored by the next share.
+   */
+  setMicAvailable(available: boolean) {
+    this.micUnavailable = !available;
+    this.syncMicChip();
+  }
+
+  private syncMicChip() {
+    const unavailable = this.micUnavailable;
+    const chip = this.micAudioToggle.closest('.source') as HTMLElement | null;
+    this.micAudioToggle.disabled = this.locked || unavailable;
+    this.micVolume.disabled = unavailable;
+    if (!chip) return;
+    chip.toggleAttribute('data-unavailable', unavailable);
+    if (unavailable) {
+      chip.title = 'Microphone was not part of this share';
     } else {
       chip.removeAttribute('title');
     }

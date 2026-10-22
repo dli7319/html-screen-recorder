@@ -307,6 +307,8 @@ async function handleShareScreen() {
     // The picker can hand back a silent share; the chip must not pretend to
     // control audio the capture does not carry.
     settings.setSystemAudioAvailable(shareResult.hasSystemAudio);
+    // Same for the mic: it can be off by choice or refused by the browser.
+    settings.setMicAvailable(shareResult.hasMic);
 
     ui.videoPreview.srcObject = stream;
     await ui.videoPreview.play();
@@ -316,6 +318,13 @@ async function handleShareScreen() {
     const [videoTrack] = stream.getVideoTracks();
     syncPreviewAspect();
     videoTrack.addEventListener('ended', stopSharing);
+
+    // A refused microphone no longer aborts the share - say so instead of
+    // letting the greyed-out chip be the only clue. Cleared by the next
+    // share attempt like every other banner message.
+    if (audioConfig.micAudio && !shareResult.hasMic) {
+      ui.showError('Could not access microphone. Continuing without it.');
+    }
 
     visualizeAudio();
   } catch (err: unknown) {
@@ -494,6 +503,7 @@ async function stopSharing() {
 
   ui.setSharingState(false);
   settings.setSystemAudioAvailable(true);
+  settings.setMicAvailable(true);
   cropper.hide();
 }
 
