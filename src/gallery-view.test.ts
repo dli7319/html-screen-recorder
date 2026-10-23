@@ -902,3 +902,123 @@ describe('GalleryView preview follows the visible rows', () => {
     expect($('previewCounter').textContent).toBe('2 / 2');
   });
 });
+
+describe('GalleryView reveal', () => {
+  /** jsdom implements no scrolling: record what would have scrolled instead. */
+  const scrolled: HTMLElement[] = [];
+  const scrolls: (ScrollIntoViewOptions | undefined)[] = [];
+
+  function rows(): HTMLElement[] {
+    return [...$('takeList').querySelectorAll<HTMLElement>('[data-take-id]')];
+  }
+
+  function freshRow(): HTMLElement | undefined {
+    return rows().find((r) => r.classList.contains('is-fresh'));
+  }
+
+  function addTake(kind: 'recording' | 'screenshot', filename: string) {
+    return store.add({
+      kind,
+      blob: new Blob(['x']),
+      filename,
+      formatName: kind === 'recording' ? 'VP9' : 'PNG',
+    });
+  }
+
+  beforeEach(() => {
+    scrolled.length = 0;
+    scrolls.length = 0;
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value(this: HTMLElement, options?: ScrollIntoViewOptions) {
+        scrolled.push(this);
+        scrolls.push(options);
+      },
+    });
+  });
+
+  it('marks the row it points at, and only that row', () => {
+    render();
+    const first = addTake('recording', 'one.webm');
+    addTake('screenshot', 'two.png');
+
+    view.reveal(first.id);
+
+    expect(freshRow()?.dataset.takeId).toBe(first.id);
+    expect(rows().filter((r) => r.classList.contains('is-fresh')).length).toBe(
+      1
+    );
+  });
+
+  it('brings that row into view with as little scrolling as it can', () => {
+    render();
+    const take = addTake('recording', 'one.webm');
+
+    view.reveal(take.id);
+
+    expect(scrolled.length).toBe(1);
+    expect(scrolled[0].dataset.takeId).toBe(take.id);
+    expect(scrolls[0]).toEqual({ block: 'nearest' });
+  });
+
+  it('keeps the mark when the rows are rebuilt underneath it', () => {
+    render();
+    const first = addTake('recording', 'one.webm');
+    view.reveal(first.id);
+
+    // A thumbnail landing re-renders the whole list; the highlight must not
+    // vanish with the element it happened to be painted on.
+    addTake('screenshot', 'two.png');
+
+    expect(freshRow()?.dataset.takeId).toBe(first.id);
+  });
+
+  it('widens the filter when the current view would hide the take', () => {
+    render();
+    const clip = addTake('recording', 'one.webm');
+    addTake('screenshot', 'two.png');
+    document
+      .querySelector<HTMLButtonElement>(
+        '.filter-chip[data-filter="screenshot"]'
+      )
+      ?.click();
+    expect(rows().length).toBe(1);
+
+    view.reveal(clip.id);
+
+    expect(rows().map((r) => r.dataset.takeId)).toContain(clip.id);
+    expect(freshRow()?.dataset.takeId).toBe(clip.id);
+    expect(
+      document
+        .querySelector('.filter-chip[data-filter="all"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('true');
+  });
+
+  it('ignores an id that is not in the gallery', () => {
+    render();
+    addTake('recording', 'one.webm');
+
+    view.reveal('nope');
+
+    expect(freshRow()).toBeUndefined();
+    expect(scrolled.length).toBe(0);
+  });
+
+  it('drops the highlight after a beat, never stranding it', () => {
+    vi.useFakeTimers();
+    try {
+      render();
+      const take = addTake('recording', 'one.webm');
+
+      view.reveal(take.id);
+      expect(freshRow()?.dataset.takeId).toBe(take.id);
+
+      vi.advanceTimersByTime(4000);
+      expect(freshRow()).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

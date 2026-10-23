@@ -250,3 +250,39 @@ test('renames a take from the preview dialog', async ({ page }) => {
   await page.click('#takeList .take-thumb');
   await expect(page.locator('#previewTitle')).toHaveText('demo.png');
 });
+
+test('confirms a saved take and jumps to its row on demand', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  await page.click('#recordBtn');
+  await page.waitForTimeout(1500);
+  await page.click('#stopBtn');
+
+  // Stopping is the app's one big success and it used to report nothing. Now
+  // the toast names the take, says where it went, and offers the jump.
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator('#toastText')).toHaveText(/^Saved .+ to Takes$/);
+  await expect(page.locator('#toastAction')).toHaveText('View');
+
+  // "View" marks the row it means and puts it on screen.
+  await page.click('#toastAction');
+  await expect(rows.first()).toHaveClass(/is-fresh/);
+  const box = await rows.first().boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport) throw new Error('row or viewport has no box');
+  // On screen, give or take a sub-pixel of layout rounding.
+  expect(box.y).toBeGreaterThanOrEqual(-1);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+
+  // A screenshot is confirmed the same way.
+  await page.click('#screenshotBtn');
+  await expect(page.locator('#toastText')).toHaveText(
+    /^Saved .+\.png to Takes$/
+  );
+  await expect(page.locator('#toastAction')).toHaveText('View');
+});
