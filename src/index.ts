@@ -15,6 +15,7 @@ import { SettingsPanel } from './settings-panel';
 import { Take, TakeStore } from './takes';
 import { TakeCache } from './take-cache';
 import { GalleryView } from './gallery-view';
+import { showToast } from './toast';
 import { downscaleImage, extractVideoThumbnail } from './thumbnail';
 import { registerServiceWorker } from './pwa';
 import { installUnloadGuard } from './unload-guard';
@@ -204,11 +205,33 @@ function cancelCountdown() {
 }
 
 /**
+ * Confirm a take landed and offer the jump to it.
+ *
+ * Saving a take is the one thing this app exists to do, and it was the one
+ * action that reported nothing: the row just appears in a gallery that sits
+ * below the fold on a short viewport, so "where did my clip go?" had no answer
+ * on screen. The shared toast names the take and says where it went, and
+ * "View" walks the user to the row. Filenames are shortened the same way the
+ * removal confirmations shorten them.
+ */
+function announceSaved(take: Take): void {
+  const name =
+    take.filename.length > 32
+      ? `${take.filename.slice(0, 31)}…`
+      : take.filename;
+  showToast(`Saved ${name} to Takes`, {
+    label: 'View',
+    onClick: () => gallery.reveal(take.id),
+  });
+}
+
+/**
  * Capture the preview's current frame as a PNG and file it as a take.
  *
  * Silent when there is nothing to capture - a shortcut should never throw up
  * an error banner mid-take - but when it does land it goes to the gallery like
- * a recording, so a screenshot cannot be lost by taking the next one.
+ * a recording and is confirmed like one, so a screenshot cannot be lost by
+ * taking the next one.
  */
 async function captureScreenshot() {
   const blob = await captureFrame(ui.videoPreview);
@@ -220,6 +243,7 @@ async function captureScreenshot() {
     filename: timestampFilename('png'),
     formatName: 'PNG',
   });
+  announceSaved(take);
   // A screenshot is already an image, so its thumbnail is just a shrunk copy.
   void attachThumbnail(take, () => downscaleImage(blob));
 }
@@ -460,6 +484,7 @@ async function onRecordingStop(blob: Blob, ext: string) {
     formatName: settings.getFormat().name,
     durationMs,
   });
+  announceSaved(take);
   // A frame from the clip becomes its gallery thumbnail. Off the stop path:
   // the seek + decode takes real time and the feedback must not wait for it.
   void attachThumbnail(take, () =>

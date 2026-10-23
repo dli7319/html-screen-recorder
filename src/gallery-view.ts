@@ -38,6 +38,12 @@ export class GalleryView {
   /** Which kinds the list shows. A view over the store, not a change to it, so
    *  "Download all" and "Clear" still act on the whole gallery. */
   private filter: 'all' | 'recording' | 'screenshot' = 'all';
+  /** The row `reveal()` is pointing at, highlighted until the timer drops it.
+   *  Kept as state rather than a one-off class because the rows are rebuilt on
+   *  every render - a thumbnail landing a beat after the reveal would otherwise
+   *  silently swallow the highlight. */
+  private freshId: string | null = null;
+  private freshTimer: number | undefined;
   /** List order; false = newest first (the default). */
   private sortAsc = false;
   private filterBtns: HTMLElement[];
@@ -105,6 +111,10 @@ export class GalleryView {
     if (this.expiryTimer !== undefined) {
       window.clearInterval(this.expiryTimer);
       this.expiryTimer = undefined;
+    }
+    if (this.freshTimer !== undefined) {
+      window.clearTimeout(this.freshTimer);
+      this.freshTimer = undefined;
     }
     this.list.replaceChildren();
   }
@@ -177,14 +187,19 @@ export class GalleryView {
     const kind = btn.dataset.filter as
       'all' | 'recording' | 'screenshot' | undefined;
     if (!kind) return;
+    this.setFilter(kind);
+  };
+
+  /** Switch the view to one kind of take and move the pressed chip with it. */
+  private setFilter(kind: 'all' | 'recording' | 'screenshot') {
     this.filter = kind;
     for (const b of this.filterBtns) {
-      const active = b === btn;
+      const active = b.dataset.filter === kind;
       b.classList.toggle('is-active', active);
       b.setAttribute('aria-pressed', String(active));
     }
     this.render();
-  };
+  }
 
   private onSortToggle = () => {
     this.sortAsc = !this.sortAsc;
@@ -201,6 +216,48 @@ export class GalleryView {
     return [...list].sort((a, b) =>
       this.sortAsc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt
     );
+  }
+
+  /**
+   * Point the user at one take: bring its row into view and mark it fresh.
+   *
+   * This is the "View" half of the saved-take confirmation - the toast says a
+   * take landed in the gallery, which on a short viewport is below the fold,
+   * and this is how the promise "it is in Takes" is kept. The filter is widened
+   * first when the current view would hide the row, so the jump never lands on
+   * a list that does not contain what it was asked to show.
+   */
+  reveal(takeId: string): void {
+    const known = this.store.list().some((t) => t.id === takeId);
+    if (!known) return;
+    if (!this.visibleTakes().some((t) => t.id === takeId))
+      this.setFilter('all');
+
+    this.freshId = takeId;
+    window.clearTimeout(this.freshTimer);
+    this.freshTimer = window.setTimeout(() => this.clearFresh(), 4000);
+    // Re-render so the mark is on the row even before any later store change
+    // happens to rebuild it.
+    this.render();
+    this.rowFor(takeId)?.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Drop the fresh mark without rebuilding rows nobody is interacting with. */
+  private clearFresh(): void {
+    this.freshId = null;
+    this.freshTimer = undefined;
+    const row = this.list.querySelector('.take-row.is-fresh');
+    row?.classList.remove('is-fresh');
+  }
+
+  /** The rendered row for a take, if the current view shows it. */
+  private rowFor(takeId: string): HTMLElement | null {
+    for (const el of this.list.querySelectorAll<HTMLElement>(
+      '[data-take-id]'
+    )) {
+      if (el.dataset.takeId === takeId) return el;
+    }
+    return null;
   }
 
   render() {
@@ -230,6 +287,9 @@ export class GalleryView {
     row.className =
       'take-row flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0';
     row.dataset.takeId = take.id;
+    // Re-applied on every rebuild so the reveal highlight survives a render
+    // triggered by something else (a thumbnail landing, say).
+    if (take.id === this.freshId) row.classList.add('is-fresh');
 
     const icon = document.createElement('button');
     icon.type = 'button';
