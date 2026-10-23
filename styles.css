@@ -1286,6 +1286,26 @@ kbd {
     background-color: var(--surface-sunken);
 }
 
+/* The row a "View" toast action just jumped to. The scroll can only bring the
+   gallery into view; on a list of many rows the eye still has to be told which
+   one is the take that just landed, so it takes a brief accent wash that fades
+   out and leaves the row as it was. The wash is the theme's accent container,
+   so it reads on both schemes, and the reduced-motion block turns it into an
+   instant state change. */
+.take-row.is-fresh {
+    animation: take-fresh 1.6s ease-out;
+}
+
+@keyframes take-fresh {
+    from {
+        background-color: var(--accent-container);
+    }
+
+    to {
+        background-color: transparent;
+    }
+}
+
 /* Expiry + the two actions ride together as one group, so on a narrow row the
    group can drop below the name instead of squeezing it. */
 .take-actions {

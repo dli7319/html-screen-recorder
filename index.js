@@ -2262,6 +2262,7 @@
 			this.clearArmed = false;
 			this.clearLabel = "Clear";
 			this.filter = "all";
+			this.freshId = null;
 			this.sortAsc = false;
 			this.onDownloadAll = () => {
 				const takes = this.store.list();
@@ -2283,16 +2284,9 @@
 				});
 			};
 			this.onFilterClick = (e) => {
-				const btn = e.currentTarget;
-				const kind = btn.dataset.filter;
+				const kind = e.currentTarget.dataset.filter;
 				if (!kind) return;
-				this.filter = kind;
-				for (const b of this.filterBtns) {
-					const active = b === btn;
-					b.classList.toggle("is-active", active);
-					b.setAttribute("aria-pressed", String(active));
-				}
-				this.render();
+				this.setFilter(kind);
 			};
 			this.onSortToggle = () => {
 				this.sortAsc = !this.sortAsc;
@@ -2337,6 +2331,10 @@
 				window.clearInterval(this.expiryTimer);
 				this.expiryTimer = void 0;
 			}
+			if (this.freshTimer !== void 0) {
+				window.clearTimeout(this.freshTimer);
+				this.freshTimer = void 0;
+			}
 			this.list.replaceChildren();
 		}
 		/**
@@ -2372,9 +2370,48 @@
 			this.clearBtn.textContent = this.clearLabel;
 			this.clearBtn.classList.remove("is-armed");
 		}
+		/** Switch the view to one kind of take and move the pressed chip with it. */
+		setFilter(kind) {
+			this.filter = kind;
+			for (const b of this.filterBtns) {
+				const active = b.dataset.filter === kind;
+				b.classList.toggle("is-active", active);
+				b.setAttribute("aria-pressed", String(active));
+			}
+			this.render();
+		}
 		/** The takes to show: filtered by kind, then ordered by creation time. */
 		visibleTakes() {
 			return [...this.filter === "all" ? this.store.list() : this.store.list().filter((t) => t.kind === this.filter)].sort((a, b) => this.sortAsc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt);
+		}
+		/**
+		* Point the user at one take: bring its row into view and mark it fresh.
+		*
+		* This is the "View" half of the saved-take confirmation - the toast says a
+		* take landed in the gallery, which on a short viewport is below the fold,
+		* and this is how the promise "it is in Takes" is kept. The filter is widened
+		* first when the current view would hide the row, so the jump never lands on
+		* a list that does not contain what it was asked to show.
+		*/
+		reveal(takeId) {
+			if (!this.store.list().some((t) => t.id === takeId)) return;
+			if (!this.visibleTakes().some((t) => t.id === takeId)) this.setFilter("all");
+			this.freshId = takeId;
+			window.clearTimeout(this.freshTimer);
+			this.freshTimer = window.setTimeout(() => this.clearFresh(), 4e3);
+			this.render();
+			this.rowFor(takeId)?.scrollIntoView({ block: "nearest" });
+		}
+		/** Drop the fresh mark without rebuilding rows nobody is interacting with. */
+		clearFresh() {
+			this.freshId = null;
+			this.freshTimer = void 0;
+			this.list.querySelector(".take-row.is-fresh")?.classList.remove("is-fresh");
+		}
+		/** The rendered row for a take, if the current view shows it. */
+		rowFor(takeId) {
+			for (const el of this.list.querySelectorAll("[data-take-id]")) if (el.dataset.takeId === takeId) return el;
+			return null;
 		}
 		render() {
 			const takes = this.visibleTakes();
@@ -2390,6 +2427,7 @@
 			const row = document.createElement("div");
 			row.className = "take-row flex items-center gap-3 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0";
 			row.dataset.takeId = take.id;
+			if (take.id === this.freshId) row.classList.add("is-fresh");
 			const icon = document.createElement("button");
 			icon.type = "button";
 			icon.className = "take-thumb";
@@ -2818,21 +2856,40 @@
 		activeCountdown?.cancel();
 	}
 	/**
+	* Confirm a take landed and offer the jump to it.
+	*
+	* Saving a take is the one thing this app exists to do, and it was the one
+	* action that reported nothing: the row just appears in a gallery that sits
+	* below the fold on a short viewport, so "where did my clip go?" had no answer
+	* on screen. The shared toast names the take and says where it went, and
+	* "View" walks the user to the row. Filenames are shortened the same way the
+	* removal confirmations shorten them.
+	*/
+	function announceSaved(take) {
+		showToast(`Saved ${take.filename.length > 32 ? `${take.filename.slice(0, 31)}…` : take.filename} to Takes`, {
+			label: "View",
+			onClick: () => gallery.reveal(take.id)
+		});
+	}
+	/**
 	* Capture the preview's current frame as a PNG and file it as a take.
 	*
 	* Silent when there is nothing to capture - a shortcut should never throw up
 	* an error banner mid-take - but when it does land it goes to the gallery like
-	* a recording, so a screenshot cannot be lost by taking the next one.
+	* a recording and is confirmed like one, so a screenshot cannot be lost by
+	* taking the next one.
 	*/
 	async function captureScreenshot() {
 		const blob = await captureFrame(ui.videoPreview);
 		if (!blob) return;
-		attachThumbnail(takes.add({
+		const take = takes.add({
 			kind: "screenshot",
 			blob,
 			filename: timestampFilename("png"),
 			formatName: "PNG"
-		}), () => downscaleImage(blob));
+		});
+		announceSaved(take);
+		attachThumbnail(take, () => downscaleImage(blob));
 	}
 	/**
 	* Make a take's thumbnail and attach it, best-effort. Fired from the capture
@@ -2990,13 +3047,15 @@
 		const durationMs = stopwatch.elapsed();
 		stopwatch.stop();
 		const fixedBlob = await fixWebmDuration(blob, durationMs);
-		attachThumbnail(takes.add({
+		const take = takes.add({
 			kind: "recording",
 			blob: fixedBlob,
 			filename: timestampFilename(ext),
 			formatName: settings.getFormat().name,
 			durationMs
-		}), () => extractVideoThumbnail(fixedBlob, durationMs));
+		});
+		announceSaved(take);
+		attachThumbnail(take, () => extractVideoThumbnail(fixedBlob, durationMs));
 		ui.setRecordingState(false);
 		captureInFlight = false;
 	}
