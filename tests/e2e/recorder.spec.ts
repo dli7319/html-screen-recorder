@@ -286,3 +286,80 @@ test('confirms a saved take and jumps to its row on demand', async ({
   );
   await expect(page.locator('#toastAction')).toHaveText('View');
 });
+
+test('undo puts a removed take back in its own slot and it survives a reload', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  // Three stills in a known creation order (the default view is newest first).
+  await page.click('#shareBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  const createdIds: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    await page.waitForTimeout(25);
+    await page.click('#screenshotBtn');
+    await expect(rows).toHaveCount(createdIds.length + 1);
+    const id = (await rowIds(page)).find(
+      (x) => x !== null && !createdIds.includes(x)
+    );
+    expect(id).toBeTruthy();
+    createdIds.push(id as string);
+  }
+  const shown = [...createdIds].reverse();
+  expect(await rowIds(page)).toEqual(shown);
+
+  // Remove the middle row: the toast names it and offers the undo.
+  const gone = shown[1];
+  await rows.nth(1).locator('button', { hasText: 'Remove' }).click();
+  await expect(page.locator('#toastText')).toHaveText(/^Removed .+\.png$/);
+  await expect(page.locator('#toastAction')).toHaveText('Undo');
+  expect(await rowIds(page)).toEqual([shown[0], shown[2]]);
+
+  // Undo must be an exact put-back - the same id in the same slot - not a
+  // fresh re-add with a new id at the front.
+  await page.click('#toastAction');
+  expect(await rowIds(page)).toEqual(shown);
+  expect((await rowIds(page)).filter((id) => id === gone)).toHaveLength(1);
+
+  // The put-back is written through to the on-device cache, so the whole
+  // gallery - restored take included - is still in the same order after a
+  // full reload.
+  await page.reload();
+  expect(await rowIds(page)).toEqual(shown);
+});
+
+test('a removal the user keeps is gone for good after a reload', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  const createdIds: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    await page.waitForTimeout(25);
+    await page.click('#screenshotBtn');
+    await expect(rows).toHaveCount(createdIds.length + 1);
+    const id = (await rowIds(page)).find(
+      (x) => x !== null && !createdIds.includes(x)
+    );
+    expect(id).toBeTruthy();
+    createdIds.push(id as string);
+  }
+  const shown = [...createdIds].reverse();
+  expect(await rowIds(page)).toEqual(shown);
+
+  // Remove the newest row and simply let the Undo offer expire.
+  await rows.first().locator('button', { hasText: 'Remove' }).click();
+  await expect(page.locator('#toastText')).toHaveText(/^Removed .+\.png$/);
+  await expect(rows).toHaveCount(1);
+  expect(await rowIds(page)).toEqual([shown[1]]);
+
+  // The removal reached the cache, so the take does not come back on reload.
+  await page.reload();
+  await expect(rows).toHaveCount(1);
+  expect(await rowIds(page)).toEqual([shown[1]]);
+});
