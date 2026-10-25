@@ -351,6 +351,13 @@ async function handleShareScreen() {
     }
 
     visualizeAudio();
+
+    // "Record on share": skip the second click and start capturing the moment
+    // the share is live. startRecording() honours the countdown setting, so this
+    // is exactly what pressing Record would do - minus the extra step.
+    if (settings.getRecordOnShare()) {
+      startRecording();
+    }
   } catch (err: unknown) {
     console.error('Error sharing screen:', err);
     let errorMsg =

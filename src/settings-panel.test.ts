@@ -31,6 +31,7 @@ function renderSettings(): SettingsPanel {
     <input type="checkbox" id="micNoiseSuppression" checked />
     <input type="checkbox" id="micEchoCancellation" checked />
     <input type="checkbox" id="micAutoGain" checked />
+    <input type="checkbox" id="recordOnShareToggle" checked />
   `;
   return new SettingsPanel();
 }
@@ -38,6 +39,7 @@ function renderSettings(): SettingsPanel {
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 
 beforeEach(() => {
+  localStorage.clear();
   // jsdom has no MediaRecorder; populateFormats consults it to filter the list.
   vi.stubGlobal('MediaRecorder', {
     isTypeSupported: vi.fn().mockReturnValue(true),
@@ -421,5 +423,33 @@ describe('SettingsPanel microphone availability', () => {
     // The fader is deliberately outside the lock - it drives live gains - so
     // only the missing track can disable it.
     expect(($('micVolume') as HTMLInputElement).disabled).toBe(false);
+  });
+});
+
+describe('SettingsPanel record on share', () => {
+  it('defaults the toggle to on', () => {
+    const settings = renderSettings();
+    expect(($('recordOnShareToggle') as HTMLInputElement).checked).toBe(true);
+    expect(settings.getRecordOnShare()).toBe(true);
+  });
+
+  it('restores a saved opt-out into the toggle', () => {
+    localStorage.setItem('html-screen-recorder:recordOnShare', 'false');
+    const settings = renderSettings();
+    expect(($('recordOnShareToggle') as HTMLInputElement).checked).toBe(false);
+    expect(settings.getRecordOnShare()).toBe(false);
+  });
+
+  it('saves the preference when the toggle is flipped', () => {
+    renderSettings();
+    const toggle = $('recordOnShareToggle') as HTMLInputElement;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+
+    expect(localStorage.getItem('html-screen-recorder:recordOnShare')).toBe(
+      'false'
+    );
+    // A fresh panel (as after a reload) picks the opt-out back up.
+    expect(renderSettings().getRecordOnShare()).toBe(false);
   });
 });

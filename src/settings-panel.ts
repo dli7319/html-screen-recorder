@@ -1,4 +1,5 @@
 import { RecordingFormat } from './types';
+import * as preferences from './preferences';
 import {
   BITRATE_PRESETS,
   CaptureConstraints,
@@ -62,9 +63,23 @@ export class SettingsPanel {
   private micVolumeValue = document.getElementById(
     'micVolumeValue'
   ) as HTMLSpanElement;
+  private recordOnShareToggle = document.getElementById(
+    'recordOnShareToggle'
+  ) as HTMLInputElement;
   private locked = false;
   private systemAudioUnavailable = false;
   private micUnavailable = false;
+
+  constructor() {
+    // Restore the one persisted preference and keep it saved as it flips, so
+    // turning "record on share" off is a one-time choice rather than a chore.
+    if (this.recordOnShareToggle) {
+      this.recordOnShareToggle.checked = preferences.getRecordOnShare();
+      this.recordOnShareToggle.addEventListener('change', () =>
+        preferences.setRecordOnShare(this.recordOnShareToggle.checked)
+      );
+    }
+  }
 
   populateFormats(formats: RecordingFormat[]) {
     formats.forEach((format) => {
@@ -159,6 +174,11 @@ export class SettingsPanel {
   getCountdownSeconds(): number {
     const value = Number(this.countdownSelect.value);
     return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  /** Whether a share should start recording on its own (the saved preference). */
+  getRecordOnShare(): boolean {
+    return this.recordOnShareToggle?.checked ?? true;
   }
 
   getAudioConfig() {
