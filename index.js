@@ -1321,6 +1321,32 @@
 		}
 	};
 	//#endregion
+	//#region src/preferences.ts
+	/**
+	* On-device UI preferences that outlive a reload.
+	*
+	* Only the "record on share" behaviour is persisted today: it is a workflow
+	* preference the user sets once and expects to keep, unlike the capture
+	* settings which are re-choosable each session. localStorage is the right home
+	* for a small durable flag - the takes themselves use IndexedDB because they
+	* hold large blobs.
+	*/
+	const RECORD_ON_SHARE_KEY = "html-screen-recorder:recordOnShare";
+	/**
+	* Whether a share should start recording on its own.
+	*
+	* Defaults to ON: the whole point of sharing is to capture, so the second
+	* "Record" click is friction most people do not want. A null entry (never set)
+	* therefore reads true; only an explicit stored "false" turns it off.
+	*/
+	function getRecordOnShare() {
+		const raw = localStorage.getItem(RECORD_ON_SHARE_KEY);
+		return raw === null ? true : raw === "true";
+	}
+	function setRecordOnShare(on) {
+		localStorage.setItem(RECORD_ON_SHARE_KEY, String(on));
+	}
+	//#endregion
 	//#region src/settings-panel.ts
 	/**
 	* Everything the user configures before capturing: format, capture quality,
@@ -1348,9 +1374,14 @@
 			this.micVolume = document.getElementById("micVolume");
 			this.systemVolumeValue = document.getElementById("systemVolumeValue");
 			this.micVolumeValue = document.getElementById("micVolumeValue");
+			this.recordOnShareToggle = document.getElementById("recordOnShareToggle");
 			this.locked = false;
 			this.systemAudioUnavailable = false;
 			this.micUnavailable = false;
+			if (this.recordOnShareToggle) {
+				this.recordOnShareToggle.checked = getRecordOnShare();
+				this.recordOnShareToggle.addEventListener("change", () => setRecordOnShare(this.recordOnShareToggle.checked));
+			}
 		}
 		populateFormats(formats) {
 			formats.forEach((format) => {
@@ -1426,6 +1457,10 @@
 		getCountdownSeconds() {
 			const value = Number(this.countdownSelect.value);
 			return Number.isFinite(value) && value > 0 ? value : 0;
+		}
+		/** Whether a share should start recording on its own (the saved preference). */
+		getRecordOnShare() {
+			return this.recordOnShareToggle?.checked ?? true;
 		}
 		getAudioConfig() {
 			return {
@@ -2958,6 +2993,7 @@
 			videoTrack.addEventListener("ended", stopSharing);
 			if (audioConfig.micAudio && !shareResult.hasMic) ui.showError("Could not access microphone. Continuing without it.");
 			visualizeAudio();
+			if (settings.getRecordOnShare()) startRecording();
 		} catch (err) {
 			console.error("Error sharing screen:", err);
 			let errorMsg = "Could not start screen sharing. Please grant permission and try again.";
