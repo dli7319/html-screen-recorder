@@ -9,7 +9,18 @@ import { test, expect, type Page } from '@playwright/test';
  * → Stop → gallery path runs for real - including the IndexedDB persistence the
  * jsdom unit tests can't exercise.
  */
-async function stubDisplayMedia(page: Page): Promise<void> {
+async function stubDisplayMedia(
+  page: Page,
+  recordOnShare = false
+): Promise<void> {
+  // Pin the record-on-share preference so runs are deterministic: the manual
+  // Share -> Record tests get it OFF, and the auto-record tests below flip it ON.
+  await page.addInitScript((on: boolean) => {
+    localStorage.setItem(
+      'html-screen-recorder:recordOnShare',
+      on ? 'true' : 'false'
+    );
+  }, recordOnShare);
   await page.addInitScript(() => {
     const install = (): void => {
       if (!navigator.mediaDevices) return;
@@ -53,6 +64,37 @@ test('records a clip into the gallery and it survives a reload', async ({
 
   // The take is cached on-device: it must still be here after a full reload.
   await page.reload();
+  await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
+});
+
+test('starts recording on share by default, without a second click', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page, true); // record-on-share ON
+  await page.goto('/');
+
+  // Share alone - never touch Record - and capture is already under way.
+  await page.click('#shareBtn');
+  await expect(page.locator('#recordBtn')).toBeDisabled();
+
+  await page.waitForTimeout(1200);
+  await page.click('#stopBtn');
+  // A clip landed without a manual Record click.
+  await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
+});
+
+test('leaves recording manual when record-on-share is off', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page, false);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  // Share alone did not start capture: Record is still there to press by hand.
+  await expect(page.locator('#recordBtn')).toBeEnabled();
+  await page.click('#recordBtn');
+  await expect(page.locator('#recordBtn')).toBeDisabled();
+  await page.click('#stopBtn');
   await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
 });
 
