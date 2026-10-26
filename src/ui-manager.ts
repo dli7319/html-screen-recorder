@@ -108,6 +108,19 @@ export class UIManager {
   private runDuration = '';
 
   /**
+   * Whether a share is currently live.
+   *
+   * The teardown after a take stops has to know which phase to fall back to.
+   * A take can outlive its share: ending the share (the browser's own "Stop
+   * sharing", a track dying) stops the recorder first and tears the capture
+   * state down synchronously, and only then does the recorder's async stop
+   * callback report the finished clip. Falling back to the sharing phase
+   * unconditionally resurrected a "Sharing" pill over an empty stage - with
+   * Record and the crop opt-in armed against a stream that no longer existed.
+   */
+  private sharingActive = false;
+
+  /**
    * Reflect a live capture in the tab title, so a backgrounded tab still shows
    * the recorder is running - the one cue that survives switching away. The
    * pill is only visible while you are looking at the app; the title is not.
@@ -298,6 +311,7 @@ export class UIManager {
   }
 
   setSharingState(isSharing: boolean) {
+    this.sharingActive = isSharing;
     const toggle = (el: HTMLElement, show: boolean) =>
       el.classList.toggle('hidden', !show);
 
@@ -350,8 +364,12 @@ export class UIManager {
       if (this.cropCheckbox.checked) this.cropBox.classList.add('is-recording');
       if (icon) icon.style.display = 'none';
     } else {
-      // Still sharing - the pill and the primary action go back to that phase.
-      this.setPhase('sharing');
+      // Fall back to whatever is actually still going. The share that fed the
+      // take may have ended before the take did - see `sharingActive` - in
+      // which case this lands on idle and stays there, rather than claiming a
+      // share and re-arming the controls that only make sense with one.
+      const phase = this.sharingActive ? 'sharing' : 'idle';
+      this.setPhase(phase);
       this.setPausedState(false);
       this.clearStats();
       this.stopBtn.disabled = true;
@@ -360,9 +378,9 @@ export class UIManager {
       this.recordBtnText.textContent = 'Start Recording';
       if (icon) icon.style.display = 'inline-block';
 
-      this.recordBtn.disabled = false;
+      this.recordBtn.disabled = !this.sharingActive;
       this.shareBtn.disabled = false;
-      this.cropCheckbox.disabled = false;
+      this.cropCheckbox.disabled = !this.sharingActive;
     }
     this.syncTabTitle();
   }
