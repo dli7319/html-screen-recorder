@@ -1073,6 +1073,7 @@
 			this.recordingActive = false;
 			this.pausedActive = false;
 			this.runDuration = "";
+			this.sharingActive = false;
 		}
 		/**
 		* Drive the presentation state.
@@ -1223,6 +1224,7 @@
 			this.videoContainer.style.removeProperty("--preview-ar-k");
 		}
 		setSharingState(isSharing) {
+			this.sharingActive = isSharing;
 			const toggle = (el, show) => el.classList.toggle("hidden", !show);
 			if (isSharing) {
 				toggle(this.placeholder, false);
@@ -1269,16 +1271,17 @@
 				if (this.cropCheckbox.checked) this.cropBox.classList.add("is-recording");
 				if (icon) icon.style.display = "none";
 			} else {
-				this.setPhase("sharing");
+				const phase = this.sharingActive ? "sharing" : "idle";
+				this.setPhase(phase);
 				this.setPausedState(false);
 				this.clearStats();
 				this.stopBtn.disabled = true;
 				if (this.cropCheckbox.checked) this.cropBox.classList.remove("is-recording");
 				this.recordBtnText.textContent = "Start Recording";
 				if (icon) icon.style.display = "inline-block";
-				this.recordBtn.disabled = false;
+				this.recordBtn.disabled = !this.sharingActive;
 				this.shareBtn.disabled = false;
-				this.cropCheckbox.disabled = false;
+				this.cropCheckbox.disabled = !this.sharingActive;
 			}
 			this.syncTabTitle();
 		}
