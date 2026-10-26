@@ -153,13 +153,15 @@ describe('UIManager.setRecordingState', () => {
 
   it('restores every control and the button label afterwards', () => {
     const ui = renderUI();
+    ui.setSharingState(true);
     ui.updateStopwatch('02:11');
     ui.setRecordingState(true);
     ui.setRecordingState(false);
 
     // The pill is no longer hidden when recording stops: it answers "what is
     // the app doing" precisely when nothing is happening, so it stays visible
-    // and reports the phase it fell back to.
+    // and reports the phase it fell back to - still sharing, since the share
+    // outlived the take.
     expect($('status').classList.contains('hidden')).toBe(false);
     expect($('status').dataset.state).toBe('sharing');
     expect($('transport').dataset.phase).toBe('sharing');
@@ -170,8 +172,47 @@ describe('UIManager.setRecordingState', () => {
     expect(ui.cropBox.classList.contains('is-recording')).toBe(false);
   });
 
+  it('lands on idle when the share ended before the take stopped', () => {
+    const ui = renderUI();
+    const cropCheckbox = $('cropCheckbox') as HTMLInputElement;
+    ui.setSharingState(true);
+    ui.setRecordingState(true);
+    // The share dies first (browser "Stop sharing" -> track ended): the whole
+    // capture state is torn down synchronously, and the recorder's async stop
+    // callback only reports back afterwards.
+    ui.setSharingState(false);
+    ui.setRecordingState(false);
+
+    // Nothing is shared any more, so the UI must not claim it is - and the
+    // controls that need a live stream must stay inert.
+    expect($('status').dataset.state).toBe('idle');
+    expect($('transport').dataset.phase).toBe('idle');
+    expect($('statusText').textContent).toBe('Ready');
+    expect(($('recordBtn') as HTMLButtonElement).disabled).toBe(true);
+    expect(cropCheckbox.disabled).toBe(true);
+    // The Share button, on the other hand, is how the next capture starts.
+    expect(($('shareBtn') as HTMLButtonElement).disabled).toBe(false);
+    expect($('recordBtnText').textContent).toBe('Start Recording');
+  });
+
+  it('re-arms the controls when a new share starts after that', () => {
+    const ui = renderUI();
+    ui.setSharingState(true);
+    ui.setRecordingState(true);
+    ui.setSharingState(false);
+    ui.setRecordingState(false);
+
+    ui.setSharingState(true);
+
+    expect($('status').dataset.state).toBe('sharing');
+    expect($('statusText').textContent).toBe('Sharing');
+    expect(($('recordBtn') as HTMLButtonElement).disabled).toBe(false);
+    expect(($('cropCheckbox') as HTMLInputElement).disabled).toBe(false);
+  });
+
   it('keeps the status label in step with the phase after stopping', () => {
     const ui = renderUI();
+    ui.setSharingState(true);
     ui.setRecordingState(true);
     expect($('statusText').textContent).toBe('Recording...');
 
