@@ -954,6 +954,16 @@ kbd {
     flex: none;
 }
 
+/* A muted channel's fader kept its accent fill while everything else around it
+   - the name, the pct, the meter - went quiet, so the one control that reads
+   "level is live" was the only one still claiming the source was on. The fader
+   stays draggable while muted (the level a source returns at is worth setting
+   ahead of time), but it paints in the same --ink-muted as the rest of the
+   muted channel instead of the accent. */
+.source:not(:has(input:checked)) .level {
+    accent-color: var(--ink-muted);
+}
+
 .source .pct {
     font-size: 11px;
     font-variant-numeric: tabular-nums;
