@@ -339,6 +339,7 @@ export class UIManager {
       this.pipBtn.classList.add('hidden');
       this.pipBtn.classList.remove('flex');
       this.stopBtn.disabled = true;
+      this.pauseBtn.disabled = true;
       this.cropCheckbox.checked = false;
       this.cropCheckbox.disabled = true;
       toggle(this.cropContainer, false);
@@ -358,6 +359,10 @@ export class UIManager {
       this.setPhase('recording');
       this.setPausedState(false);
       this.stopBtn.disabled = false;
+      // Pause is a recording-time control: it is armed only while a take is
+      // running (and stays armed across a pause - that is the Resume button).
+      // Disabled icon buttons hide themselves, see styles.css.
+      this.pauseBtn.disabled = false;
       this.recordBtn.disabled = true;
       this.shareBtn.disabled = true;
       this.cropCheckbox.disabled = true;
@@ -373,6 +378,7 @@ export class UIManager {
       this.setPausedState(false);
       this.clearStats();
       this.stopBtn.disabled = true;
+      this.pauseBtn.disabled = true;
       if (this.cropCheckbox.checked)
         this.cropBox.classList.remove('is-recording');
       this.recordBtnText.textContent = 'Start Recording';
