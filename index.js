@@ -1248,6 +1248,7 @@
 				this.pipBtn.classList.add("hidden");
 				this.pipBtn.classList.remove("flex");
 				this.stopBtn.disabled = true;
+				this.pauseBtn.disabled = true;
 				this.cropCheckbox.checked = false;
 				this.cropCheckbox.disabled = true;
 				toggle(this.cropContainer, false);
@@ -1265,6 +1266,7 @@
 				this.setPhase("recording");
 				this.setPausedState(false);
 				this.stopBtn.disabled = false;
+				this.pauseBtn.disabled = false;
 				this.recordBtn.disabled = true;
 				this.shareBtn.disabled = true;
 				this.cropCheckbox.disabled = true;
@@ -1276,6 +1278,7 @@
 				this.setPausedState(false);
 				this.clearStats();
 				this.stopBtn.disabled = true;
+				this.pauseBtn.disabled = true;
 				if (this.cropCheckbox.checked) this.cropBox.classList.remove("is-recording");
 				this.recordBtnText.textContent = "Start Recording";
 				if (icon) icon.style.display = "inline-block";
