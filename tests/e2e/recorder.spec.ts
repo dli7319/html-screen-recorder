@@ -405,3 +405,114 @@ test('a removal the user keeps is gone for good after a reload', async ({
   await expect(rows).toHaveCount(1);
   expect(await rowIds(page)).toEqual([shown[1]]);
 });
+
+test('pausing freezes the clock and the saved take leaves the paused time out', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  const startedAt = Date.now();
+  await page.click('#recordBtn');
+
+  // Let the stopwatch tick before pausing so there is a reading to freeze.
+  await page.waitForTimeout(1300);
+
+  // The Pause control is armed for the running take and clickable - it used
+  // to stay hidden for the whole recording, leaving pause keyboard-only.
+  await expect(page.locator('#pauseBtn')).toBeVisible();
+  await expect(page.locator('#pauseBtn')).toBeEnabled();
+
+  // Pause surfaces the state on every control that tracks the phase.
+  await page.click('#pauseBtn');
+  await expect(page.locator('#pauseBtnText')).toHaveText('Resume');
+  await expect(page.locator('#statusText')).toHaveText('Paused');
+  await expect(page.locator('#statusDot')).toHaveClass(/is-paused/);
+  await expect(page).toHaveTitle(/Paused/);
+
+  // The clock is frozen: the reading in the Record button must not move at
+  // all across the pause, however long the pause lasts.
+  const clock = page.locator('#recordBtnText');
+  const frozen = await clock.textContent();
+  await page.waitForTimeout(4000);
+  expect(await clock.textContent()).toBe(frozen);
+
+  // Resume: the label falls back and the clock runs again. The readout ticks
+  // once a second, so give it room for the next tick to land.
+  await page.click('#pauseBtn');
+  await expect(page.locator('#pauseBtnText')).toHaveText('Pause');
+  await expect(page.locator('#statusText')).toHaveText('Recording...');
+  await expect(page.locator('#statusDot')).not.toHaveClass(/is-paused/);
+  const before = await clock.textContent();
+  await expect(clock).not.toHaveText(before ?? '', { timeout: 6000 });
+
+  await page.click('#stopBtn');
+  const wallSeconds = (Date.now() - startedAt) / 1000;
+
+  // The take reports only the time actually captured. The clock was frozen
+  // for 4s, so the reported length must lag the wall clock by roughly that
+  // much - a stopwatch that counted paused time would keep up with it.
+  // Parse the meta line, not the row: textContent glues the timestamp
+  // filename to the meta ("...mp400:01..."), which fools a colon regex.
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  const meta = rows.first().locator('p.text-xs');
+  const shown = /(\d+):(\d\d)/.exec((await meta.textContent()) ?? '');
+  expect(shown).not.toBeNull();
+  const reported =
+    Number((shown as RegExpExecArray)[1]) * 60 +
+    Number((shown as RegExpExecArray)[2]);
+  expect(reported).toBeGreaterThanOrEqual(1);
+  expect(reported).toBeLessThanOrEqual(6);
+  expect(wallSeconds - reported).toBeGreaterThan(2);
+
+  // The exclusion reaches the file, not just the label: the repaired clip
+  // plays for the captured length, not the wall clock.
+  await page.click('#takeList .take-thumb');
+  await expect(page.locator('#previewModal')).toBeVisible();
+  const clip = page.locator('#previewMedia video');
+  await expect(clip).toBeVisible();
+  const duration = await clip.evaluate(
+    (v) =>
+      new Promise<number>((resolve) => {
+        if (Number.isFinite(v.duration)) resolve(v.duration);
+        else
+          v.addEventListener('loadedmetadata', () => resolve(v.duration), {
+            once: true,
+          });
+      })
+  );
+  expect(duration).toBeGreaterThan(0.5);
+  expect(duration).toBeLessThan(wallSeconds - 2);
+});
+
+test('stopping while paused still saves the take', async ({ page }) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  await page.click('#recordBtn');
+  await page.waitForTimeout(1300);
+  await page.click('#pauseBtn');
+  await expect(page.locator('#statusText')).toHaveText('Paused');
+
+  // Stop straight from the paused state - MediaRecorder is in its distinct
+  // 'paused' state here, and the take must still be assembled and saved.
+  await page.click('#stopBtn');
+
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  await expect(page.locator('#toastText')).toHaveText(/^Saved .+ to Takes$/);
+
+  // The paused presentation clears with the take, and the control retires
+  // with it: at rest it is hidden again, not left as a dead button.
+  await expect(page.locator('#pauseBtnText')).toHaveText('Pause');
+  await expect(page.locator('#pauseBtn')).toBeHidden();
+  await expect(page.locator('#statusDot')).not.toHaveClass(/is-paused/);
+  await expect(page.locator('#statusText')).toHaveText('Sharing');
+
+  // It reached the on-device cache: still there after a full reload.
+  await page.reload();
+  await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
+});

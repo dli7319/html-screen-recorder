@@ -43,7 +43,7 @@ function renderUI(): UIManager {
       <div id="statusDot" class="status-dot"></div>
       <span id="statusText">Recording...</span>
       <span id="statsText"></span>
-      <button id="pauseBtn">
+      <button id="pauseBtn" disabled>
         <svg><use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use></svg>
         <span id="pauseBtnText">Pause</span>
       </button>
@@ -149,6 +149,41 @@ describe('UIManager.setRecordingState', () => {
     expect(($('shareBtn') as HTMLButtonElement).disabled).toBe(true);
     expect(cropCheckbox.disabled).toBe(true);
     expect(ui.cropBox.classList.contains('is-recording')).toBe(true);
+  });
+
+  it('arms the pause control only while the take is running', () => {
+    const ui = renderUI();
+    const pauseBtn = $('pauseBtn') as HTMLButtonElement;
+
+    // At rest it is disabled, and styles.css hides disabled icon buttons -
+    // there is nothing to pause, so the control must not show as a broken
+    // button. The markup ships it in exactly this state.
+    expect(pauseBtn.disabled).toBe(true);
+
+    ui.setRecordingState(true);
+    expect(pauseBtn.disabled).toBe(false);
+
+    // A paused take still needs the control: it is the Resume button.
+    ui.setPausedState(true);
+    expect(pauseBtn.disabled).toBe(false);
+
+    ui.setRecordingState(false);
+    expect(pauseBtn.disabled).toBe(true);
+  });
+
+  it('disarms pause as soon as the share dies mid-take', () => {
+    const ui = renderUI();
+    const pauseBtn = $('pauseBtn') as HTMLButtonElement;
+    ui.setSharingState(true);
+    ui.setRecordingState(true);
+    expect(pauseBtn.disabled).toBe(false);
+
+    // The browser-side share ends first; the whole capture state tears down
+    // synchronously and the control must go with it, not linger armed.
+    ui.setSharingState(false);
+    expect(pauseBtn.disabled).toBe(true);
+    ui.setRecordingState(false);
+    expect(pauseBtn.disabled).toBe(true);
   });
 
   it('restores every control and the button label afterwards', () => {
@@ -523,6 +558,7 @@ describe('UIManager.bindEvents', () => {
     // Disabled buttons do not fire click in jsdom, matching real browsers.
     ($('screenshotBtn') as HTMLButtonElement).disabled = false;
     ($('pipBtn') as HTMLButtonElement).disabled = false;
+    ($('pauseBtn') as HTMLButtonElement).disabled = false;
 
     $('shareBtn').click();
     $('recordBtn').click();
