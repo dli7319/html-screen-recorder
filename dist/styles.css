@@ -1895,6 +1895,16 @@ kbd {
     width: 120px;
 }
 
+/* A locked select must READ as locked. `.drawer select` styles the control
+   itself - colours included - which overrides the browser's disabled
+   rendering and left a greyed-out select looking exactly like a live one when
+   the capture-time settings lock during a share. The muted ink keeps the
+   house 4.5:1 floor: a lock is a state, not an unreadable label. */
+.drawer select:disabled {
+    color: var(--ink-disabled);
+    cursor: not-allowed;
+}
+
 .row3 {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;

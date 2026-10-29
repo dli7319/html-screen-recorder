@@ -338,6 +338,12 @@ async function handleShareScreen() {
     await ui.videoPreview.play();
 
     ui.setSharingState(true);
+    // The capture-time settings are fixed for the life of the share - the
+    // stream's tracks and audio graph were built from them, and a change here
+    // would silently do nothing until the next share. setLocked greys them out
+    // so the panel stops accepting edits it cannot honour; the settings that
+    // govern the next take (bitrate, countdown, record-on-share) stay live.
+    settings.setLocked(true);
 
     const [videoTrack] = stream.getVideoTracks();
     syncPreviewAspect();
@@ -536,6 +542,9 @@ async function stopSharing() {
   ui.setSharingState(false);
   settings.setSystemAudioAvailable(true);
   settings.setMicAvailable(true);
+  // The capture-time settings are editable again: whatever the next share
+  // captures is decided from the panel now.
+  settings.setLocked(false);
   cropper.hide();
 }
 
