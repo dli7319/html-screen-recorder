@@ -487,6 +487,85 @@ test('pausing freezes the clock and the saved take leaves the paused time out', 
   expect(duration).toBeLessThan(wallSeconds - 2);
 });
 
+test('locks the capture-time settings while a share is live', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  // The settings that are baked into the shared stream when the share starts:
+  // the container/codec, the track's resolution and frame rate, and the audio
+  // inputs with their conditioning. The next-take settings - bitrate and
+  // countdown - are the contrast: they apply to a take, not to the share.
+  const captureTime = [
+    '#formatSelect',
+    '#resolutionSelect',
+    '#frameRateSelect',
+    '#systemAudioToggle',
+    '#micAudioToggle',
+    '#micNoiseSuppression',
+    '#micEchoCancellation',
+    '#micAutoGain',
+  ];
+  const nextTake = ['#bitrateSelect', '#countdownSelect'];
+
+  // Before a share exists, everything is editable.
+  await page.click('#openSettings');
+  await expect(page.locator('body')).toHaveAttribute('data-panel', 'open');
+  for (const id of [...captureTime, ...nextTake]) {
+    await expect(page.locator(id)).toBeEnabled();
+  }
+
+  // While the share is live the capture-time controls are greyed out: editing
+  // them cannot change the stream that already exists, and accepting the input
+  // silently would make the panel lie. They used to stay editable throughout.
+  await page.click('#closeSettings');
+  await page.click('#shareBtn');
+  await page.click('#openSettings');
+  for (const id of captureTime) {
+    await expect(page.locator(id)).toBeDisabled();
+  }
+  for (const id of nextTake) {
+    await expect(page.locator(id)).toBeEnabled();
+  }
+
+  // The lock has to be visible too: the drawer styles its own selects, which
+  // otherwise overrides the browser's disabled rendering and leaves a locked
+  // control looking live. The locked control must render in different ink
+  // from the next-take control beside it.
+  const lockedInk = await page
+    .locator('#formatSelect')
+    .evaluate((el) => getComputedStyle(el).color);
+  const liveInk = await page
+    .locator('#bitrateSelect')
+    .evaluate((el) => getComputedStyle(el).color);
+  expect(lockedInk).not.toBe(liveInk);
+
+  // Stop sharing and the whole panel is editable again - the next share is
+  // decided from these very controls. The share ends the way it does outside
+  // the app: the browser's own "Stop sharing" kills the captured track and the
+  // UA fires its 'ended' event, which is what the app tears the capture down
+  // on. (A script-side track.stop() deliberately does not dispatch 'ended' -
+  // that event is the UA's signal - so the test stands in for the user's click
+  // by firing it. The transport hides its own share control while a share is
+  // live - one prominent button per phase - so there is no in-page stop.)
+  await page.click('#closeSettings');
+  await page.evaluate(() => {
+    const preview = document.getElementById(
+      'videoPreview'
+    ) as HTMLVideoElement | null;
+    const live = preview?.srcObject as MediaStream | null;
+    for (const track of live?.getTracks() ?? []) {
+      track.stop();
+      track.dispatchEvent(new Event('ended'));
+    }
+  });
+  await page.click('#openSettings');
+  for (const id of [...captureTime, ...nextTake]) {
+    await expect(page.locator(id)).toBeEnabled();
+  }
+});
+
 test('stopping while paused still saves the take', async ({ page }) => {
   await stubDisplayMedia(page);
   await page.goto('/');
