@@ -2994,6 +2994,7 @@
 			ui.videoPreview.srcObject = stream;
 			await ui.videoPreview.play();
 			ui.setSharingState(true);
+			settings.setLocked(true);
 			const [videoTrack] = stream.getVideoTracks();
 			syncPreviewAspect();
 			videoTrack.addEventListener("ended", stopSharing);
@@ -3125,6 +3126,7 @@
 		ui.setSharingState(false);
 		settings.setSystemAudioAvailable(true);
 		settings.setMicAvailable(true);
+		settings.setLocked(false);
 		cropper.hide();
 	}
 	function visualizeAudio() {
