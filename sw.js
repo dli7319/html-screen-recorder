@@ -1,5 +1,5 @@
 (function() {
-	//#region src/sw-core.ts
+	// src/sw-core.ts
 	/**
 	* Service worker logic, free of side effects so it can be unit tested.
 	*
@@ -45,8 +45,7 @@
 		}
 		return true;
 	}
-	//#endregion
-	//#region src/sw.ts
+	// src/sw.ts
 	/**
 	* Service worker.
 	*
@@ -74,7 +73,7 @@
 	* instead and the user picks the moment.
 	*/
 	const PRECACHE_MANIFEST = ["./index.html","./index.js","./styles.css","./tailwind.css","./icons.svg","./manifest.json","./fonts/roboto-latin.woff2","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-512-maskable.png","./icons/apple-touch-icon.png"];
-	const CACHE_VERSION = "7edd5635a097";
+	const CACHE_VERSION = "16a12b3ee983";
 	const PRECACHE = parsePrecache(PRECACHE_MANIFEST);
 	const CACHE = cacheName(CACHE_VERSION);
 	self.addEventListener("message", (event) => {
@@ -107,5 +106,4 @@
 			return cached ?? network;
 		}));
 	});
-	//#endregion
 })();

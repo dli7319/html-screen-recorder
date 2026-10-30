@@ -1,5 +1,5 @@
 (function() {
-	//#region src/quality.ts
+	// src/quality.ts
 	/**
 	* `Auto` entries map to "set nothing" so the browser picks. That is the right
 	* default for screen capture: the ideal settings depend on the content, the
@@ -108,8 +108,7 @@
 		if (capture.frameRate) dims.push(`${capture.frameRate}fps`);
 		return `${dims.length ? dims.join(" ") : "Source"} · ${encoder.videoBitsPerSecond ? `${(encoder.videoBitsPerSecond / 1e6).toFixed(1)} Mbps` : "Auto"}`;
 	}
-	//#endregion
-	//#region src/screen-share.ts
+	// src/screen-share.ts
 	async function shareScreen(wantsSystemAudio, mic, capture = {}) {
 		const finalStream = new MediaStream();
 		const displayStream = await navigator.mediaDevices.getDisplayMedia({
@@ -160,8 +159,7 @@
 			audioContext
 		};
 	}
-	//#endregion
-	//#region src/recorder.ts
+	// src/recorder.ts
 	/**
 	* How often MediaRecorder hands back a chunk.
 	*
@@ -223,8 +221,7 @@
 			return this.isRecording() || this.isPaused();
 		}
 	};
-	//#endregion
-	//#region src/cropper.ts
+	// src/cropper.ts
 	var Cropper = class {
 		constructor(cropBox, cropTargetElement, videoContainer, videoPreview) {
 			this.cropBox = cropBox;
@@ -384,8 +381,7 @@
 			window.addEventListener("mouseup", this.onCropBoxMouseUp);
 		}
 	};
-	//#endregion
-	//#region src/constants.ts
+	// src/constants.ts
 	const FORMATS_TO_CHECK = [
 		{
 			name: "AV1 + Opus (MP4)",
@@ -418,8 +414,7 @@
 			ext: "mp4"
 		}
 	];
-	//#endregion
-	//#region src/filename.ts
+	// src/filename.ts
 	/**
 	* Build the download name for a capture: a sortable, collision-resistant
 	* `YYYYMMDDHHmmss` stamp plus the container extension.
@@ -451,8 +446,7 @@
 		if (!ext || name.includes(".")) return name;
 		return `${name}.${ext}`;
 	}
-	//#endregion
-	//#region src/format.ts
+	// src/format.ts
 	/**
 	* Display formatting for the live recording stats. Pure functions, so the exact
 	* output the user sees is pinned by tests rather than eyeballed.
@@ -522,8 +516,7 @@
 		if (remainingMs < DAY) return "is-soon";
 		return "";
 	}
-	//#endregion
-	//#region src/shortcuts.ts
+	// src/shortcuts.ts
 	/** Targets where a bare letter must stay a letter, not a command. */
 	function isTypingTarget(target) {
 		if (!(target instanceof HTMLElement)) return false;
@@ -578,8 +571,7 @@
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}
-	//#endregion
-	//#region src/screenshot.ts
+	// src/screenshot.ts
 	/**
 	* Still-frame capture. Grabs the preview's current frame as a PNG, and the
 	* output plumbing it needs (a download, a clipboard copy) - which the
@@ -654,8 +646,7 @@
 		anchor.remove();
 		setTimeout(() => URL.revokeObjectURL(url), 1e3);
 	}
-	//#endregion
-	//#region src/countdown.ts
+	// src/countdown.ts
 	function runCountdown(options) {
 		const { seconds, onTick, onDone, onCancel } = options;
 		let timerId = null;
@@ -693,8 +684,7 @@
 			}
 		};
 	}
-	//#endregion
-	//#region src/pip.ts
+	// src/pip.ts
 	var PictureInPicture = class {
 		constructor(video, options = {}) {
 			this.video = video;
@@ -756,8 +746,7 @@
 			document.removeEventListener("leavepictureinpicture", this.onLeave);
 		}
 	};
-	//#endregion
-	//#region src/stopwatch.ts
+	// src/stopwatch.ts
 	var Stopwatch = class {
 		constructor() {
 			this.startTime = 0;
@@ -810,8 +799,7 @@
 			this.startTime = 0;
 		}
 	};
-	//#endregion
-	//#region src/webm-duration.ts
+	// src/webm-duration.ts
 	/**
 	* MediaRecorder's WebM output omits the EBML `Duration` element, so players and
 	* editors report the recording as `Infinity` (or refuse to seek). This writes the
@@ -987,8 +975,7 @@
 			return blob;
 		}
 	}
-	//#endregion
-	//#region src/focus-trap.ts
+	// src/focus-trap.ts
 	/**
 	* Keep keyboard focus inside a modal while it is open.
 	*
@@ -1028,8 +1015,7 @@
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
 	}
-	//#endregion
-	//#region src/ui-manager.ts
+	// src/ui-manager.ts
 	/**
 	* The transport and status surface: the preview, the share/record/stop/pause
 	* controls, and the status row.
@@ -1326,8 +1312,7 @@
 			if (visualizer) visualizer.style.width = `${Math.min(100, Math.max(0, level * 100))}%`;
 		}
 	};
-	//#endregion
-	//#region src/preferences.ts
+	// src/preferences.ts
 	/**
 	* On-device UI preferences that outlive a reload.
 	*
@@ -1352,8 +1337,7 @@
 	function setRecordOnShare(on) {
 		localStorage.setItem(RECORD_ON_SHARE_KEY, String(on));
 	}
-	//#endregion
-	//#region src/settings-panel.ts
+	// src/settings-panel.ts
 	/**
 	* Everything the user configures before capturing: format, capture quality,
 	* and the audio inputs.
@@ -1570,8 +1554,7 @@
 			else chip.removeAttribute("title");
 		}
 	};
-	//#endregion
-	//#region src/takes.ts
+	// src/takes.ts
 	/**
 	* A cache that is full, disabled (some private windows), or simply slow must
 	* never break a capture: the take is still made, still listed, still
@@ -1773,8 +1756,7 @@
 			for (const listener of listeners) listener();
 		}
 	};
-	//#endregion
-	//#region src/take-cache.ts
+	// src/take-cache.ts
 	const TAKE_TTL_MS = 2592e6;
 	const DB_NAME = "html-screen-recorder";
 	const DB_VERSION = 1;
@@ -1855,8 +1837,7 @@
 	function recordExpired(record, cutoff) {
 		return record.createdAt < cutoff;
 	}
-	//#endregion
-	//#region src/toast.ts
+	// src/toast.ts
 	let timer;
 	/** When the armed timer would fire, if it were not being held. */
 	let deadline = 0;
@@ -1986,8 +1967,7 @@
 			btn.classList.add("hidden");
 		}
 	}
-	//#endregion
-	//#region src/preview-modal.ts
+	// src/preview-modal.ts
 	/**
 	* The aspect the media box takes. The box itself is sized in CSS from these
 	* variables (falling back to 16:9), so setting them keeps a clip's own shape
@@ -2282,8 +2262,7 @@
 			this.nextBtn.disabled = idx >= total - 1;
 		}
 	};
-	//#endregion
-	//#region src/gallery-view.ts
+	// src/gallery-view.ts
 	/**
 	* Renders the take list and its actions.
 	*
@@ -2695,8 +2674,7 @@
 			bitmap.close();
 		}
 	}
-	//#endregion
-	//#region src/pwa.ts
+	// src/pwa.ts
 	/**
 	* Activate a waiting worker and run `onceControlled` afterwards.
 	*
@@ -2763,8 +2741,7 @@
 			});
 		} catch {}
 	}
-	//#endregion
-	//#region src/unload-guard.ts
+	// src/unload-guard.ts
 	/**
 	* Warn before the page unloads while a capture is still in flight.
 	*
@@ -2786,8 +2763,7 @@
 		window.addEventListener("beforeunload", handler);
 		return () => window.removeEventListener("beforeunload", handler);
 	}
-	//#endregion
-	//#region src/index.ts
+	// src/index.ts
 	const ui = new UIManager();
 	const settings = new SettingsPanel();
 	const takes = new TakeStore(new TakeCache());
@@ -3154,5 +3130,4 @@
 			cropper.hide();
 		}
 	}
-	//#endregion
 })();
