@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UIManager } from './ui-manager';
+import { runCountdown } from './countdown';
 
 /**
  * The exact element ids UIManager looks up in its constructor. Keeping the
@@ -575,6 +576,81 @@ describe('UIManager.bindEvents', () => {
     expect(onPause).toHaveBeenCalledOnce();
     expect(onScreenshot).toHaveBeenCalledOnce();
     expect(onPip).toHaveBeenCalledOnce();
+  });
+});
+
+describe('UIManager settings drawer Escape', () => {
+  // Escape serves both the drawer and a running countdown. While a count is
+  // on it owns the key (the shortcuts layer cancels it), so the drawer must
+  // wait for the next press instead of closing as collateral on the same one.
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // The panel state lives on <body>, which outlives each test's markup.
+    delete document.body.dataset.panel;
+  });
+
+  afterEach(() => {
+    // Drain any countdown left ticking so its claim on Escape cannot leak
+    // into the tests that follow.
+    vi.runAllTimers();
+    vi.useRealTimers();
+    delete document.body.dataset.panel;
+  });
+
+  /** Wire the controls and open the drawer the way the header button does. */
+  function openDrawer() {
+    const ui = renderUI();
+    ui.bindEvents({
+      onShare: () => {},
+      onRecord: () => {},
+      onStop: () => {},
+      onCropToggle: () => {},
+      onPause: () => {},
+      onScreenshot: () => {},
+      onPip: () => {},
+    });
+    $('openSettings').click();
+    expect(document.body.dataset.panel).toBe('open');
+  }
+
+  const pressEscape = () =>
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+
+  it('closes the drawer when nothing is counting', () => {
+    openDrawer();
+
+    pressEscape();
+
+    expect(document.body.dataset.panel).toBe('closed');
+  });
+
+  it('leaves the drawer open while a countdown owns Escape, then closes on the next press', () => {
+    openDrawer();
+
+    const countdown = runCountdown({ seconds: 3, onDone: vi.fn() });
+    pressEscape();
+    expect(document.body.dataset.panel).toBe('open');
+
+    // The same keypress reaches the shortcuts layer, which cancels the count;
+    // with it gone, Escape belongs to the drawer again.
+    countdown.cancel();
+    pressEscape();
+    expect(document.body.dataset.panel).toBe('closed');
+  });
+
+  it('closes the drawer again once a countdown ends on its own', () => {
+    openDrawer();
+
+    runCountdown({ seconds: 1, onDone: vi.fn() });
+    pressEscape();
+    expect(document.body.dataset.panel).toBe('open');
+
+    vi.advanceTimersByTime(1000);
+    pressEscape();
+    expect(document.body.dataset.panel).toBe('closed');
   });
 });
 

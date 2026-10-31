@@ -7,6 +7,7 @@ import {
 } from './screenshot';
 import { trapFocus } from './focus-trap';
 import { showToast } from './toast';
+import { countdownRunning } from './countdown';
 
 /**
  * The aspect the media box takes. The box itself is sized in CSS from these
@@ -259,6 +260,11 @@ export class TakePreview {
     // through takes mid-edit.
     if (this.renaming) return;
     if (e.key === 'Escape') {
+      // While a countdown runs, Escape belongs to it (see shortcuts.ts and the
+      // settings drawer in ui-manager.ts): this press cancels the count and
+      // leaves the dialog for the next one. A press meant to abort the 3-2-1
+      // must not also throw away the take being previewed.
+      if (countdownRunning()) return;
       this.close();
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       // While the clip's own player has focus the arrows belong to it: they

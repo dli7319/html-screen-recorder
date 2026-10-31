@@ -26,17 +26,49 @@ export interface CountdownHandle {
   isActive(): boolean;
 }
 
+/**
+ * How many countdowns are ticking right now.
+ *
+ * Escape is shared between cancelling a countdown and dismissing an open
+ * dialog, and one keypress was doing both - a press meant to close the
+ * settings drawer (or the preview) silently killed the 3-2-1 along with it.
+ * The dialogs ask {@link countdownRunning} before treating Escape as theirs,
+ * so while a count is on, Escape cancels it and leaves the dialog for the
+ * next press. Counted rather than flagged so a replaced or abandoned handle
+ * can never leave the signal stuck on.
+ */
+let ticking = 0;
+
+/**
+ * True while a countdown is still counting down. False the moment it is done
+ * or cancelled - including the synchronous "countdown off" case, which never
+ * ticks at all.
+ */
+export function countdownRunning(): boolean {
+  return ticking > 0;
+}
+
 export function runCountdown(options: CountdownOptions): CountdownHandle {
   const { seconds, onTick, onDone, onCancel } = options;
 
   let timerId: number | null = null;
   let finished = false;
   let cancelled = false;
+  ticking += 1;
+
+  /** Drop this countdown's claim on the running signal, exactly once. */
+  const release = () => {
+    ticking -= 1;
+  };
 
   const finish = () => {
     if (finished || cancelled) return;
     finished = true;
     timerId = null;
+    // Released before the callback so anything the callback triggers sees the
+    // countdown as gone - `onDone` starts a capture, and Escape during that
+    // setup must not think a count is still owning the key.
+    release();
     onDone();
   };
 
@@ -70,6 +102,7 @@ export function runCountdown(options: CountdownOptions): CountdownHandle {
         window.clearTimeout(timerId);
         timerId = null;
       }
+      release();
       onCancel?.();
     },
     isActive() {
