@@ -647,15 +647,41 @@
 		setTimeout(() => URL.revokeObjectURL(url), 1e3);
 	}
 	// src/countdown.ts
+	/**
+	* How many countdowns are ticking right now.
+	*
+	* Escape is shared between cancelling a countdown and dismissing an open
+	* dialog, and one keypress was doing both - a press meant to close the
+	* settings drawer (or the preview) silently killed the 3-2-1 along with it.
+	* The dialogs ask {@link countdownRunning} before treating Escape as theirs,
+	* so while a count is on, Escape cancels it and leaves the dialog for the
+	* next press. Counted rather than flagged so a replaced or abandoned handle
+	* can never leave the signal stuck on.
+	*/
+	let ticking = 0;
+	/**
+	* True while a countdown is still counting down. False the moment it is done
+	* or cancelled - including the synchronous "countdown off" case, which never
+	* ticks at all.
+	*/
+	function countdownRunning() {
+		return ticking > 0;
+	}
 	function runCountdown(options) {
 		const { seconds, onTick, onDone, onCancel } = options;
 		let timerId = null;
 		let finished = false;
 		let cancelled = false;
+		ticking += 1;
+		/** Drop this countdown's claim on the running signal, exactly once. */
+		const release = () => {
+			ticking -= 1;
+		};
 		const finish = () => {
 			if (finished || cancelled) return;
 			finished = true;
 			timerId = null;
+			release();
 			onDone();
 		};
 		const tick = (remaining) => {
@@ -677,6 +703,7 @@
 					window.clearTimeout(timerId);
 					timerId = null;
 				}
+				release();
 				onCancel?.();
 			},
 			isActive() {
@@ -1130,7 +1157,7 @@
 			closeBtn.addEventListener("click", () => setPanel(false));
 			scrim.addEventListener("click", () => setPanel(false));
 			document.addEventListener("keydown", (e) => {
-				if (e.key === "Escape" && shell.dataset.panel === "open") setPanel(false);
+				if (e.key === "Escape" && shell.dataset.panel === "open" && !countdownRunning()) setPanel(false);
 			});
 			advBtn.addEventListener("click", () => {
 				const open = shell.dataset.adv !== "open";
@@ -2010,8 +2037,10 @@
 			this.onKeyDown = (e) => {
 				if (this.currentId === null) return;
 				if (this.renaming) return;
-				if (e.key === "Escape") this.close();
-				else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+				if (e.key === "Escape") {
+					if (countdownRunning()) return;
+					this.close();
+				} else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
 					if (this.isPlayerTarget(e.target)) return;
 					e.preventDefault();
 					this.openRelative(e.key === "ArrowLeft" ? -1 : 1);
