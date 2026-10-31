@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TakePreview } from './preview-modal';
 import { Take, TakeStore } from './takes';
+import { runCountdown } from './countdown';
 
 const PREVIEW_MARKUP = `
   <main>
@@ -267,6 +268,61 @@ describe('TakePreview closing', () => {
     expect(() => preview.close()).not.toThrow();
 
     expect(document.body.dataset.preview).toBe(before);
+  });
+});
+
+describe('TakePreview closing while a countdown runs', () => {
+  // Escape is shared with the countdown; while a count is on it owns the key
+  // (the shortcuts layer cancels it), so the dialog waits for the next press
+  // instead of closing as collateral on the same keypress.
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    // Drain any countdown left ticking so its claim on Escape cannot leak
+    // into the tests that follow.
+    vi.runAllTimers();
+    vi.useRealTimers();
+  });
+
+  it('keeps the dialog open on the Escape that cancels the countdown', () => {
+    setup();
+    const take = addRecording();
+    preview.open(take);
+
+    const countdown = runCountdown({ seconds: 3, onDone: vi.fn() });
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(document.body.dataset.preview).toBe('open');
+
+    // The count is gone now (the shortcuts layer cancelled it on that press),
+    // so the next Escape belongs to the dialog.
+    countdown.cancel();
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(document.body.dataset.preview).toBe('closed');
+  });
+
+  it('closes again once the countdown ends on its own', () => {
+    setup();
+    const take = addRecording();
+    preview.open(take);
+
+    runCountdown({ seconds: 1, onDone: vi.fn() });
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(document.body.dataset.preview).toBe('open');
+
+    vi.advanceTimersByTime(1000);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+    expect(document.body.dataset.preview).toBe('closed');
   });
 });
 

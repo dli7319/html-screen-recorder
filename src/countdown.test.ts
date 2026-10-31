@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runCountdown } from './countdown';
+import { countdownRunning, runCountdown } from './countdown';
 
 beforeEach(() => {
   vi.useFakeTimers();
 });
 
 afterEach(() => {
+  // Let any countdown still ticking reach its end before the fake clock is
+  // dropped. A count abandoned mid-test would otherwise stay counted in the
+  // module and leak `countdownRunning()` into the tests that follow.
+  vi.runAllTimers();
   vi.useRealTimers();
 });
 
@@ -159,5 +163,55 @@ describe('runCountdown.isActive', () => {
   it('is false immediately when there is no countdown', () => {
     const handle = runCountdown({ seconds: 0, onDone: vi.fn() });
     expect(handle.isActive()).toBe(false);
+  });
+});
+
+describe('countdownRunning', () => {
+  // This is the signal the dialogs use to decide whether Escape is theirs or
+  // the countdown's - it must go up with the count and come back down on every
+  // way a count can end, or a dialog would stop closing for good.
+
+  it('is true while a count ticks and false once it is done', () => {
+    runCountdown({ seconds: 3, onDone: vi.fn() });
+    expect(countdownRunning()).toBe(true);
+
+    vi.advanceTimersByTime(1000);
+    expect(countdownRunning()).toBe(true);
+
+    vi.advanceTimersByTime(2000);
+    expect(countdownRunning()).toBe(false);
+  });
+
+  it('drops the signal when a count is cancelled', () => {
+    const handle = runCountdown({
+      seconds: 5,
+      onDone: vi.fn(),
+      onCancel: vi.fn(),
+    });
+    expect(countdownRunning()).toBe(true);
+
+    handle.cancel();
+    expect(countdownRunning()).toBe(false);
+  });
+
+  it('is false at once for the countdown-off case', () => {
+    // Zero and negative counts finish synchronously, so no keypress can ever
+    // find them owning Escape.
+    runCountdown({ seconds: 0, onDone: vi.fn() });
+    expect(countdownRunning()).toBe(false);
+
+    runCountdown({ seconds: -5, onDone: vi.fn() });
+    expect(countdownRunning()).toBe(false);
+  });
+
+  it('tracks counts independently, so one ending leaves the others running', () => {
+    const first = runCountdown({ seconds: 5, onDone: vi.fn() });
+    const second = runCountdown({ seconds: 5, onDone: vi.fn() });
+
+    first.cancel();
+    expect(countdownRunning()).toBe(true);
+
+    second.cancel();
+    expect(countdownRunning()).toBe(false);
   });
 });

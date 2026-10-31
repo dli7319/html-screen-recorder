@@ -1,4 +1,5 @@
 import { trapFocus } from './focus-trap';
+import { countdownRunning } from './countdown';
 
 /**
  * The transport and status surface: the preview, the share/record/stop/pause
@@ -199,8 +200,17 @@ export class UIManager {
     scrim.addEventListener('click', () => setPanel(false));
     document.addEventListener('keydown', (e) => {
       // Escape is already used to cancel a countdown; only close when one is
-      // not running and the drawer is open.
-      if (e.key === 'Escape' && shell.dataset.panel === 'open') setPanel(false);
+      // not running and the drawer is open. Otherwise a single keypress does
+      // two things at once: a press meant to close the drawer silently kills
+      // the running 3-2-1 as collateral. While a count is on, Escape belongs
+      // to it (the shortcuts layer cancels it) and the drawer waits for the
+      // next press.
+      if (
+        e.key === 'Escape' &&
+        shell.dataset.panel === 'open' &&
+        !countdownRunning()
+      )
+        setPanel(false);
     });
 
     advBtn.addEventListener('click', () => {
