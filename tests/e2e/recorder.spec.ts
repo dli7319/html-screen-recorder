@@ -125,6 +125,119 @@ test('opens a take in the preview modal', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-preview', 'open');
 });
 
+/** Arm a 3-second countdown through the settings drawer. */
+async function armCountdown(page: Page): Promise<void> {
+  await page.click('#openSettings');
+  await page.selectOption('#countdownSelect', '3');
+  await page.click('#closeSettings');
+}
+
+test('counts down before a recording and cancels from the Record button', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+  await armCountdown(page);
+
+  await page.click('#shareBtn');
+  await page.click('#recordBtn');
+
+  // The count is on screen where the capture will land, and the button that
+  // started it becomes the way to call it off.
+  await expect(page.locator('#countdownOverlay')).toBeVisible();
+  await expect(page.locator('#countdownNumber')).toHaveText('3');
+  await expect(page.locator('#recordBtnText')).toHaveText('Cancel');
+  await expect(page.locator('#countdownNumber')).toHaveText('2', {
+    timeout: 2500,
+  });
+
+  // Cancel mid-count: the overlay clears, the button reads as Record again,
+  // and the state a cancel leaves behind is clean.
+  await page.click('#recordBtn');
+  await expect(page.locator('#countdownOverlay')).toBeHidden();
+  await expect(page.locator('#recordBtnText')).toHaveText('Start Recording');
+
+  // Nothing was captured: no take lands now, and none lands late - waiting
+  // past the abandoned count must not resurrect it into a recording.
+  await page.waitForTimeout(3500);
+  await expect(page.locator('#takeList [data-take-id]')).toHaveCount(0);
+  await expect(page.locator('#statusText')).toHaveText('Sharing');
+});
+
+test('Escape during a countdown cancels the count and leaves the dialog for the next press', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+  await armCountdown(page);
+
+  await page.click('#shareBtn');
+  await page.click('#recordBtn');
+  await expect(page.locator('#countdownNumber')).toHaveText('3');
+
+  // A dialog is up while the count runs - exactly when one Escape used to do
+  // two jobs at once, closing the drawer and killing the 3-2-1 as collateral.
+  await page.click('#openSettings');
+  await expect(page.locator('body')).toHaveAttribute('data-panel', 'open');
+
+  await page.keyboard.press('Escape');
+  // The first press belongs to the countdown...
+  await expect(page.locator('#countdownOverlay')).toBeHidden();
+  await expect(page.locator('#recordBtnText')).toHaveText('Start Recording');
+  // ...and the drawer waits for the next one.
+  await expect(page.locator('body')).toHaveAttribute('data-panel', 'open');
+
+  // The cancelled count never turns into a recording.
+  await page.waitForTimeout(3500);
+  await expect(page.locator('#takeList [data-take-id]')).toHaveCount(0);
+  await expect(page.locator('#statusText')).toHaveText('Sharing');
+
+  // The second press closes the drawer.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('body')).not.toHaveAttribute('data-panel', 'open');
+});
+
+test('a finished countdown starts the recording with the count left out of its length', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+  await armCountdown(page);
+
+  await page.click('#shareBtn');
+  const pressedAt = Date.now();
+  await page.click('#recordBtn');
+
+  // The count really runs before capture: the take must not be recording
+  // while the overlay is up.
+  await expect(page.locator('#countdownOverlay')).toBeVisible();
+  await expect(page.locator('#statusText')).toHaveText('Sharing');
+  await expect(page.locator('#statusText')).toHaveText(/^Recording/, {
+    timeout: 8000,
+  });
+  await expect(page.locator('#countdownOverlay')).toBeHidden();
+  expect(Date.now() - pressedAt).toBeGreaterThanOrEqual(2500);
+
+  // Capture for a moment after the count, then stop.
+  await page.waitForTimeout(1500);
+  await page.click('#stopBtn');
+  const wallSeconds = (Date.now() - pressedAt) / 1000;
+
+  // The 3-second count is not part of the take: the reported length tracks
+  // the captured time, lagging the wall clock by roughly the countdown.
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  const meta = rows.first().locator('p.text-xs');
+  const shown = /(\d+):(\d\d)/.exec((await meta.textContent()) ?? '');
+  expect(shown).not.toBeNull();
+  const reported =
+    Number((shown as RegExpExecArray)[1]) * 60 +
+    Number((shown as RegExpExecArray)[2]);
+  expect(reported).toBeGreaterThanOrEqual(1);
+  expect(reported).toBeLessThanOrEqual(4);
+  expect(wallSeconds - reported).toBeGreaterThan(2);
+});
+
 /** Row ids in the order the gallery currently renders them. */
 function rowIds(page: Page) {
   return page
