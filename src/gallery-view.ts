@@ -1,4 +1,4 @@
-import { Take, TakeStore } from './takes';
+import { Take, TakeStore, type TakeKind } from './takes';
 import { TAKE_TTL_MS } from './take-cache';
 import {
   formatBytes,
@@ -190,6 +190,30 @@ export class GalleryView {
     this.setFilter(kind);
   };
 
+  /**
+   * Write each chip's count badge, or blank it while the gallery is empty.
+   *
+   * The numbers answer "how much is behind this chip" before it is clicked -
+   * the only place a zero reads as information rather than an empty result:
+   * an empty gallery has no count to give, so every badge blanks out entirely
+   * (the first visit should not announce three zeros), while a populated one
+   * can honestly show a chip that currently holds nothing.
+   *
+   * Counts are over the whole gallery, not the current view: the chips
+   * describe the filters, so "Recordings 3" stays true while "Screenshots" is
+   * the active filter.
+   */
+  private refreshChipCounts(hasAny: boolean) {
+    for (const chip of this.filterBtns) {
+      const badge = chip.querySelector<HTMLElement>('.chip-count');
+      const kind = chip.dataset.filter as TakeKind | 'all' | undefined;
+      if (!badge || !kind) continue;
+      const total =
+        kind === 'all' ? this.store.count() : this.store.byKind(kind).length;
+      badge.textContent = hasAny ? String(total) : '';
+    }
+  }
+
   /** Switch the view to one kind of take and move the pressed chip with it. */
   private setFilter(kind: 'all' | 'recording' | 'screenshot') {
     this.filter = kind;
@@ -276,6 +300,8 @@ export class GalleryView {
     this.count.textContent = takes.length
       ? `${takes.length} · ${formatBytes(takes.reduce((n, t) => n + t.size, 0))}`
       : '';
+
+    this.refreshChipCounts(hasAny);
 
     // Rebuild wholesale. The lists are small and this is far harder to get out
     // of sync than incremental patching.

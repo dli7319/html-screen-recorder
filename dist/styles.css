@@ -1221,6 +1221,25 @@ kbd {
     box-shadow: none;
 }
 
+/* What each filter would show, before it is clicked. Blanked (not "0") while
+   the gallery is empty: a first-visit page of three zeros is noise and the
+   empty state already says there is nothing. The badge stays neutral on the
+   active chip too, so the raised pill still reads as the current view. */
+.filter-chip .chip-count {
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    color: var(--ink-muted);
+    font: 400 10px/18px var(--font);
+    font-variant-numeric: tabular-nums;
+}
+
+.filter-chip .chip-count:empty {
+    display: none;
+}
+
 .sort-btn {
     margin-left: auto;
     border: 1px solid var(--border);
