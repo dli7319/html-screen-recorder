@@ -12,9 +12,9 @@ const GALLERY_MARKUP = `
     <button id="clearTakesBtn" disabled></button>
     <div class="takes-tools">
       <div class="filter-group">
-        <button type="button" class="filter-chip is-active" data-filter="all"></button>
-        <button type="button" class="filter-chip" data-filter="recording"></button>
-        <button type="button" class="filter-chip" data-filter="screenshot"></button>
+        <button type="button" class="filter-chip is-active" data-filter="all"><span class="chip-count"></span></button>
+        <button type="button" class="filter-chip" data-filter="recording"><span class="chip-count"></span></button>
+        <button type="button" class="filter-chip" data-filter="screenshot"><span class="chip-count"></span></button>
       </div>
       <button id="sortTakesBtn" type="button">Newest first</button>
     </div>
@@ -760,6 +760,21 @@ describe('GalleryView filter and sort', () => {
       .querySelector<HTMLButtonElement>(`.filter-chip[data-filter="${kind}"]`)
       ?.click();
   }
+  /** The text of a chip's count badge - null when the chip has no badge. */
+  function chipCount(kind: string): string | null {
+    return (
+      document.querySelector(`.filter-chip[data-filter="${kind}"] .chip-count`)
+        ?.textContent ?? null
+    );
+  }
+  /** Click every visible Remove, leaving only the kinds still in the gallery. */
+  function removeAllVisible() {
+    for (const btn of [
+      ...$('takeList').querySelectorAll<HTMLButtonElement>('button'),
+    ].filter((b) => b.textContent === 'Remove')) {
+      btn.click();
+    }
+  }
 
   it('filters the list down to one kind and back', () => {
     render();
@@ -794,6 +809,73 @@ describe('GalleryView filter and sort', () => {
 
     clickFilter('all');
     expect(rows().length).toBe(3);
+  });
+
+  it('tells each chip how much is behind it, before it is clicked', () => {
+    render();
+    // Blank, not "0": three zeros on a first visit is noise the empty state
+    // has already explained.
+    expect(chipCount('all')).toBe('');
+    expect(chipCount('recording')).toBe('');
+    expect(chipCount('screenshot')).toBe('');
+
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['b']),
+      filename: 'two.webm',
+      formatName: 'VP9',
+    });
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['c']),
+      filename: 'three.png',
+      formatName: 'PNG',
+    });
+
+    expect(chipCount('all')).toBe('3');
+    expect(chipCount('recording')).toBe('2');
+    expect(chipCount('screenshot')).toBe('1');
+  });
+
+  it('keeps chip counts true to the whole gallery while a filter is on', () => {
+    render();
+    store.add({
+      kind: 'recording',
+      blob: new Blob(['a']),
+      filename: 'one.webm',
+      formatName: 'VP9',
+    });
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+    store.add({
+      kind: 'screenshot',
+      blob: new Blob(['c']),
+      filename: 'three.png',
+      formatName: 'PNG',
+    });
+
+    // The chips describe the filters, not the current view: filtering to
+    // recordings must not rewrite what the screenshots chip promises.
+    clickFilter('recording');
+    expect(chipCount('all')).toBe('3');
+    expect(chipCount('recording')).toBe('1');
+    expect(chipCount('screenshot')).toBe('2');
+
+    // A kind drained to nothing reads as an honest 0, not a hidden badge -
+    // the gallery still has takes, so there is a count to give.
+    removeAllVisible();
+    expect(chipCount('recording')).toBe('0');
+    expect(chipCount('all')).toBe('2');
   });
 
   it('says so when a filter matches nothing, and keeps bulk actions on', () => {
