@@ -52,6 +52,9 @@ export const SHELL: readonly string[] = [
   'icons/icon-512.png',
   'icons/icon-512-maskable.png',
   'icons/apple-touch-icon.png',
+  'icons/favicon.svg',
+  'icons/favicon-32.png',
+  'icons/favicon-16.png',
 ];
 
 /** A file taking part in the cache hash. */

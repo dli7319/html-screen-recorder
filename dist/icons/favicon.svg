@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    App icon source. Rasterise with scripts/build-icons.mjs (cairosvg).
+
+    Two variants are generated because they are not interchangeable:
+      - icon.svg (this file)   -> 'any' purpose. Rounded corners are fine;
+        the platform draws the mask.
+      - icon-maskable.svg      -> 'purpose: maskable'. Android crops this into
+        circles, squircles and teardrops, so it needs a full-bleed background
+        and every bit of artwork inside the centre 80%.
+
+    Reusing this file for both is the classic mistake: Android clips the
+    corners off the record dot and the icon looks broken.
+  -->
+  <rect width="512" height="512" rx="96" fill="#4f39f6" />
+
+  <!-- monitor -->
+  <rect x="104" y="136" width="304" height="208" rx="24" fill="#ffffff" />
+  <rect x="216" y="360" width="80" height="20" rx="10" fill="#ffffff" />
+  <rect x="168" y="386" width="176" height="22" rx="11" fill="#ffffff" />
+
+  <!-- record dot -->
+  <circle cx="256" cy="240" r="58" fill="#dc2626" />
+</svg>
