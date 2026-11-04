@@ -519,6 +519,51 @@ test('a removal the user keeps is gone for good after a reload', async ({
   expect(await rowIds(page)).toEqual([shown[1]]);
 });
 
+test('undo after removing from the preview dialog is reachable by keyboard', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  const createdIds: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    await page.waitForTimeout(25);
+    await page.click('#screenshotBtn');
+    await expect(rows).toHaveCount(createdIds.length + 1);
+    const id = (await rowIds(page)).find(
+      (x) => x !== null && !createdIds.includes(x)
+    );
+    expect(id).toBeTruthy();
+    createdIds.push(id as string);
+  }
+  const shown = [...createdIds].reverse();
+  expect(await rowIds(page)).toEqual(shown);
+
+  // Remove a take from INSIDE its preview dialog: the dialog steps on to the
+  // next take, and the only undo for the removal is the toast's Undo button -
+  // which sits outside the dialog the focus trap is holding focus in.
+  await rows.nth(1).locator('.take-thumb').click();
+  await expect(page.locator('#previewModal')).toBeVisible();
+  await page.click('#previewRemove');
+  await expect(page.locator('#toastText')).toHaveText(/^Removed .+\.png$/);
+  await expect(page.locator('#toastAction')).toHaveText('Undo');
+
+  // Focus lands on the dialog's first control; the trap must still let the
+  // keyboard walk out to the Undo it just offered - one Shift+Tab away - and
+  // Enter activates it, so the undo is not mouse-only.
+  await expect(page.locator('#previewClose')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('#toastAction')).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // The take is back in its own slot, and the dialog is still open on the take
+  // it stepped to.
+  expect(await rowIds(page)).toEqual(shown);
+  await expect(page.locator('#previewModal')).toBeVisible();
+});
+
 test('pausing freezes the clock and the saved take leaves the paused time out', async ({
   page,
 }) => {

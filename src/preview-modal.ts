@@ -209,7 +209,11 @@ export class TakePreview {
     this.setOpen(true);
     this.updateNav();
     this.releaseTrap?.();
-    this.releaseTrap = trapFocus(this.modal);
+    // The toast host joins the cycle: removing a take from here fires the Undo
+    // toast, and that undo must not become mouse-only the moment it matters.
+    this.releaseTrap = trapFocus(this.modal, [
+      document.getElementById('toastHost'),
+    ]);
     this.closeBtn.focus();
   }
 
