@@ -183,7 +183,9 @@ export class UIManager {
       if (open) {
         invoker = source ?? openBtn;
         releaseTrap?.();
-        releaseTrap = trapFocus(drawer);
+        // The toast host joins the cycle so an action toast (the "View" on a
+        // saved take) stays keyboard-reachable while the drawer traps focus.
+        releaseTrap = trapFocus(drawer, [document.getElementById('toastHost')]);
         closeBtn.focus();
       } else {
         releaseTrap?.();
