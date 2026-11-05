@@ -1385,6 +1385,29 @@ kbd {
     font-weight: 500;
     white-space: nowrap;
     box-shadow: var(--elev-2);
+    /* Bounded, and laid out as a row, so a long message cannot grow the pill
+       off the screen. The pill is centred with translateX(-50%), so an
+       unbounded nowrap message extended equally off BOTH edges - and with an
+       action attached, "Undo" landed outside the viewport entirely, making a
+       confirmation's reversal unreachable. The message yields (it ellipsizes);
+       the action never does. `width: max-content` keeps short messages exactly
+       as wide as they were before this constraint existed - without it the
+       shrink-to-fit ceiling for a left:50% box is only half the viewport. */
+    display: flex;
+    align-items: center;
+    width: max-content;
+    max-width: min(92vw, 640px);
+}
+
+/* The message is the flexible part: it shrinks and ellipsizes to fit the pill
+   rather than pushing it (and the action at its end) off-screen. min-width: 0
+   overrides the flex default that would otherwise refuse to shrink a nowrap
+   line below its full width - which is exactly the overflow being fixed. */
+.toast-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .toast-host.is-visible {
@@ -1395,8 +1418,10 @@ kbd {
 /* The optional action (Undo) in a toast. It inverts the toast's own colours so
    it reads as the one live control on the pill, in either theme. The pill itself
    stays `pointer-events: none` so a confirmation never blocks the gallery - only
-   this button opts back into clicks. */
+   this button opts back into clicks. flex-shrink: 0 keeps it whole when a long
+   message squeezes the row: the text gives way, the action never does. */
 .toast-action {
+    flex-shrink: 0;
     margin-left: 12px;
     padding: 3px 12px;
     border: none;

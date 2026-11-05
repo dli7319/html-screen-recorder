@@ -406,6 +406,57 @@ test('renames a take from the preview dialog', async ({ page }) => {
   await expect(page.locator('#previewTitle')).toHaveText('demo.png');
 });
 
+test('a long filename in a toast stays inside the window with its action', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  await page.click('#screenshotBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+
+  // A pasted long name makes "Renamed to ..." wider than any window. The pill
+  // is centred, so unbounded it slid off BOTH edges - and with an action
+  // attached the Undo button landed outside the viewport, unreachable.
+  await page.click('#takeList .take-thumb');
+  await page.click('#previewRename');
+  await page.fill('#previewRenameInput', 'z'.repeat(400));
+  await page.press('#previewRenameInput', 'Enter');
+
+  const viewport = page.viewportSize()!;
+  const expectWithinWindow = async (selector: string) => {
+    const box = await page.locator(selector).boundingBox();
+    expect(box, selector).not.toBeNull();
+    expect(box!.x, `${selector} left edge`).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width, `${selector} right edge`).toBeLessThanOrEqual(
+      viewport.width
+    );
+  };
+
+  // The message itself yields: it is clipped by an ellipsizing box instead of
+  // widening the pill past the window.
+  await expectWithinWindow('#toastHost');
+  const text = await page.$eval('#toastText', (el) => ({
+    clipped: el.scrollWidth > el.clientWidth + 1,
+    ellipsis: getComputedStyle(el).textOverflow,
+  }));
+  expect(text.clipped).toBe(true);
+  expect(text.ellipsis).toBe('ellipsis');
+
+  // The critical case: a Remove toast carries Undo. The action must stay on
+  // screen (and the pill with it), or the undo is mouse-unreachable.
+  await page.click('#previewRemove');
+  await expect(page.locator('#toastAction')).toHaveText('Undo');
+  await expectWithinWindow('#toastHost');
+  await expectWithinWindow('#toastAction');
+
+  // ...and it still works.
+  await page.click('#toastAction');
+  await expect(rows).toHaveCount(1);
+});
+
 test('confirms a saved take and jumps to its row on demand', async ({
   page,
 }) => {
