@@ -2826,6 +2826,70 @@
 		window.addEventListener("beforeunload", handler);
 		return () => window.removeEventListener("beforeunload", handler);
 	}
+	// src/wake-lock.ts
+	/**
+	* Owns one screen wake lock across a recording.
+	*
+	* The keeper remembers whether the screen *should* stay awake (`wanted`)
+	* separately from whether a lock is currently held, because the two come
+	* apart on their own: the platform reclaims the lock the moment the document
+	* hides, while the recording it protected is still running.
+	*/
+	var WakeLockKeeper = class {
+		constructor(manager) {
+			this.manager = manager;
+			this.held = null;
+			this.wanted = false;
+		}
+		/** True while a lock is believed to be held. */
+		isHeld() {
+			return this.held !== null && !this.held.released;
+		}
+		/**
+		* Ask for the screen to stay awake. Idempotent, and never rejects: a
+		* missing API or a denied request must not ripple into the capture path.
+		*/
+		async acquire() {
+			this.wanted = true;
+			await this.ensure();
+		}
+		/** Let the screen sleep again. Safe to call whether or not one is held. */
+		async release() {
+			this.wanted = false;
+			const held = this.held;
+			this.held = null;
+			if (held && !held.released) try {
+				await held.release();
+			} catch {}
+		}
+		/**
+		* Re-ask after the document becomes visible again, if the screen is still
+		* supposed to stay awake. A no-op in every other state.
+		*/
+		async refresh() {
+			await this.ensure();
+		}
+		async ensure() {
+			if (!this.wanted || !this.manager) return;
+			if (this.isHeld()) return;
+			let sentinel;
+			try {
+				sentinel = await this.manager.request("screen");
+			} catch {
+				return;
+			}
+			if (!this.wanted || this.isHeld()) {
+				try {
+					await sentinel.release();
+				} catch {}
+				return;
+			}
+			this.held = sentinel;
+			sentinel.addEventListener("release", () => {
+				if (this.held === sentinel) this.held = null;
+			});
+		}
+	};
 	// src/index.ts
 	const ui = new UIManager();
 	const settings = new SettingsPanel();
@@ -2837,6 +2901,10 @@
 	const cropper = new Cropper(ui.cropBox, ui.cropTargetElement, ui.videoContainer, ui.videoPreview);
 	const recorder = new Recorder(onRecordingStop);
 	const pip = new PictureInPicture(document.getElementById("videoPreview"), { onChange: (active) => ui.setPipState(active) });
+	const wakeLock = new WakeLockKeeper(navigator.wakeLock);
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState === "visible") wakeLock.refresh();
+	});
 	let stream = null;
 	let audioContext = null;
 	let analysers = null;
@@ -3118,6 +3186,7 @@
 			return;
 		}
 		captureInFlight = true;
+		wakeLock.acquire();
 		ui.setRecordingState(true);
 		ui.clearStats();
 		stopwatch.start((time) => {
@@ -3140,6 +3209,7 @@
 		attachThumbnail(take, () => extractVideoThumbnail(fixedBlob, durationMs));
 		ui.setRecordingState(false);
 		captureInFlight = false;
+		wakeLock.release();
 	}
 	async function stopRecording() {
 		await cropper.stopCrop(stream);
@@ -3149,6 +3219,7 @@
 		cancelCountdown();
 		await cropper.stopCrop(stream);
 		if (recorder.isActive()) recorder.stop();
+		wakeLock.release();
 		if (visualizationAnimationFrame) {
 			cancelAnimationFrame(visualizationAnimationFrame);
 			visualizationAnimationFrame = null;
