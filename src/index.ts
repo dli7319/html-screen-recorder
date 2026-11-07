@@ -19,6 +19,7 @@ import { showToast } from './toast';
 import { downscaleImage, extractVideoThumbnail } from './thumbnail';
 import { registerServiceWorker } from './pwa';
 import { installUnloadGuard } from './unload-guard';
+import { WakeLockKeeper, type WakeLockManagerLike } from './wake-lock';
 
 const ui = new UIManager();
 const settings = new SettingsPanel();
@@ -49,6 +50,21 @@ const pip = new PictureInPicture(
     onChange: (active) => ui.setPipState(active),
   }
 );
+/*
+ * The screen must not sleep while a take is recording: a machine that nods
+ * off mid-capture freezes the recording and loses the unwritten tail. The
+ * lock is held exactly as long as the capture is in flight, and is
+ * best-effort - a browser without the Wake Lock API records exactly as
+ * before (see wake-lock.ts).
+ */
+const wakeLock = new WakeLockKeeper(
+  (navigator as unknown as { wakeLock?: WakeLockManagerLike }).wakeLock
+);
+document.addEventListener('visibilitychange', () => {
+  // The platform reclaims the lock whenever the document hides, so a take
+  // still recording when the user comes back needs it asked for again.
+  if (document.visibilityState === 'visible') void wakeLock.refresh();
+});
 
 let stream: MediaStream | null = null;
 let audioContext: AudioContext | null | undefined = null;
@@ -467,6 +483,8 @@ async function startCapture() {
   }
 
   captureInFlight = true;
+  // Frames are being captured now; the display must stay on until they stop.
+  void wakeLock.acquire();
   ui.setRecordingState(true);
   ui.clearStats();
   stopwatch.start((time) => {
@@ -507,6 +525,8 @@ async function onRecordingStop(blob: Blob, ext: string) {
   ui.setRecordingState(false);
   // The take is in the store now, so a reload at this point is safe.
   captureInFlight = false;
+  // Nothing is being captured: the screen may sleep again.
+  void wakeLock.release();
 }
 
 async function stopRecording() {
@@ -522,6 +542,10 @@ async function stopSharing() {
   if (recorder.isActive()) {
     recorder.stop();
   }
+  // Belt and braces: the take-stop path releases the wake lock when the
+  // clip lands, but a share that ends without one - or a recorder whose stop
+  // callback never fires - must not leave the display held awake.
+  void wakeLock.release();
 
   if (visualizationAnimationFrame) {
     cancelAnimationFrame(visualizationAnimationFrame);

@@ -98,6 +98,63 @@ test('leaves recording manual when record-on-share is off', async ({
   await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
 });
 
+/** The wake-lock stub's call log, in order. */
+function wakeLockLog(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    (window as unknown as { __wakeLockLog: string[] }).__wakeLockLog.slice()
+  );
+}
+
+test('holds a screen wake lock exactly while a take is recording', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  // The Wake Lock API is stubbed to a call log: the point under test is the
+  // app's acquire/release discipline around the recording, not the
+  // platform's grant behaviour.
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    (window as unknown as { __wakeLockLog: string[] }).__wakeLockLog = log;
+    const makeSentinel = () => {
+      const sentinel = {
+        released: false,
+        release: async () => {
+          sentinel.released = true;
+          log.push('release');
+        },
+        addEventListener: () => {},
+      };
+      return sentinel;
+    };
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: {
+        request: async (type: string) => {
+          log.push(`request:${type}`);
+          return makeSentinel();
+        },
+      },
+    });
+  });
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  // Sharing alone must not hold the display: only a capture in flight does.
+  await page.waitForTimeout(300);
+  expect(await wakeLockLog(page)).toEqual([]);
+
+  await page.click('#recordBtn');
+  await expect.poll(() => wakeLockLog(page)).toEqual(['request:screen']);
+
+  // The take lands and the lock goes straight back with it.
+  await page.waitForTimeout(1200);
+  await page.click('#stopBtn');
+  await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
+  await expect
+    .poll(() => wakeLockLog(page))
+    .toEqual(['request:screen', 'release']);
+});
+
 test('captures a screenshot into the gallery', async ({ page }) => {
   await stubDisplayMedia(page);
   await page.goto('/');
