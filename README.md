@@ -32,6 +32,8 @@ Everything happens on your machine: the recording is captured with
 - **System audio and microphone** as independent toggles, each with a live level
   meter
 - **Running timer** on the record button while recording
+- **Keeps the screen awake while recording** via the Wake Lock API, so a long
+  take is not cut short by the display sleeping (where the browser supports it)
 - **Timestamped filenames** (`20261004193012.mp4`)
 - **Dark mode** that follows your OS setting
 - **Responsive layout** — usable down to phone widths
