@@ -1880,8 +1880,14 @@ kbd {
 
 /* Pause is a recording-time control. At rest it is disabled, and a disabled
    circle sitting in the header reads as a broken button. Hiding it is clearer
-   than dimming it - the control appears when it can actually be used. */
-.icon-btn[disabled] {
+   than dimming it - the control appears when it can actually be used.
+
+   Scoped to the pause button instead of `.icon-btn[disabled]`: the preview
+   dialog's prev/next chevrons are icon buttons too, and they go disabled at
+   the ends of the list where the design keeps them visible but faded (see
+   .preview-nav[disabled]). The generic rule hid them outright - the first
+   take had no back chevron and the last no forward one. */
+#pauseBtn[disabled] {
     display: none;
 }
 
