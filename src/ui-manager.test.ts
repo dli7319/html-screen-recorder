@@ -156,7 +156,7 @@ describe('UIManager.setRecordingState', () => {
     const ui = renderUI();
     const pauseBtn = $('pauseBtn') as HTMLButtonElement;
 
-    // At rest it is disabled, and styles.css hides disabled icon buttons -
+    // At rest it is disabled, and styles.css hides the disabled pause button -
     // there is nothing to pause, so the control must not show as a broken
     // button. The markup ships it in exactly this state.
     expect(pauseBtn.disabled).toBe(true);

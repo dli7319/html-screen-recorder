@@ -118,4 +118,33 @@ describe('markup contract', () => {
       'styles.css must not declare @layer blocks'
     ).toBe(false);
   });
+
+  it('hides the disabled pause button without hiding the preview chevrons', () => {
+    // The preview dialog's prev/next chevrons go disabled at the ends of the
+    // list, where the design keeps them visible but faded. A generic
+    // `.icon-btn[disabled] { display: none }` - written for the header Pause
+    // button, which must hide at rest - also caught the chevrons and made them
+    // vanish at exactly the ends where their faded state is the affordance.
+    // The hide is scoped to the pause button; this pins both halves of that
+    // split so neither drifts back into the other's job.
+    //
+    // Comments are stripped first for the same reason as the rule above: the
+    // prose discusses the selectors by name.
+    const styles = readFileSync(join(ROOT, 'dist', 'styles.css'), 'utf8');
+    const stylesCode = styles
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|\s)\/\/.*$/gm, '$1');
+    expect(
+      /\.icon-btn\[disabled\]\s*\{[^}]*display\s*:\s*none/.test(stylesCode),
+      'a generic .icon-btn[disabled] hide swallows the chevrons fade'
+    ).toBe(false);
+    expect(
+      /#pauseBtn\[disabled\]\s*\{[^}]*display\s*:\s*none/.test(stylesCode),
+      'the disabled pause button must still hide itself'
+    ).toBe(true);
+    expect(
+      /\.preview-nav\[disabled\]\s*\{[^}]*opacity/.test(stylesCode),
+      'the chevrons must fade at the ends, not vanish'
+    ).toBe(true);
+  });
 });
