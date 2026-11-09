@@ -72,8 +72,9 @@ describe('injectPlaceholders', () => {
   it('works regardless of which quote style the bundler emitted', () => {
     // This is the bug that shipped a worker throwing on first load: the
     // source used single quotes, rolldown rewrote them to double, and a
-    // single-quoted match silently did nothing.
-    for (const q of ["'", '"']) {
+    // single-quoted match silently did nothing. The minifier adds a third
+    // style - backticks - so cover all of them.
+    for (const q of ["'", '"', '`']) {
       const out = injectPlaceholders(
         `const A = ${q}__PRECACHE_MANIFEST__${q};\nconst B = ${q}__CACHE_VERSION__${q};`,
         PRECACHE,

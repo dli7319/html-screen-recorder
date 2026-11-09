@@ -81,9 +81,10 @@ export function computeVersion(entries: readonly ShellEntry[]): string {
 /**
  * Substitute the two placeholders in the compiled worker.
  *
- * Quote-agnostic on purpose. rolldown emits double quotes where the source
- * uses single ones, and matching a fixed quote style silently no-ops - which
- * ships a worker that throws on first load. A replacer function keeps the
+ * Quote-agnostic on purpose: the bundle is minified, and minifiers pick their
+ * own quote style (rolldown rewrites the source's single quotes to doubles;
+ * its minifier emits backticks). Matching a fixed quote style silently no-ops -
+ * which ships a worker that throws on first load. A replacer function keeps the
  * replacement text from being read as a $-pattern.
  *
  * Throws rather than returning partial output, so a failed injection can
@@ -98,22 +99,18 @@ export function injectPlaceholders(
   // substitution would miss a placeholder that a future minifier renamed or
   // dropped entirely - which would ship a worker with no precache list and no
   // cache version, failing at runtime instead of at build time.
-  if (!/(["'])__PRECACHE_MANIFEST__\1/.test(compiled)) {
+  if (!/(["'`])__PRECACHE_MANIFEST__\1/.test(compiled)) {
     throw new Error(
       'missing __PRECACHE_MANIFEST__ placeholder - check src/sw.ts'
     );
   }
-  if (!/(["'])__CACHE_VERSION__\1/.test(compiled)) {
+  if (!/(["'`])__CACHE_VERSION__\1/.test(compiled)) {
     throw new Error('missing __CACHE_VERSION__ placeholder - check src/sw.ts');
   }
 
-  // Quote-agnostic on purpose. rolldown emits double quotes where the source
-  // uses single ones, and matching a fixed quote style silently no-ops. A
-  // replacer function keeps the replacement text from being read as a
-  // $-pattern.
   const result = compiled
-    .replace(/(["'])__PRECACHE_MANIFEST__\1/, () => JSON.stringify(precache))
-    .replace(/(["'])__CACHE_VERSION__\1/, () => JSON.stringify(version));
+    .replace(/(["'`])__PRECACHE_MANIFEST__\1/, () => JSON.stringify(precache))
+    .replace(/(["'`])__CACHE_VERSION__\1/, () => JSON.stringify(version));
 
   if (
     result.includes('__PRECACHE_MANIFEST__') ||
