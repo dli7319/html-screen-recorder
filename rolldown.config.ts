@@ -17,5 +17,10 @@ export default defineConfig({
   output: {
     file: 'dist/index.js',
     format: 'iife',
+    // Minify the shipped bundle. Rolldown's default is 'dce-only', which keeps
+    // every comment and full identifier name in the deployed file. The CSS side
+    // of the build already minifies (tailwind --minify), so leaving the JS raw
+    // was the odd one out - and this is a PWA shell that gets precached whole.
+    minify: true,
   },
 });

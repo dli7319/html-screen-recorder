@@ -22,5 +22,10 @@ export default defineConfig({
     // the browser - the unit tests import the source file directly - so the
     // name only exists to keep the build output quiet.
     name: 'ScreenRecorderServiceWorker',
+    // Minified like the app bundle. The two build-time placeholder strings
+    // below survive minification untouched (minifiers never rewrite string
+    // literal contents), and scripts/build-sw.ts still finds them by their
+    // quoted form - it fails the build loudly if either goes missing.
+    minify: true,
   },
 });
