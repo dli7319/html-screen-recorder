@@ -11,6 +11,11 @@
  * Plain letters only - modifiers are ignored so browser and OS shortcuts keep
  * working - and nothing fires while the user is typing in a form control.
  *
+ * One press, one action: the auto-repeat keydowns a held key delivers are not
+ * new presses and never re-fire a command. Every action here is discrete (a
+ * toggle or a capture) - none is "hold to repeat" - so the repeats a slow
+ * press or a heavy finger produces must fall on the floor.
+ *
  * Two things can own the keyboard ahead of these shortcuts: a form control
  * being typed into, and a modal dialog being open. The dialog gate covers the
  * actions that would start something new (record, screenshot) so a review of
@@ -42,6 +47,8 @@ interface ShortcutEvent {
   metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
+  /** True on the auto-repeat keydowns a held key delivers. */
+  repeat?: boolean;
   target?: unknown;
 }
 
@@ -52,6 +59,14 @@ interface ShortcutEvent {
  * Cmd/Ctrl/Alt combinations never trigger a recording.
  */
 export function matchShortcut(event: ShortcutEvent): ShortcutAction | null {
+  // A held key keeps delivering keydowns marked `repeat`, and re-firing the
+  // action on each one is a bug, not a feature: holding R cancels the
+  // countdown the first press just started (toggleRecord treats it as a
+  // second press), holding P flip-flops pause/resume several times over, and
+  // holding Shift+S fills the gallery with duplicate screenshots. Nothing
+  // here repeats usefully, so only the first press of a hold acts.
+  if (event.repeat) return null;
+
   if (event.metaKey || event.ctrlKey || event.altKey) return null;
 
   // Escape is how you abort something already in progress, so unlike the
