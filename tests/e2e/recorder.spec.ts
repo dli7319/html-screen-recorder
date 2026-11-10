@@ -861,3 +861,99 @@ test('stopping while paused still saves the take', async ({ page }) => {
   await page.reload();
   await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
 });
+
+/**
+ * The auto-repeat keydowns a held key delivers. Automation cannot hold a real
+ * key past the OS repeat delay, so the exact event the browser would send -
+ * `repeat: true` - is dispatched to `window`, where the shortcut listener is.
+ */
+async function holdKeyRepeats(
+  page: Page,
+  key: string,
+  shift = false,
+  count = 8
+): Promise<void> {
+  await page.evaluate(
+    ({ key, shift, count }) => {
+      for (let i = 0; i < count; i++) {
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key,
+            shiftKey: shift,
+            repeat: true,
+            cancelable: true,
+          })
+        );
+      }
+    },
+    { key, shift, count }
+  );
+}
+
+test('a held shortcut key fires once, not once per auto-repeat', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+  await page.click('#shareBtn');
+
+  // A key press is not a click: nothing waits for the control to become
+  // ready, and captureFrame() quietly keeps nothing while the preview has no
+  // frame yet. Wait for the first frame so the press has something to shoot.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const video = document.getElementById(
+          'videoPreview'
+        ) as HTMLVideoElement | null;
+        return video?.videoWidth ?? 0;
+      })
+    )
+    .toBeGreaterThan(0);
+
+  // One press of Shift+S is one still...
+  await page.keyboard.press('Shift+S');
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+
+  // ...and the auto-repeats of the held key take none - they used to add a
+  // duplicate screenshot each. The wait is part of the assertion: a repeat's
+  // take would land asynchronously, so the count only means something once
+  // there has been time for one to arrive.
+  await holdKeyRepeats(page, 'S', true);
+  await page.waitForTimeout(600);
+  await expect(rows).toHaveCount(1);
+});
+
+test('holding Record does not cancel the countdown it started', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+  await armCountdown(page);
+  await page.click('#shareBtn');
+
+  // Press R to start the 3-2-1, then keep holding: the repeats used to reach
+  // the handler as extra presses - cancelling the count and, on the repeats
+  // after that, starting a fresh one.
+  await page.keyboard.press('r');
+  await expect(page.locator('#countdownNumber')).toHaveText('3');
+  await expect(page.locator('#countdownNumber')).toHaveText('2');
+  await holdKeyRepeats(page, 'r');
+
+  // The count in flight must simply continue: still up, and never snapped
+  // back to 3 by a restart. The number is read once, not retried - a retry
+  // would drift along a restarted count and pass at its "2".
+  await expect(page.locator('#countdownOverlay')).toBeVisible();
+  const number = await page.locator('#countdownNumber').textContent();
+  expect(number).not.toBe('3');
+
+  // ...and it finishes as a real recording.
+  await expect(page.locator('#statusText')).toHaveText(/^Recording/, {
+    timeout: 8000,
+  });
+  await expect(page.locator('#countdownOverlay')).toBeHidden();
+
+  await page.click('#stopBtn');
+  await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
+});

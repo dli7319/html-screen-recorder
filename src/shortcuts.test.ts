@@ -55,6 +55,19 @@ describe('matchShortcut', () => {
     expect(matchShortcut(key('Escape', { shiftKey: true }))).toBe('cancel');
   });
 
+  it('treats the auto-repeats of a held key as no key at all', () => {
+    // One press, one action: a held R must not re-fire Record (which would
+    // cancel the countdown the first press just started), a held P must not
+    // flip-flop pause, and a held Shift+S must not flood the gallery.
+    expect(matchShortcut(key('r', { repeat: true }))).toBeNull();
+    expect(matchShortcut(key('p', { repeat: true }))).toBeNull();
+    expect(matchShortcut(key('s', { repeat: true }))).toBeNull();
+    expect(
+      matchShortcut(key('s', { shiftKey: true, repeat: true }))
+    ).toBeNull();
+    expect(matchShortcut(key('Escape', { repeat: true }))).toBeNull();
+  });
+
   it('lets Escape cancel from inside a field, unlike the others', () => {
     // Escape aborts something in progress, so it cannot be swallowed by a
     // focused input the way a recording shortcut must be.
@@ -167,6 +180,38 @@ describe('bindShortcuts', () => {
     const event = new KeyboardEvent('keydown', { key: 'r', cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('fires each shortcut once per press, not once per auto-repeat', () => {
+    const handlers = {
+      onRecord: vi.fn(),
+      onPause: vi.fn(),
+      onScreenshot: vi.fn(),
+    };
+    bind(handlers);
+
+    press({ key: 'r' });
+    press({ key: 'r', repeat: true });
+    press({ key: 'r', repeat: true });
+    press({ key: 'p' });
+    press({ key: 'p', repeat: true });
+    press({ key: 'S', shiftKey: true });
+    press({ key: 'S', shiftKey: true, repeat: true });
+
+    expect(handlers.onRecord).toHaveBeenCalledOnce();
+    expect(handlers.onPause).toHaveBeenCalledOnce();
+    expect(handlers.onScreenshot).toHaveBeenCalledOnce();
+
+    // The ignored repeats keep their default behaviour, same as any other
+    // keystroke that is not one of ours.
+    const repeat = new KeyboardEvent('keydown', {
+      key: 'r',
+      repeat: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(repeat);
+    expect(repeat.defaultPrevented).toBe(false);
+    expect(handlers.onRecord).toHaveBeenCalledOnce();
   });
 
   it('ignores a modifier chord entirely', () => {
