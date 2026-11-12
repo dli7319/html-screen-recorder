@@ -1441,11 +1441,13 @@ kbd {
 
 /* ---------- settings drawer ---------- */
 
-/* The shared dimming layer for both overlays. `.scrim` is the settings
-   drawer's, `.preview-scrim` the take preview's: separate classes because
-   the activation rules below match on class, and a shared one would light
-   both layers whenever either overlay opened. */
+/* The shared dimming layer for the overlays. `.scrim` is the settings
+   drawer's, `.shortcuts-scrim` the shortcuts sheet's, `.preview-scrim` the
+   take preview's: separate classes because the activation rules below match
+   on class, and a shared one would light all the layers whenever any overlay
+   opened. */
 .scrim,
+.shortcuts-scrim,
 .preview-scrim {
     position: fixed;
     inset: 0;
@@ -1480,6 +1482,113 @@ kbd {
 
 .shell[data-panel='open'] .drawer {
     transform: none;
+}
+
+/* ---------- keyboard shortcuts sheet ---------- */
+
+/*
+   A small centered card over the settings-style dim - a reference sheet, not
+   a media stage, so it keeps the light scrim. visibility is the hide, not
+   opacity: a closed dialog at z-index 110 would otherwise still swallow
+   clicks and sit in the tab order (same contract as the preview).
+*/
+.shortcuts {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 110;
+    width: min(92vw, 400px);
+    max-height: 84vh;
+    overflow: auto;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--elev-2);
+    padding: 18px 20px 16px;
+    visibility: hidden;
+    opacity: 0;
+    transform: translate(-50%, -48%);
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        visibility 0s linear 0.18s;
+}
+
+.shell[data-shortcuts='open'] .shortcuts-scrim {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.shell[data-shortcuts='open'] .shortcuts {
+    visibility: visible;
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease,
+        visibility 0s;
+}
+
+.shortcuts-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.shortcuts-head strong {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
+}
+
+.shortcuts-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 9px 2px;
+}
+
+.shortcut-row + .shortcut-row {
+    border-top: 1px solid var(--border);
+}
+
+/* The keys column keeps a fixed width so the descriptions line up; long
+   chords wrap their caps rather than pushing the text around. */
+.shortcut-keys {
+    flex: 0 0 86px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.shortcut-keys kbd {
+    /* The base kbd chip (top of this file) carries the key-cap look; this
+       only lifts it to sheet size. */
+    font-size: 0.75rem;
+    padding: 0.2rem 0.45rem;
+}
+
+.shortcut-desc {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink-muted);
+}
+
+.shortcuts-note {
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-muted);
 }
 
 /* ---------- take preview ---------- */

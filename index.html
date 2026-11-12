@@ -86,6 +86,19 @@
             <circle cx="9" cy="17" r="2.2" />
           </svg>
         </button>
+
+        <!-- The shortcuts sheet's pointer affordance. The keys themselves are
+             faster but undiscoverable; this button is how a new user learns
+             they exist at all. -->
+        <button id="shortcutsBtn" type="button" title="Keyboard shortcuts (?)" class="icon-btn"
+          aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.3 9.2a2.8 2.8 0 0 1 5.4.9c0 1.8-2.7 2.3-2.7 3.9" />
+            <path d="M12 17h.01" />
+          </svg>
+        </button>
       </header>
 
       <div class="stage">
@@ -397,6 +410,35 @@
         </div>
       </div>
     </aside>
+
+    <!--
+      Keyboard shortcuts sheet. The R / P / S / Shift+S keys are the fastest
+      way to drive a capture, but they were discoverable only from button
+      tooltips. This is the reference: the header help button opens it with
+      the pointer, `?` toggles it from the keyboard, Escape or a click on the
+      scrim closes it.
+
+      The rows are NOT written here - HelpSheet renders them from
+      SHORTCUT_DOCS in shortcuts.ts, the same table the key bindings are
+      tested against, so the sheet cannot drift from what the keys do.
+    -->
+    <div id="shortcutsScrim" class="shortcuts-scrim"></div>
+    <div id="shortcutsModal" class="shortcuts" role="dialog" aria-modal="true"
+      aria-label="Keyboard shortcuts" aria-hidden="true">
+      <div class="shortcuts-head">
+        <strong>Keyboard shortcuts</strong>
+        <button id="closeShortcuts" type="button" class="icon-btn" aria-label="Close keyboard shortcuts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+      <div id="shortcutRows" class="shortcuts-list"></div>
+      <p class="shortcuts-note">
+        Shortcut keys are ignored while you type in a field. In the take
+        preview, the arrow keys page through takes.
+      </p>
+    </div>
 
     <!--
       Take preview. A click on a gallery thumbnail shows the clip or still
