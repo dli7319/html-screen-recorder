@@ -7,6 +7,7 @@
  *   P      pause / resume
  *   S      stop recording
  *   Shift+S  capture a still frame
+ *   ?      toggle the keyboard shortcuts sheet
  *
  * Plain letters only - modifiers are ignored so browser and OS shortcuts keep
  * working - and nothing fires while the user is typing in a form control.
@@ -24,7 +25,33 @@
  */
 
 export type ShortcutAction =
-  'record' | 'pause' | 'stop' | 'screenshot' | 'cancel';
+  'record' | 'pause' | 'stop' | 'screenshot' | 'cancel' | 'help';
+
+/**
+ * One row of the keyboard shortcuts sheet: the keys to press, what they do,
+ * and the action they must map back to.
+ *
+ * This table is the single source of truth for the sheet - help-sheet.ts
+ * renders its rows from here - and shortcuts.test.ts pins each entry to the
+ * key event `matchShortcut` actually answers to, so the sheet cannot drift
+ * away from the bindings it documents.
+ */
+export interface ShortcutDoc {
+  /** How the keys are shown to the user, e.g. 'Shift+S'. */
+  keys: string;
+  action: ShortcutAction;
+  /** One line saying what the shortcut does. */
+  label: string;
+}
+
+export const SHORTCUT_DOCS: readonly ShortcutDoc[] = [
+  { keys: 'R', action: 'record', label: 'Start recording' },
+  { keys: 'P', action: 'pause', label: 'Pause or resume the recording' },
+  { keys: 'S', action: 'stop', label: 'Stop recording' },
+  { keys: 'Shift+S', action: 'screenshot', label: 'Capture a screenshot' },
+  { keys: 'Escape', action: 'cancel', label: 'Cancel a running countdown' },
+  { keys: '?', action: 'help', label: 'Show or hide this sheet' },
+];
 
 /** Targets where a bare letter must stay a letter, not a command. */
 export function isTypingTarget(target: unknown): boolean {
@@ -84,6 +111,12 @@ export function matchShortcut(event: ShortcutEvent): ShortcutAction | null {
     case 's':
       // Shift+S is the still-capture chord; bare S stops the recording.
       return event.shiftKey ? 'screenshot' : 'stop';
+    case '?':
+      // Shift+/ on most layouts, but read from the resolved key so any layout
+      // that produces '?' works. Unlike the letters it is not gated behind the
+      // dialog check below: pressing it while the sheet is open is how the
+      // sheet gets closed again.
+      return 'help';
     default:
       return null;
   }
@@ -96,6 +129,8 @@ export interface ShortcutHandlers {
   onScreenshot?: () => void;
   /** Abort whatever is pending, e.g. a countdown. */
   onCancel?: () => void;
+  /** Toggle the keyboard shortcuts sheet. */
+  onHelp?: () => void;
 }
 
 export interface ShortcutOptions {
@@ -148,6 +183,9 @@ export function bindShortcuts(
         break;
       case 'cancel':
         handlers.onCancel?.();
+        break;
+      case 'help':
+        handlers.onHelp?.();
         break;
     }
   };

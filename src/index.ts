@@ -20,6 +20,7 @@ import { downscaleImage, extractVideoThumbnail } from './thumbnail';
 import { registerServiceWorker } from './pwa';
 import { installUnloadGuard } from './unload-guard';
 import { WakeLockKeeper, type WakeLockManagerLike } from './wake-lock';
+import { HelpSheet } from './help-sheet';
 
 const ui = new UIManager();
 const settings = new SettingsPanel();
@@ -34,6 +35,7 @@ const takes = new TakeStore(new TakeCache());
 const galleryRoot = document.getElementById('takesRoot');
 if (!galleryRoot) throw new Error('Gallery markup is missing #takesRoot');
 const gallery = new GalleryView(galleryRoot, takes);
+const helpSheet = new HelpSheet();
 const stopwatch = new Stopwatch();
 const cropper = new Cropper(
   ui.cropBox,
@@ -110,6 +112,7 @@ settings.bindVolumeControls(applyVolume);
 // --- Initialization ---
 // Keep the preview matched to the shared surface as it changes shape.
 ui.videoPreview.addEventListener('resize', syncPreviewAspect);
+helpSheet.bind();
 
 window.addEventListener('load', () => {
   gallery.bind();
@@ -152,13 +155,15 @@ ui.bindEvents({
 
 // R / P / S / Shift+S drive the same actions as the buttons.
 //
-// While a modal dialog (the preview, the settings drawer) is open, the keys
-// that would start a new capture go inert: reviewing an old take must not fire
-// up a recording or drop a stray screenshot behind the dialog. The dialog
-// state lives on <body> as data-preview / data-panel.
+// While a modal dialog (the preview, the settings drawer, the shortcuts
+// sheet) is open, the keys that would start a new capture go inert:
+// reviewing an old take must not fire up a recording or drop a stray
+// screenshot behind the dialog. The dialog state lives on <body> as
+// data-preview / data-panel / data-shortcuts.
 const dialogIsOpen = () =>
   document.body.dataset.preview === 'open' ||
-  document.body.dataset.panel === 'open';
+  document.body.dataset.panel === 'open' ||
+  document.body.dataset.shortcuts === 'open';
 
 bindShortcuts(
   {
@@ -169,6 +174,13 @@ bindShortcuts(
     },
     onScreenshot: captureScreenshot,
     onCancel: cancelCountdown,
+    // `?` toggles the sheet, but only against the plain backdrop: while the
+    // preview or the drawer owns the screen the keystroke is theirs to ignore,
+    // and only the sheet's own open state answers the press that closes it.
+    onHelp: () => {
+      if (helpSheet.isOpen()) helpSheet.close();
+      else if (!dialogIsOpen()) helpSheet.open();
+    },
   },
   { isDialogOpen: dialogIsOpen }
 );
