@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bindShortcuts, isTypingTarget, matchShortcut } from './shortcuts';
+import {
+  bindShortcuts,
+  isTypingTarget,
+  matchShortcut,
+  SHORTCUT_DOCS,
+  type ShortcutAction,
+} from './shortcuts';
 
 function key(
   key: string,
@@ -55,6 +61,13 @@ describe('matchShortcut', () => {
     expect(matchShortcut(key('Escape', { shiftKey: true }))).toBe('cancel');
   });
 
+  it('maps ? to the help sheet', () => {
+    // Shift+/ on most layouts: read from the resolved key, so any layout that
+    // produces '?' works, with or without Shift.
+    expect(matchShortcut(key('?'))).toBe('help');
+    expect(matchShortcut(key('?', { shiftKey: true }))).toBe('help');
+  });
+
   it('treats the auto-repeats of a held key as no key at all', () => {
     // One press, one action: a held R must not re-fire Record (which would
     // cancel the countdown the first press just started), a held P must not
@@ -86,6 +99,7 @@ describe('matchShortcut', () => {
     const input = document.createElement('input');
     expect(matchShortcut(key('r', { target: input }))).toBeNull();
     expect(matchShortcut(key('s', { target: input }))).toBeNull();
+    expect(matchShortcut(key('?', { target: input }))).toBeNull();
 
     const textarea = document.createElement('textarea');
     expect(matchShortcut(key('p', { target: textarea }))).toBeNull();
@@ -294,5 +308,69 @@ describe('bindShortcuts', () => {
 
     press({ key: 'r' });
     expect(onRecord).toHaveBeenCalledOnce();
+  });
+
+  it('dispatches help on ?', () => {
+    const onHelp = vi.fn();
+    bind({ onHelp });
+
+    press({ key: '?' });
+    expect(onHelp).toHaveBeenCalledOnce();
+  });
+
+  it('lets the help toggle work while a dialog is open', () => {
+    // The sheet must be closable from the keyboard while it is up - it is a
+    // dialog itself - so unlike Record and Screenshot the key is never
+    // gated; what the handler does with the press is the caller's call.
+    const onHelp = vi.fn();
+    bind({ onHelp }, { isDialogOpen: () => true });
+
+    press({ key: '?' });
+    expect(onHelp).toHaveBeenCalledOnce();
+  });
+});
+
+describe('SHORTCUT_DOCS', () => {
+  /** The key event a display string like 'Shift+S' stands for. */
+  function docEvent(keys: string) {
+    const parts = keys.split('+');
+    return {
+      key: parts.filter((p) => p !== 'Shift').join('+'),
+      shiftKey: parts.includes('Shift'),
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+    };
+  }
+
+  it('documents every action exactly once', () => {
+    const actions = SHORTCUT_DOCS.map((d) => d.action);
+    expect(new Set(actions).size).toBe(actions.length);
+    expect([...actions].sort()).toEqual(
+      (
+        [
+          'record',
+          'pause',
+          'stop',
+          'screenshot',
+          'cancel',
+          'help',
+        ] as ShortcutAction[]
+      ).sort()
+    );
+  });
+
+  it('keys that really map to the documented action', () => {
+    // The sheet is rendered from this table; if a row stops matching the
+    // binding it documents, the sheet would be lying about what a key does.
+    for (const doc of SHORTCUT_DOCS) {
+      expect(matchShortcut(docEvent(doc.keys)), doc.keys).toBe(doc.action);
+    }
+  });
+
+  it('carries a one-line label for every row', () => {
+    for (const doc of SHORTCUT_DOCS) {
+      expect(doc.label.length, doc.keys).toBeGreaterThan(0);
+    }
   });
 });
