@@ -435,6 +435,16 @@ kbd {
     height: 15px;
 }
 
+/* The header's tool buttons (pause, settings, shortcuts) are one group so a
+   wrapped app bar moves them as a unit - flex line-breaking splits items one
+   at a time and would strand a lone icon on its own line. `gap: inherit` ties
+   the inner spacing to the app bar's gap, so the desktop bar is pixel-identical
+   to the loose buttons it replaces. */
+.tools {
+    display: flex;
+    gap: inherit;
+}
+
 .status-pill {
     display: inline-flex;
     align-items: center;
@@ -1144,6 +1154,13 @@ kbd {
     margin-bottom: 12px;
 }
 
+/* "Download all" + "Clear" are one group, so a wrapped head moves them as a
+   pair instead of stranding one per line (see the narrow-viewport rules). */
+.head-actions {
+    display: flex;
+    gap: 10px;
+}
+
 .takes-head h2 {
     font-size: 16px;
     font-weight: 500;
@@ -1346,7 +1363,11 @@ kbd {
 
 /* On a narrow row the trailing group drops below the name and right-aligns,
    instead of squeezing the filename down to nothing. The thumbnail and name
-   stay on the first line. */
+   stay on the first line. The group wraps internally before it can push the
+   page sideways, and the old `padding-left: 92px` indent is gone: with the
+   group right-aligned it never showed - while adding 92px to the group's
+   minimum width, which is exactly what pushed the Remove button off a
+   phone-width row. */
 @media (max-width: 600px) {
     .take-row {
         flex-wrap: wrap;
@@ -1356,7 +1377,7 @@ kbd {
         flex-basis: 100%;
         margin-left: auto;
         justify-content: flex-end;
-        padding-left: 92px; /* clear the thumbnail column (80px thumb + 12px gap) */
+        flex-wrap: wrap;
     }
 }
 
@@ -2262,6 +2283,93 @@ kbd {
 
     .row3 {
         grid-template-columns: 1fr;
+    }
+}
+
+/*
+   Phone-width windows. Every horizontal row here carries more content than a
+   ~640px viewport has, and they used to resolve the shortage by scrolling the
+   page sideways (the app bar's help button rode off the right edge) or - on
+   the channel pills, which clip with `overflow: hidden` - by silently cutting
+   off their own faders and readouts.
+
+   The rows stack instead. `flex-wrap` only takes effect at the point of
+   overflow, so nothing changes at widths where a row still fits. The app bar
+   is the one deterministic exception: its status pill grows with the length of
+   the session it reports, so a bar that reflowed only on overflow would move
+   the tools under the pointer the moment a recording started. One line needs
+   up to ~610px (a long session's pill is ~230px of it), so the bar stacks
+   below 640px no matter the state, and the title yields with an ellipsis
+   rather than wrapping or pushing anything off-screen.
+*/
+@media (max-width: 640px) {
+    /* Brand + tools on the first line, the live status owns the second. The
+       pill is ordered after the tools and full-width, so it always wraps to
+       its own line rather than crowding them. */
+    .appbar {
+        height: auto;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px var(--gutter);
+    }
+
+    .appbar h1 {
+        /* The compact bar's title yields a step so brand + all three tools
+           stay on one line at 360px even mid-recording (with the Pause button
+           showing) - at the desktop 18px the line was 6px too wide and the
+           help button wrapped away from its group. */
+        font-size: 16px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .status-pill {
+        order: 2;
+        flex: 1 0 100%;
+        justify-content: center;
+    }
+
+    /* When the tool group cannot share the brand's line (below ~360px) it
+       keeps to the right edge instead of starting one under the logo. */
+    .tools {
+        margin-left: auto;
+    }
+
+    /* One channel per line - together, the two pills clip each other's faders
+       and percentages behind `.source`'s overflow. */
+    .channels {
+        flex-wrap: wrap;
+    }
+
+    /* "Download all" / "Clear" drop under the heading as a pair (the pair is
+       grouped in the markup - flex line-breaking would split it) and stay
+       right-aligned; the same for the sort toggle under the filter chips. */
+    .takes-head {
+        flex-wrap: wrap;
+    }
+
+    .head-actions {
+        margin-left: auto;
+    }
+
+    .takes-tools {
+        flex-wrap: wrap;
+    }
+
+    /* Tighter chip padding buys the segmented control its last few pixels of
+       room next to the counts. */
+    .filter-chip {
+        padding: 0 10px;
+    }
+
+    /* The update banner is one row of text + two buttons; let it stack and
+       stay centred rather than growing past the viewport. */
+    .update-banner {
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: calc(100vw - 36px);
     }
 }
 
