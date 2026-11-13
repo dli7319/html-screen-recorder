@@ -64,41 +64,47 @@
           <span id="statsText" class="stats"></span>
         </div>
 
-        <button id="pauseBtn" type="button" title="Pause recording (P)" class="icon-btn" disabled>
-          <svg class="h-5 w-5"><use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use></svg>
-          <span id="pauseBtnText" class="sr-only">Pause</span>
-        </button>
+        <!-- The tools are one group so the wrapped narrow-viewport bar keeps
+             them together: flex line-breaking splits items one at a time, and
+             while recording (Pause showing) it stranded the help button alone
+             on its own line between the brand row and the status pill. -->
+        <div class="tools">
+          <button id="pauseBtn" type="button" title="Pause recording (P)" class="icon-btn" disabled>
+            <svg class="h-5 w-5"><use id="pauseBtnIcon" href="./icons.svg#icon-pause"></use></svg>
+            <span id="pauseBtnText" class="sr-only">Pause</span>
+          </button>
 
-        <!-- Sliders, not a sun.
+          <!-- Sliders, not a sun.
 
-             The previous icon and the first attempt at a fix were both a ring
-             with radiating spokes - Feather's "settings" gear. At 20px the
-             teeth read as rays and the glyph looks like brightness or theme,
-             which is what the user saw. A cog has to have a toothed rim to
-             read as a cog at this size, and the drawer is literally a set of
-             adjustments, so sliders say it plainly and cannot be misread. -->
-        <button id="openSettings" type="button" title="Recording settings" class="icon-btn"
-          aria-label="Recording settings" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            stroke-linecap="round">
-            <path d="M4 7h9M18.5 7H20M4 17h2.5M12 17h8" />
-            <circle cx="15.5" cy="7" r="2.2" />
-            <circle cx="9" cy="17" r="2.2" />
-          </svg>
-        </button>
+               The previous icon and the first attempt at a fix were both a ring
+               with radiating spokes - Feather's "settings" gear. At 20px the
+               teeth read as rays and the glyph looks like brightness or theme,
+               which is what the user saw. A cog has to have a toothed rim to
+               read as a cog at this size, and the drawer is literally a set of
+               adjustments, so sliders say it plainly and cannot be misread. -->
+          <button id="openSettings" type="button" title="Recording settings" class="icon-btn"
+            aria-label="Recording settings" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round">
+              <path d="M4 7h9M18.5 7H20M4 17h2.5M12 17h8" />
+              <circle cx="15.5" cy="7" r="2.2" />
+              <circle cx="9" cy="17" r="2.2" />
+            </svg>
+          </button>
 
-        <!-- The shortcuts sheet's pointer affordance. The keys themselves are
-             faster but undiscoverable; this button is how a new user learns
-             they exist at all. -->
-        <button id="shortcutsBtn" type="button" title="Keyboard shortcuts (?)" class="icon-btn"
-          aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M9.3 9.2a2.8 2.8 0 0 1 5.4.9c0 1.8-2.7 2.3-2.7 3.9" />
-            <path d="M12 17h.01" />
-          </svg>
-        </button>
+          <!-- The shortcuts sheet's pointer affordance. The keys themselves are
+               faster but undiscoverable; this button is how a new user learns
+               they exist at all. -->
+          <button id="shortcutsBtn" type="button" title="Keyboard shortcuts (?)" class="icon-btn"
+            aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.3 9.2a2.8 2.8 0 0 1 5.4.9c0 1.8-2.7 2.3-2.7 3.9" />
+              <path d="M12 17h.01" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       <div class="stage">
@@ -244,14 +250,20 @@
           <h2>Takes</h2>
           <span id="takeCount" class="count"></span>
           <div class="spacer"></div>
-          <button id="downloadAllBtn" type="button" disabled title="Download every take"
-            class="btn btn--outline btn--sm">
-            Download all
-          </button>
-          <button id="clearTakesBtn" type="button" disabled title="Remove every take from the gallery"
-            class="btn btn--outline btn--danger btn--sm">
-            Clear
-          </button>
+          <!-- The gallery-level actions are one group so a wrapped head keeps
+               them together: flex line-breaking splits items one at a time, and
+               at phone widths "Download all" and "Clear" landed on separate
+               lines - one of them alone under the heading. -->
+          <div class="head-actions">
+            <button id="downloadAllBtn" type="button" disabled title="Download every take"
+              class="btn btn--outline btn--sm">
+              Download all
+            </button>
+            <button id="clearTakesBtn" type="button" disabled title="Remove every take from the gallery"
+              class="btn btn--outline btn--danger btn--sm">
+              Clear
+            </button>
+          </div>
         </div>
 
         <!--
