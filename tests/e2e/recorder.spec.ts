@@ -182,6 +182,149 @@ test('opens a take in the preview modal', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-preview', 'open');
 });
 
+test('steps through the gallery from the preview, fading the chevrons at the ends', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  await page.click('#shareBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  const createdIds: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    await page.waitForTimeout(25);
+    await page.click('#screenshotBtn');
+    await expect(rows).toHaveCount(createdIds.length + 1);
+    const id = (await rowIds(page)).find(
+      (x) => x !== null && !createdIds.includes(x)
+    );
+    expect(id).toBeTruthy();
+    createdIds.push(id as string);
+  }
+  const shown = [...createdIds].reverse();
+  expect(await rowIds(page)).toEqual(shown);
+  const names = await Promise.all(
+    [0, 1, 2].map((i) =>
+      rows
+        .nth(i)
+        .locator('.take-thumb')
+        .getAttribute('aria-label')
+        .then((label) => (label ?? '').replace(/^Preview /, ''))
+    )
+  );
+
+  // Open the newest row and walk the gallery from inside the dialog.
+  await rows.first().locator('.take-thumb').click();
+  await expect(page.locator('#previewModal')).toBeVisible();
+  const counter = page.locator('#previewCounter');
+  await expect(counter).toHaveText('1 / 3');
+
+  // At the first take there is nowhere back to, but the design keeps the
+  // chevron on screen - faded, not gone (`.preview-nav[disabled]`). That
+  // visible end-of-list affordance is exactly what a generic
+  // `.icon-btn[disabled] { display: none }` used to swallow, so the proof is
+  // in the rendered ink: on screen, disabled, and dimmer than the live
+  // chevron beside it.
+  const prev = page.locator('#previewPrev');
+  const next = page.locator('#previewNext');
+  await expect(prev).toBeVisible();
+  await expect(prev).toBeDisabled();
+  await expect(next).toBeVisible();
+  await expect(next).toBeEnabled();
+  const faded = await prev.evaluate((el) =>
+    Number(getComputedStyle(el).opacity)
+  );
+  const lit = await next.evaluate((el) => Number(getComputedStyle(el).opacity));
+  expect(faded).toBeGreaterThan(0);
+  expect(faded).toBeLessThan(lit);
+
+  // The keyboard walks the same list, and every step lands on the take the
+  // row order promises - counter and title together - so the dialog cannot
+  // silently drift from the gallery underneath it.
+  await page.keyboard.press('ArrowRight');
+  await expect(counter).toHaveText('2 / 3');
+  await expect(page.locator('#previewTitle')).toHaveText(names[1]);
+  await expect(prev).toBeEnabled();
+  await expect(next).toBeEnabled();
+
+  await page.click('#previewNext');
+  await expect(counter).toHaveText('3 / 3');
+  await expect(page.locator('#previewTitle')).toHaveText(names[2]);
+  // The far end fades the forward chevron in place, same as the back one.
+  await expect(next).toBeVisible();
+  await expect(next).toBeDisabled();
+  await expect(prev).toBeEnabled();
+
+  // No wrap: stepping past the end stays put.
+  await page.keyboard.press('ArrowRight');
+  await expect(counter).toHaveText('3 / 3');
+  await expect(page.locator('#previewTitle')).toHaveText(names[2]);
+
+  // Back to the start, where the fade returns to the other side.
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(counter).toHaveText('1 / 3');
+  await expect(page.locator('#previewTitle')).toHaveText(names[0]);
+  await expect(prev).toBeDisabled();
+
+  // The walk never reorders or drops the rows it is walking.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#previewModal')).toBeHidden();
+  expect(await rowIds(page)).toEqual(shown);
+});
+
+test('the preview walks the filtered view and stays put when the view has one take', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  // A clip, then two stills - mixed kinds so the filter has something to hide.
+  await page.click('#shareBtn');
+  await page.click('#recordBtn');
+  await page.waitForTimeout(1500);
+  await page.click('#stopBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  await page.click('#screenshotBtn');
+  await expect(rows).toHaveCount(2);
+  await page.waitForTimeout(25);
+  await page.click('#screenshotBtn');
+  await expect(rows).toHaveCount(3);
+
+  // Filtered to stills, the dialog pages through the stills only: the walk
+  // follows the rows the user can see, not the store's full list.
+  await page.click('.filter-chip[data-filter="screenshot"]');
+  await expect(rows).toHaveCount(2);
+  await rows.first().locator('.take-thumb').click();
+  const counter = page.locator('#previewCounter');
+  await expect(counter).toHaveText('1 / 2');
+  await page.keyboard.press('ArrowRight');
+  await expect(counter).toHaveText('2 / 2');
+  const lastStill = (await page.locator('#previewTitle').textContent()) ?? '';
+
+  // ...and the end of the FILTERED list is a real end: no step overshoots
+  // onto the clip the filter is hiding.
+  await page.keyboard.press('ArrowRight');
+  await expect(counter).toHaveText('2 / 2');
+  await expect(page.locator('#previewTitle')).toHaveText(lastStill);
+
+  // A filter that leaves one take reads as a single take: no counter, no
+  // chevrons - there is nowhere to go - and arrows must not reach past the
+  // filter to the takes it hides.
+  await page.keyboard.press('Escape');
+  await page.click('.filter-chip[data-filter="recording"]');
+  await expect(rows).toHaveCount(1);
+  await rows.first().locator('.take-thumb').click();
+  await expect(page.locator('#previewModal')).toBeVisible();
+  await expect(counter).toHaveText('');
+  await expect(page.locator('#previewPrev')).toBeHidden();
+  await expect(page.locator('#previewNext')).toBeHidden();
+  await page.keyboard.press('ArrowRight');
+  await expect(counter).toHaveText('');
+  await expect(page.locator('#previewModal')).toBeVisible();
+});
+
 /** Arm a 3-second countdown through the settings drawer. */
 async function armCountdown(page: Page): Promise<void> {
   await page.click('#openSettings');
