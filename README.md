@@ -84,12 +84,12 @@ rebuild after editing.
 
 ## Scripts
 
-| Command                | What it does                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `npm run build`        | Compile Tailwind → `dist/tailwind.css`, then bundle with Rolldown → `dist/index.js` |
-| `npm run lint`         | Lint with Oxlint                                                                    |
-| `npm run format`       | Format the source with Prettier                                                     |
-| `npm run format:check` | Check formatting without writing                                                    |
+| Command                | What it does                                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run build`        | Compile Tailwind → `dist/tailwind.css`, bundle with Rolldown → `dist/index.js`, then run the build checks (service-worker manifest, styled classes, size budgets) |
+| `npm run lint`         | Lint with Oxlint                                                                                                                                                  |
+| `npm run format`       | Format the source with Prettier                                                                                                                                   |
+| `npm run format:check` | Check formatting without writing                                                                                                                                  |
 
 ## How it works
 
