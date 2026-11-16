@@ -5,7 +5,7 @@ import { FORMATS_TO_CHECK } from './constants';
 import { timestampFilename } from './filename';
 import { formatBytes, formatDuration } from './format';
 import { bindShortcuts } from './shortcuts';
-import { captureFrame } from './screenshot';
+import { captureFrame, selectionToFrameRegion } from './screenshot';
 import { CountdownHandle, runCountdown } from './countdown';
 import { PictureInPicture } from './pip';
 import { Stopwatch } from './stopwatch';
@@ -254,6 +254,26 @@ function announceSaved(take: Take): void {
 }
 
 /**
+ * The region a still should capture.
+ *
+ * "Crop to a region" states what gets captured, and a screenshot is a capture:
+ * with the box on, the still is the region - exactly what the next recording
+ * would capture - not the whole shared screen sitting behind the overlay. The
+ * one exception is a native (Region Capture) crop already applied to the
+ * shared track: the preview then shows only the region, so the frame is taken
+ * as-is rather than cropped a second time.
+ */
+function screenshotRegion() {
+  if (!ui.cropCheckbox.checked || cropper.isSourceCropped()) return null;
+  return selectionToFrameRegion(
+    ui.cropBox.getBoundingClientRect(),
+    ui.videoPreview.getBoundingClientRect(),
+    ui.videoPreview.videoWidth,
+    ui.videoPreview.videoHeight
+  );
+}
+
+/**
  * Capture the preview's current frame as a PNG and file it as a take.
  *
  * Silent when there is nothing to capture - a shortcut should never throw up
@@ -262,7 +282,7 @@ function announceSaved(take: Take): void {
  * taking the next one.
  */
 async function captureScreenshot() {
-  const blob = await captureFrame(ui.videoPreview);
+  const blob = await captureFrame(ui.videoPreview, screenshotRegion());
   if (!blob) return;
 
   const take = takes.add({

@@ -18,6 +18,13 @@ export class Cropper {
   private cropAnimationId: number | null = null;
   private isCropApiSupported =
     'CropTarget' in window && 'fromElement' in CropTarget;
+  /**
+   * True while the shared track itself carries the crop (native Region
+   * Capture). The preview then shows only the region, so anything reading the
+   * frame must know the picture is already cropped - cropping it again by the
+   * box's geometry would take a second, wrong bite out of it.
+   */
+  private sourceCropped = false;
 
   constructor(
     private cropBox: HTMLDivElement,
@@ -46,6 +53,7 @@ export class Cropper {
   }
 
   async startCrop(stream: MediaStream): Promise<MediaStream> {
+    this.sourceCropped = false;
     if (this.isCropApiSupported) {
       try {
         const [videoTrack] = stream.getVideoTracks();
@@ -53,6 +61,7 @@ export class Cropper {
         await (videoTrack as unknown as CropMediaStreamTrack).cropTo(
           cropTarget
         );
+        this.sourceCropped = true;
         return stream;
       } catch (err) {
         console.error('Native cropping failed, falling back to canvas.', err);
@@ -63,7 +72,13 @@ export class Cropper {
     }
   }
 
+  /** Whether the live track is already cropped to the region. */
+  isSourceCropped(): boolean {
+    return this.sourceCropped;
+  }
+
   async stopCrop(stream: MediaStream | null) {
+    this.sourceCropped = false;
     if (this.cropAnimationId) {
       cancelAnimationFrame(this.cropAnimationId);
       this.cropAnimationId = null;

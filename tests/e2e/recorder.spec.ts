@@ -11,7 +11,8 @@ import { test, expect, type Page } from '@playwright/test';
  */
 async function stubDisplayMedia(
   page: Page,
-  recordOnShare = false
+  recordOnShare = false,
+  quadrants = false
 ): Promise<void> {
   // Pin the record-on-share preference so runs are deterministic: the manual
   // Share -> Record tests get it OFF, and the auto-record tests below flip it ON.
@@ -21,7 +22,7 @@ async function stubDisplayMedia(
       on ? 'true' : 'false'
     );
   }, recordOnShare);
-  await page.addInitScript(() => {
+  await page.addInitScript((quads: boolean) => {
     const install = (): void => {
       if (!navigator.mediaDevices) return;
       navigator.mediaDevices.getDisplayMedia =
@@ -33,8 +34,21 @@ async function stubDisplayMedia(
           let t = 0;
           const draw = (): void => {
             if (ctx) {
-              ctx.fillStyle = `hsl(${t++ % 360}, 70%, 50%)`;
-              ctx.fillRect(0, 0, 640, 360);
+              if (quads) {
+                // Four fixed-colour quadrants: which quadrant a captured pixel
+                // lands in says exactly where in the shared frame it came from.
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(0, 0, 320, 180);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(320, 0, 320, 180);
+                ctx.fillStyle = '#0000ff';
+                ctx.fillRect(0, 180, 320, 180);
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(320, 180, 320, 180);
+              } else {
+                ctx.fillStyle = `hsl(${t++ % 360}, 70%, 50%)`;
+                ctx.fillRect(0, 0, 640, 360);
+              }
             }
             requestAnimationFrame(draw);
           };
@@ -43,7 +57,7 @@ async function stubDisplayMedia(
         };
     };
     install();
-  });
+  }, quadrants);
 }
 
 test('records a clip into the gallery and it survives a reload', async ({
@@ -166,6 +180,119 @@ test('captures a screenshot into the gallery', async ({ page }) => {
   await expect(rows).toHaveCount(1);
   // A screenshot row carries its size, not a duration.
   await expect(rows.first()).toContainText('PNG');
+});
+
+/** The opened still's decoded pixel size; the dialog is closed again after. */
+async function previewImageSize(page: Page): Promise<{ w: number; h: number }> {
+  await page.click('#takeList .take-thumb');
+  await expect(page.locator('#previewModal')).toBeVisible();
+  const size = await page.locator('#previewMedia img').evaluate(
+    (img) =>
+      new Promise<{ w: number; h: number }>((resolve) => {
+        const el = img as HTMLImageElement;
+        const done = () => resolve({ w: el.naturalWidth, h: el.naturalHeight });
+        if (el.complete && el.naturalWidth > 0) done();
+        else el.addEventListener('load', done, { once: true });
+      })
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#previewModal')).toBeHidden();
+  return size;
+}
+
+/**
+ * The opened still's corner colours (top-left, top-right, bottom-left,
+ * bottom-right), sampled 5px in. Against the quadrant stub, which quadrant
+ * each corner lands in says exactly where in the shared frame its pixels came
+ * from.
+ */
+async function previewCorners(page: Page): Promise<number[][]> {
+  await page.click('#takeList .take-thumb');
+  await expect(page.locator('#previewModal')).toBeVisible();
+  const corners = await page.locator('#previewMedia img').evaluate(
+    (img) =>
+      new Promise<number[][]>((resolve) => {
+        const el = img as HTMLImageElement;
+        const read = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = el.naturalWidth;
+          canvas.height = el.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve([]);
+          ctx.drawImage(el, 0, 0);
+          const px = (x: number, y: number) =>
+            Array.from(ctx.getImageData(x, y, 1, 1).data.slice(0, 3));
+          resolve([
+            px(5, 5),
+            px(el.naturalWidth - 6, 5),
+            px(5, el.naturalHeight - 6),
+            px(el.naturalWidth - 6, el.naturalHeight - 6),
+          ]);
+        };
+        if (el.complete && el.naturalWidth > 0) read();
+        else el.addEventListener('load', read, { once: true });
+      })
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#previewModal')).toBeHidden();
+  return corners;
+}
+
+/** The quadrant stub's colours, in corner order: red, green, blue, yellow. */
+function expectFrameQuadrants(corners: number[][]): void {
+  const expected = [
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [255, 255, 0],
+  ];
+  expect(corners).toHaveLength(4);
+  corners.forEach((corner, i) => {
+    for (let ch = 0; ch < 3; ch++) {
+      expect(
+        Math.abs(corner[ch] - expected[i][ch]),
+        `corner ${i} channel ${ch} (got ${corner.join(',')})`
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+}
+
+test('a screenshot follows the Crop to a region selection', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page, false, true);
+  await page.goto('/');
+  await page.click('#shareBtn');
+  await page.waitForFunction(() => {
+    const v = document.getElementById(
+      'videoPreview'
+    ) as HTMLVideoElement | null;
+    return Boolean(v && v.videoWidth === 640);
+  });
+
+  // Crop off: a still is the whole shared frame - all four quadrants, 640x360.
+  await page.click('#screenshotBtn');
+  const rows = page.locator('#takeList [data-take-id]');
+  await expect(rows).toHaveCount(1);
+  let size = await previewImageSize(page);
+  expect(Math.abs(size.w - 640)).toBeLessThanOrEqual(1);
+  expect(Math.abs(size.h - 360)).toBeLessThanOrEqual(1);
+  expectFrameQuadrants(await previewCorners(page));
+
+  // Crop on: the default box holds the middle 80% of the preview, and the
+  // still must be exactly the region a recording would capture. It used to
+  // ignore the box entirely and shoot the whole frame sitting behind it.
+  await page.click('#openSettings');
+  await page.click('#cropCheckbox');
+  await page.click('#closeSettings');
+  await page.click('#screenshotBtn');
+  await expect(rows).toHaveCount(2);
+  size = await previewImageSize(page);
+  expect(Math.abs(size.w - 512)).toBeLessThanOrEqual(2);
+  expect(Math.abs(size.h - 288)).toBeLessThanOrEqual(2);
+  // The region is the frame's middle 80%, so its corners still sit inside the
+  // same four frame quadrants - the same pixels a recording would capture.
+  expectFrameQuadrants(await previewCorners(page));
 });
 
 test('opens a take in the preview modal', async ({ page }) => {
