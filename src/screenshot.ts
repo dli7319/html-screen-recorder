@@ -22,20 +22,113 @@ export function frameSize(video: {
   return { width, height };
 }
 
-/** Render the video's current frame into a PNG blob. */
+/** A rectangle in viewport coordinates, e.g. from getBoundingClientRect(). */
+export interface ViewRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** A capture region in frame pixel coordinates, whole pixels inside the frame. */
+export interface FrameRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Map a selection drawn over the video element onto the frame's own pixels.
+ *
+ * A crop box is positioned over the preview element, but a capture is made
+ * from the decoded frame - two different coordinate spaces. The frame is
+ * displayed `object-contain`ed inside the element, so the mapping runs through
+ * the element's fitted content box: a selection hanging into a letterbox bar
+ * is clamped away rather than sampling blank margin.
+ *
+ * Edges are rounded to whole pixels together (before clamping) so the region
+ * keeps the size it was drawn with instead of drifting a pixel per edge, and
+ * anything that covers no picture at all returns null.
+ */
+export function selectionToFrameRegion(
+  selection: ViewRect,
+  element: ViewRect,
+  frameWidth: number,
+  frameHeight: number
+): FrameRegion | null {
+  if (
+    !(frameWidth > 0) ||
+    !(frameHeight > 0) ||
+    !(element.width > 0) ||
+    !(element.height > 0)
+  ) {
+    return null;
+  }
+
+  // object-fit: contain - the frame's picture box inside the element.
+  const scale = Math.min(
+    element.width / frameWidth,
+    element.height / frameHeight
+  );
+  const contentWidth = frameWidth * scale;
+  const contentHeight = frameHeight * scale;
+  const offsetX = element.left + (element.width - contentWidth) / 2;
+  const offsetY = element.top + (element.height - contentHeight) / 2;
+
+  const x0 = Math.round((selection.left - offsetX) / scale);
+  const y0 = Math.round((selection.top - offsetY) / scale);
+  const x1 = Math.round((selection.left + selection.width - offsetX) / scale);
+  const y1 = Math.round((selection.top + selection.height - offsetY) / scale);
+
+  // Clamp to the frame; a selection sitting in a letterbox bar collapses.
+  const cx0 = Math.min(Math.max(x0, 0), frameWidth);
+  const cy0 = Math.min(Math.max(y0, 0), frameHeight);
+  const cx1 = Math.min(Math.max(x1, cx0), frameWidth);
+  const cy1 = Math.min(Math.max(y1, cy0), frameHeight);
+
+  const width = cx1 - cx0;
+  const height = cy1 - cy0;
+  if (width < 1 || height < 1) return null;
+  return { x: cx0, y: cy0, width, height };
+}
+
+/**
+ * Render the video's current frame into a PNG blob - the whole frame, or just
+ * `region` when a crop selection decides what a capture means.
+ */
 export async function captureFrame(
-  video: HTMLVideoElement
+  video: HTMLVideoElement,
+  region?: FrameRegion | null
 ): Promise<Blob | null> {
-  const size = frameSize(video);
-  if (!size) return null;
+  const frame = frameSize(video);
+  if (!frame) return null;
+
+  const width = region ? region.width : frame.width;
+  const height = region ? region.height : frame.height;
+  if (!(width > 0) || !(height > 0)) return null;
 
   const canvas = document.createElement('canvas');
-  canvas.width = size.width;
-  canvas.height = size.height;
+  canvas.width = width;
+  canvas.height = height;
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
-  ctx.drawImage(video, 0, 0, size.width, size.height);
+  if (region) {
+    ctx.drawImage(
+      video,
+      region.x,
+      region.y,
+      region.width,
+      region.height,
+      0,
+      0,
+      width,
+      height
+    );
+  } else {
+    ctx.drawImage(video, 0, 0, width, height);
+  }
 
   return new Promise<Blob | null>((resolve) => {
     // toBlob reports null when the canvas cannot be encoded.
