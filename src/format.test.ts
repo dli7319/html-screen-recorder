@@ -4,6 +4,7 @@ import {
   formatDuration,
   formatExpiry,
   expiryTone,
+  formatWhen,
 } from './format';
 
 describe('formatBytes', () => {
@@ -150,5 +151,58 @@ describe('expiryTone', () => {
     expect(expiryTone(30 * MINUTE)).toBe('is-urgent');
     expect(expiryTone(0)).toBe('is-urgent');
     expect(expiryTone(-DAY)).toBe('is-urgent');
+  });
+});
+
+describe('formatWhen', () => {
+  // Both stamps are built in local time, so the day words depend only on the
+  // pair - the assertions hold in any timezone.
+  const at = (m: number, d: number, h: number, min: number, y = 2026) =>
+    new Date(y, m - 1, d, h, min).getTime();
+
+  it('reads a take from today with the clock time', () => {
+    expect(formatWhen(at(11, 17, 14, 32), at(11, 17, 23, 59))).toBe(
+      'Today, 14:32'
+    );
+    // An hour ago is still today: the words are calendar days, not hours.
+    expect(formatWhen(at(11, 17, 9, 5), at(11, 17, 10, 5))).toBe(
+      'Today, 09:05'
+    );
+  });
+
+  it('reads a take from the day before as yesterday', () => {
+    expect(formatWhen(at(11, 16, 23, 30), at(11, 17, 23, 0))).toBe(
+      'Yesterday, 23:30'
+    );
+  });
+
+  it('crosses month and year boundaries for yesterday', () => {
+    expect(formatWhen(at(11, 1, 0, 5), at(11, 2, 8, 0))).toBe(
+      'Yesterday, 00:05'
+    );
+    expect(formatWhen(at(12, 31, 23, 59, 2025), at(1, 1, 0, 30))).toBe(
+      'Yesterday, 23:59'
+    );
+  });
+
+  it('dates older takes inside the current year', () => {
+    expect(formatWhen(at(3, 3, 9, 7), at(11, 17, 12, 0))).toBe('Mar 3, 09:07');
+  });
+
+  it('adds the year once the take is from another year', () => {
+    expect(formatWhen(at(11, 5, 14, 32, 2025), at(11, 17, 12, 0, 2026))).toBe(
+      'Nov 5, 2025, 14:32'
+    );
+  });
+
+  it('dates a future timestamp rather than claiming it is today', () => {
+    // Clock skew after a capture on another machine: say what the stamp says.
+    expect(formatWhen(at(11, 18, 8, 0), at(11, 17, 23, 59))).toBe(
+      'Nov 18, 08:00'
+    );
+  });
+
+  it('tolerates non-finite input without printing NaN', () => {
+    expect(formatWhen(NaN, at(11, 17, 12, 0))).toBe('');
   });
 });

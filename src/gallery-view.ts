@@ -4,6 +4,7 @@ import {
   formatBytes,
   formatDuration,
   formatExpiry,
+  formatWhen,
   expiryTone,
 } from './format';
 import { downloadBlob } from './screenshot';
@@ -370,7 +371,15 @@ export class GalleryView {
 
     const meta = document.createElement('p');
     meta.className = 'text-xs text-gray-500 dark:text-gray-400';
-    meta.textContent = [this.describeTake(take), take.formatName]
+    // "01:23 · 4.5 MB · WebM · Today, 14:32": what it is, then when it
+    // happened. The when rides last so it reads as the row's qualifier, and
+    // so the duration stays the first clock in the line - the e2e specs
+    // measure the length by the first mm:ss in this text.
+    meta.textContent = [
+      this.describeTake(take),
+      take.formatName,
+      formatWhen(take.createdAt),
+    ]
       .filter(Boolean)
       .join(' · ');
 

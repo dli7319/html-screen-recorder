@@ -3,6 +3,22 @@
  * output the user sees is pinned by tests rather than eyeballed.
  */
 
+/** English month abbreviations for formatWhen - fixed, not locale-derived. */
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
 /**
  * Human-readable byte count using 1024-based steps, which is what people expect
  * from a file they are about to download.
@@ -69,6 +85,46 @@ export function formatExpiry(remainingMs: number): string {
     return phrase(Math.round(remainingMs / HOUR), 'hour');
   // The bottom rung stays at one: "Expires in 0 minutes" reads as expired.
   return phrase(Math.max(1, Math.round(remainingMs / MINUTE)), 'minute');
+}
+
+/**
+ * When a take was made, in words a person can scan: `Today, 14:32`,
+ * `Yesterday, 09:05`, `Nov 5, 14:32`, or `Nov 5, 2025, 14:32` once the year
+ * is not this one.
+ *
+ * The filename stamp is the same information (`20261105143215.webm`) but
+ * unreadable at a glance, and a renamed take loses it outright - the row
+ * still needs to say when it happened. Recent days get words ("Today") and
+ * older ones a date, which is how people talk about their own captures.
+ *
+ * Fixed English and a 24-hour clock, like every other formatter here: the
+ * exact string is pinned by tests, and locale-dependent output cannot be.
+ * `now` is injectable so the day words are testable without a fake clock.
+ */
+export function formatWhen(
+  createdAt: number,
+  now: number = Date.now()
+): string {
+  if (!Number.isFinite(createdAt)) return '';
+
+  const at = new Date(createdAt);
+  const ref = new Date(now);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+
+  // Calendar-day distance via UTC midnights of the local dates: a plain ms
+  // difference would miscount either side of a DST transition.
+  const dayIndex = (d: Date) =>
+    Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;
+  const daysAgo = dayIndex(ref) - dayIndex(at);
+
+  if (daysAgo === 0) return `Today, ${time}`;
+  if (daysAgo === 1) return `Yesterday, ${time}`;
+
+  const date = `${MONTHS[at.getMonth()]} ${at.getDate()}`;
+  return at.getFullYear() === ref.getFullYear()
+    ? `${date}, ${time}`
+    : `${date}, ${at.getFullYear()}, ${time}`;
 }
 
 /**
