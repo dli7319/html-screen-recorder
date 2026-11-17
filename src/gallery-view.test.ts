@@ -157,6 +157,38 @@ describe('GalleryView with takes', () => {
     expect(text.some((t) => t.includes('two.png'))).toBe(true);
   });
 
+  it('stamps each row with when the take was made', () => {
+    // Fake the clock only: the label names the calendar day of the take, so
+    // pinning the day is what makes "Today, 14:32" deterministic (an
+    // unfaked run would race local midnight twice per year).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 17, 14, 32));
+    try {
+      render();
+      store.add({
+        kind: 'screenshot',
+        blob: new Blob(['b']),
+        filename: 'two.png',
+        formatName: 'PNG',
+      });
+      store.add({
+        kind: 'screenshot',
+        blob: new Blob(['c']),
+        filename: 'old.png',
+        formatName: 'PNG',
+        createdAt: new Date(2025, 10, 5, 9, 7).getTime(),
+      });
+
+      const text = [...$('takeList').querySelectorAll('[data-take-id]')].map(
+        (r) => r.textContent ?? ''
+      );
+      expect(text[0]).toContain('Today, 14:32');
+      expect(text[1]).toContain('Nov 5, 2025, 09:07');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rebuilds when a take is removed', () => {
     render();
     const keep = store.add({
