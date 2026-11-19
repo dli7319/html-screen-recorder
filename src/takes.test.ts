@@ -87,6 +87,45 @@ describe('TakeStore.add', () => {
     expect(shot.kind).toBe('screenshot');
     expect(shot.durationMs).toBeUndefined();
   });
+
+  it('numbers same-stamped takes instead of naming them alike', () => {
+    // Two captures inside one second generate the same timestamp filename;
+    // the rows must still tell each other apart.
+    const store = new TakeStore();
+    const names = [
+      store.add({ ...take(), filename: '20261119160518.png' }).filename,
+      store.add({ ...take(), filename: '20261119160518.png' }).filename,
+      store.add({ ...take(), filename: '20261119160518.png' }).filename,
+    ];
+
+    expect(names).toEqual([
+      '20261119160518.png',
+      '20261119160518-2.png',
+      '20261119160518-3.png',
+    ]);
+  });
+
+  it('fills the lowest free suffix when one is already held', () => {
+    const store = new TakeStore();
+    store.add({ ...take(), filename: 'shot-2.png' });
+    const second = store.add({ ...take(), filename: 'shot.png' });
+    const third = store.add({ ...take(), filename: 'shot.png' });
+
+    expect(second.filename).toBe('shot.png');
+    expect(third.filename).toBe('shot-3.png');
+  });
+
+  it('does not re-issue the name of a removed take', () => {
+    // A name is held for the session so a later undo can put the take back
+    // exactly as it was; the newcomer gets the suffix instead.
+    const store = new TakeStore();
+    const gone = store.add({ ...take(), filename: 'shot.png' });
+    store.remove(gone.id);
+
+    expect(store.add({ ...take(), filename: 'shot.png' }).filename).toBe(
+      'shot-2.png'
+    );
+  });
 });
 
 describe('TakeStore.remove', () => {
@@ -620,6 +659,25 @@ describe('TakeStore remove/clear/reinsert (undo)', () => {
       'c.webm',
       'b.webm',
       'a.webm',
+    ]);
+  });
+
+  it('undo keeps the exact name even when a newcomer raced for it', () => {
+    // remove -> capture in the same second -> undo: the newcomer already had
+    // to take a suffixed name, so the restored take finds its own name free
+    // and no two rows end up alike.
+    const store = new TakeStore();
+    const added = store.add({ ...take(), filename: 'shot.png' });
+    const record = store.remove(added.id) as TakeRecord;
+    const newcomer = store.add({ ...take(), filename: 'shot.png' });
+
+    const restored = store.reinsert(record, 0);
+
+    expect(newcomer.filename).toBe('shot-2.png');
+    expect(restored.filename).toBe('shot.png');
+    expect(store.list().map((t) => t.filename)).toEqual([
+      'shot.png',
+      'shot-2.png',
     ]);
   });
 });

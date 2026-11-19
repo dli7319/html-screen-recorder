@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renameFilename, timestampFilename } from './filename';
+import { dedupeFilename, renameFilename, timestampFilename } from './filename';
 
 describe('timestampFilename', () => {
   it('produces a sortable YYYYMMDDHHmmss stamp', () => {
@@ -43,6 +43,51 @@ describe('timestampFilename', () => {
   it('zero-pads every field', () => {
     const at = new Date('2026-03-04T05:06:07Z');
     expect(timestampFilename('webm', at)).toBe('20260304050607.webm');
+  });
+});
+
+describe('dedupeFilename', () => {
+  it('returns the name untouched when nothing holds it', () => {
+    expect(dedupeFilename('shot.png', [])).toBe('shot.png');
+    expect(dedupeFilename('shot.png', ['other.png'])).toBe('shot.png');
+  });
+
+  it('numbers a colliding name before the extension', () => {
+    // Two captures inside one second share a timestamp stamp; the second one
+    // must not file under the same name as the first.
+    expect(dedupeFilename('20261119160518.png', ['20261119160518.png'])).toBe(
+      '20261119160518-2.png'
+    );
+  });
+
+  it('walks past every suffixed name already taken', () => {
+    expect(dedupeFilename('shot.png', ['shot.png', 'shot-2.png'])).toBe(
+      'shot-3.png'
+    );
+    expect(
+      dedupeFilename('shot.png', ['shot.png', 'shot-2.png', 'shot-3.png'])
+    ).toBe('shot-4.png');
+  });
+
+  it('fills the lowest free number rather than the next one', () => {
+    // A gap in the run goes to the new name; the suffix is a count, not a
+    // sequence position.
+    expect(dedupeFilename('shot.png', ['shot.png', 'shot-3.png'])).toBe(
+      'shot-2.png'
+    );
+  });
+
+  it('keeps the extension on suffixed names', () => {
+    expect(dedupeFilename('my.clip.png', ['my.clip.png'])).toBe(
+      'my.clip-2.png'
+    );
+  });
+
+  it('suffixes names that have no extension', () => {
+    expect(dedupeFilename('README', ['README'])).toBe('README-2');
+    // A leading dot is a base name, not an extension - same rule as
+    // renameFilename applies here.
+    expect(dedupeFilename('.draft', ['.draft'])).toBe('.draft-2');
   });
 });
 
