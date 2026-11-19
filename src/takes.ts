@@ -6,6 +6,8 @@
  * there is exactly one place responsible for the lifetime of a blob URL.
  */
 
+import { dedupeFilename } from './filename';
+
 export type TakeKind = 'recording' | 'screenshot';
 
 export interface Take {
@@ -99,13 +101,27 @@ export class TakeStore {
 
   constructor(private cache?: TakePersistence) {}
 
+  /**
+   * Every filename the store has issued this session. A name is never
+   * re-issued, even after its take is removed: undoing a removal must find
+   * the exact name still waiting, so a remove -> capture -> undo race cannot
+   * put two same-named takes back on the shelf.
+   */
+  private claimedNames = new Set<string>();
+
   add(input: TakeInput): Take {
+    // Two captures in the same second share a timestamp name; the second one
+    // gets a numbered suffix instead of a twin. Done here, not at the capture
+    // sites, so every way a take can enter the gallery is covered and two
+    // adds racing in one tick still land distinct names.
+    const filename = dedupeFilename(input.filename, this.claimedNames);
+    this.claimedNames.add(filename);
     const take: Take = {
       id: this.nextId(),
       kind: input.kind,
       blob: input.blob,
       url: URL.createObjectURL(input.blob),
-      filename: input.filename,
+      filename,
       size: input.blob.size,
       durationMs: input.durationMs,
       createdAt: input.createdAt ?? Date.now(),
@@ -195,15 +211,20 @@ export class TakeStore {
       // A record whose id is already listed was written by this session's own
       // add(); listing it twice would double every download.
       .filter((record) => !held.has(record.id))
-      .map((record) => ({
-        ...record,
-        url: URL.createObjectURL(record.blob),
-        // Rows cached before thumbnails existed simply have no `thumbnail`;
-        // they restore without one and pick it up from the backfill pass.
-        thumbnailUrl: record.thumbnail
-          ? URL.createObjectURL(record.thumbnail)
-          : undefined,
-      }));
+      .map((record) => {
+        // Claimed verbatim - a cached take comes back under the name it was
+        // saved with, and no new capture may take that name from it.
+        this.claimedNames.add(record.filename);
+        return {
+          ...record,
+          url: URL.createObjectURL(record.blob),
+          // Rows cached before thumbnails existed simply have no `thumbnail`;
+          // they restore without one and pick it up from the backfill pass.
+          thumbnailUrl: record.thumbnail
+            ? URL.createObjectURL(record.thumbnail)
+            : undefined,
+        };
+      });
     if (restored.length === 0) return;
 
     this.takes = [...this.takes, ...restored].sort(
@@ -239,12 +260,15 @@ export class TakeStore {
   }
 
   /**
-   * Put a take back exactly as it was - same id, timestamp and thumbnail - to
-   * undo a Remove or Clear. `add()` cannot do this: it would mint a fresh id and
-   * today's date, silently resetting the expiry. Re-inserts at `index` so the
-   * list order comes back too.
+   * Put a take back exactly as it was - same id, timestamp, filename and
+   * thumbnail - to undo a Remove or Clear. `add()` cannot do this: it would
+   * mint a fresh id, today's date and a deduped name, silently changing what
+   * is being restored. Re-inserts at `index` so the list order comes back too.
    */
   reinsert(record: TakeRecord, index = 0): Take {
+    // The name is claimed, not deduped: this is the exact take coming back,
+    // and add() already kept any newcomer off its name while it was away.
+    this.claimedNames.add(record.filename);
     const take: Take = {
       ...record,
       url: URL.createObjectURL(record.blob),
