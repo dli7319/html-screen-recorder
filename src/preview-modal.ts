@@ -367,10 +367,14 @@ export class TakePreview {
     // worth skipping so no toast claims something did not happen.
     const filename = renameFilename(take.filename, typed);
     if (filename === null || filename === take.filename) return;
-    this.store.rename(take.id, filename);
-    this.title.textContent = filename;
-    this.modal.setAttribute('aria-label', filename);
-    showToast(`Renamed to ${filename}`);
+    // Name uniqueness belongs to the store: a typed name another take already
+    // wears comes back with the numbered suffix captures get, and the caption
+    // and the confirmation report what was applied rather than what was typed.
+    const applied = this.store.rename(take.id, filename);
+    if (applied === null) return;
+    this.title.textContent = applied;
+    this.modal.setAttribute('aria-label', applied);
+    showToast(`Renamed to ${applied}`);
   }
 
   /** Put the caption back and drop the field without touching the take. */

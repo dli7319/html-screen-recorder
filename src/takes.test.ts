@@ -554,7 +554,7 @@ describe('TakeStore.rename', () => {
     const store = new TakeStore();
     const added = store.add(take());
 
-    expect(store.rename(added.id, 'demo.webm')).toBe(true);
+    expect(store.rename(added.id, 'demo.webm')).toBe('demo.webm');
 
     const renamed = store.list()[0];
     expect(renamed.filename).toBe('demo.webm');
@@ -563,10 +563,76 @@ describe('TakeStore.rename', () => {
     expect(revoked).toEqual([]);
   });
 
-  it('reports false for an id that is not in the store', () => {
+  it('reports null for an id that is not in the store', () => {
     const store = new TakeStore();
 
-    expect(store.rename('nope', 'demo.webm')).toBe(false);
+    expect(store.rename('nope', 'demo.webm')).toBeNull();
+  });
+
+  it('suffixes a name another take already wears, keeping names unique', () => {
+    // Two takes, one download name: "Download all" would save two files as
+    // shot.png and the browser's own -2 suffix would mean the name on the row
+    // is not the name on disk - the same hole the capture-side dedupe closes.
+    const store = new TakeStore();
+    store.add({ ...take(), filename: 'shot.png' });
+    const other = store.add({ ...take(), filename: 'other.png' });
+
+    expect(store.rename(other.id, 'shot.png')).toBe('shot-2.png');
+
+    expect(
+      store
+        .list()
+        .map((t) => t.filename)
+        .sort()
+    ).toEqual(['shot-2.png', 'shot.png']);
+  });
+
+  it('walks past every collision until a free name is found', () => {
+    const store = new TakeStore();
+    store.add({ ...take(), filename: 'shot.png' });
+    store.add({ ...take(), filename: 'shot-2.png' });
+    const other = store.add({ ...take(), filename: 'other.png' });
+
+    expect(store.rename(other.id, 'shot.png')).toBe('shot-3.png');
+  });
+
+  it('lets a take reclaim its own abandoned name without a suffix', () => {
+    const store = new TakeStore();
+    const added = store.add({ ...take(), filename: 'shot.png' });
+
+    expect(store.rename(added.id, 'demo.webm')).toBe('demo.webm');
+    expect(store.rename(added.id, 'shot.png')).toBe('shot.png');
+  });
+
+  it('keeps a removed take name reserved so Undo can restore it verbatim', () => {
+    const store = new TakeStore();
+    const gone = store.add({ ...take(), filename: 'shot.png' });
+    const record = store.remove(gone.id) as TakeRecord;
+    const other = store.add({ ...take(), filename: 'other.png' });
+
+    // The name is not free: the Undo for `gone` still has to land on it.
+    expect(store.rename(other.id, 'shot.png')).toBe('shot-2.png');
+
+    const restored = store.reinsert(record, 0);
+    expect(restored.filename).toBe('shot.png');
+  });
+
+  it('names the winner of a rename race without duplicating either take', () => {
+    // add() dedupes two same-second captures; a rename racing a capture must
+    // land the same way - whichever claims the name first keeps it.
+    const store = new TakeStore();
+    const added = store.add({ ...take(), filename: 'other.png' });
+
+    expect(store.rename(added.id, '20261120120000.png')).toBe(
+      '20261120120000.png'
+    );
+    const captured = store.add({
+      ...take(),
+      filename: '20261120120000.png',
+    });
+
+    expect(captured.filename).toBe('20261120120000-2.png');
+    expect(new Set(store.list().map((t) => t.filename)).size).toBe(2);
   });
 
   it('notifies listeners so the views re-render', () => {
@@ -588,6 +654,18 @@ describe('TakeStore.rename', () => {
     store.rename(added.id, 'demo.webm');
     await vi.waitFor(() => expect(cache.put).toHaveBeenCalledTimes(2));
     expect(cache.records.get(added.id)?.filename).toBe('demo.webm');
+  });
+
+  it('writes the applied name through when the typed one had to be suffixed', async () => {
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    store.add({ ...take(), filename: 'shot.png' });
+    const other = store.add({ ...take(), filename: 'other.png' });
+
+    store.rename(other.id, 'shot.png');
+    await vi.waitFor(() =>
+      expect(cache.records.get(other.id)?.filename).toBe('shot-2.png')
+    );
   });
 
   it('keeps the name when the cache refuses the write', () => {
