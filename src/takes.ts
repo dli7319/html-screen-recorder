@@ -103,9 +103,12 @@ export class TakeStore {
 
   /**
    * Every filename the store has issued this session. A name is never
-   * re-issued, even after its take is removed: undoing a removal must find
-   * the exact name still waiting, so a remove -> capture -> undo race cannot
-   * put two same-named takes back on the shelf.
+   * re-issued while a take - live, or removed with its Undo still pending -
+   * can come back under it: undoing a removal must find the exact name still
+   * waiting, so a remove -> capture -> undo race cannot put two same-named
+   * takes back on the shelf. The one release is rename(): once a take has
+   * stopped wearing a name for good, nothing can return under it and the name
+   * is free to be typed again.
    */
   private claimedNames = new Set<string>();
 
@@ -171,19 +174,39 @@ export class TakeStore {
   /**
    * Rename a take. The blob is untouched - this is the name downloads save as
    * - and the new name is written through to the cache so it survives a
-   * refresh alongside the take. Reports whether the take was still there to
-   * rename.
+   * refresh alongside the take. Returns the name actually applied, or null
+   * when the take was gone.
+   *
+   * Uniqueness is enforced here for the same reason add() enforces it: one
+   * filename may belong to one take, or "Download all" saves two files under
+   * one name and the browser's own -2 suffix means the name on the row is not
+   * the name on disk. A typed name that is already worn lands on the same
+   * numbered suffix captures get, and the caller reports what was applied -
+   * the user is told, not silently second-guessed.
    */
-  rename(id: string, filename: string): boolean {
+  rename(id: string, filename: string): string | null {
     const take = this.takes.find((candidate) => candidate.id === id);
-    if (!take) return false;
+    if (!take) return null;
 
-    const updated: Take = { ...take, filename };
+    // The name it stops wearing goes back on the shelf when no other take
+    // wears it, so renaming away and back again does not suffix a take with
+    // its own abandoned name. Names held by a removed take are never handed
+    // back: remove() keeps them claimed so an Undo can still find its exact
+    // name waiting.
+    const wornByAnother = this.takes.some(
+      (other) => other.id !== id && other.filename === take.filename
+    );
+    if (!wornByAnother) this.claimedNames.delete(take.filename);
+
+    const applied = dedupeFilename(filename, this.claimedNames);
+    this.claimedNames.add(applied);
+
+    const updated: Take = { ...take, filename: applied };
     this.takes[this.takes.indexOf(take)] = updated;
 
     this.cache?.put(TakeStore.toRecord(updated)).catch(warnCacheFailure);
     this.emit();
-    return true;
+    return applied;
   }
 
   private nextId(): string {

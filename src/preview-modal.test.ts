@@ -791,6 +791,33 @@ describe('TakePreview rename', () => {
     expect($('toastText').textContent).toBe('Renamed to demo.png');
   });
 
+  it('reports the applied name when the typed one was already taken', () => {
+    setup();
+    addScreenshot(); // 'shot.png'
+    const other = store.add({
+      kind: 'screenshot',
+      blob: new Blob(['img']),
+      filename: 'other.png',
+      formatName: 'PNG',
+    });
+    preview.open(other);
+
+    ($('previewRename') as HTMLButtonElement).click();
+    input().value = 'shot.png';
+    press('Enter');
+
+    // The typed name belongs to another take, so the rename lands on the
+    // numbered suffix - and the caption and toast say what actually happened.
+    expect(
+      store
+        .list()
+        .map((t) => t.filename)
+        .sort()
+    ).toEqual(['shot-2.png', 'shot.png']);
+    expect($('previewTitle').textContent).toBe('shot-2.png');
+    expect($('toastText').textContent).toBe('Renamed to shot-2.png');
+  });
+
   it('saves the name when the field loses focus', () => {
     setup();
     preview.open(addRecording()); // 'clip.webm'
