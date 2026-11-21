@@ -828,6 +828,8 @@ kbd {
     position: absolute;
     inset: 0;
     display: flex;
+    flex-direction: column;
+    gap: 12px;
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.5);
@@ -844,6 +846,20 @@ kbd {
     color: #fff;
     font-variant-numeric: tabular-nums;
     line-height: 1;
+}
+
+/* How to stop the count, on the count. The overlay is a 50% scrim over live
+   video, so the worst-case backdrop for this text is a bright frame mid-share -
+   a flat translucent white fails there. Solid white plus a dark halo keeps it
+   legible over anything the share can show, and it stays subordinate to the
+   number by size alone. */
+.countdown-hint {
+    margin: 0;
+    font-size: 13px;
+    color: #fff;
+    text-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.75),
+        0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .crop-target {

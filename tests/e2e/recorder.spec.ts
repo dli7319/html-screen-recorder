@@ -473,6 +473,9 @@ test('counts down before a recording and cancels from the Record button', async 
   // started it becomes the way to call it off.
   await expect(page.locator('#countdownOverlay')).toBeVisible();
   await expect(page.locator('#countdownNumber')).toHaveText('3');
+  // The overlay itself carries the way out, not just the button below it.
+  await expect(page.locator('.countdown-hint')).toBeVisible();
+  await expect(page.locator('.countdown-hint')).toContainText('Esc');
   await expect(page.locator('#recordBtnText')).toHaveText('Cancel');
   await expect(page.locator('#countdownNumber')).toHaveText('2', {
     timeout: 2500,
