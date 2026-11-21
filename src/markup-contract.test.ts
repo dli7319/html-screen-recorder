@@ -119,6 +119,28 @@ describe('markup contract', () => {
     ).toBe(false);
   });
 
+  it('announces the countdown and says how to stop it', () => {
+    // The 3-2-1 used to tick silently: the number is written every second by
+    // showCountdown(), and a span with no live region announces none of it - a
+    // screen reader user had no warning a capture was about to start. And
+    // nothing on the overlay itself said the count could be cancelled; the
+    // only hints were a settings tooltip and the Record button's label swap.
+    //
+    // Both halves are markup contracts: an ARIA attribute silently dropped in
+    // a rewrite re-arms the first bug, and a hint deleted for tidiness re-arms
+    // the second - neither would fail any behaviour test.
+    expect(
+      /id="countdownNumber"[^>]*aria-live="polite"/.test(html),
+      'the countdown number must be a polite live region, or its ticks are silent'
+    ).toBe(true);
+    expect(
+      /id="countdownOverlay"[\s\S]*?class="countdown-hint"[\s\S]*?Esc/.test(
+        html
+      ),
+      'the countdown overlay must say on itself how to stop the count'
+    ).toBe(true);
+  });
+
   it('hides the disabled pause button without hiding the preview chevrons', () => {
     // The preview dialog's prev/next chevrons go disabled at the ends of the
     // list, where the design keeps them visible but faded. A generic

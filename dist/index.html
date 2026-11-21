@@ -120,9 +120,22 @@
           </button>
 
           <!-- The 3-2-1, sitting over the preview so the count is where the
-               capture is about to happen. -->
+               capture is about to happen.
+
+               The number is a live region: the count ticks visually every
+               second, and until now it ticked silently - a screen reader got
+               no warning at all that a capture was about to start. role=timer
+               is the honest role for a count, but its implicit aria-live is
+               "off", so the explicit polite live region is what makes the tick
+               announce; atomic so each tick reads as one number, not a diff.
+
+               The overlay also says how to stop it. The escape hatch used to
+               live only in a tooltip on the settings drawer and the button's
+               own label swap - neither is on the thing covering the screen. -->
           <div id="countdownOverlay" class="countdown hidden">
-            <span id="countdownNumber"></span>
+            <span id="countdownNumber" role="timer" aria-live="polite"
+              aria-atomic="true"></span>
+            <p class="countdown-hint">Press Esc or Cancel to stop the countdown</p>
           </div>
 
           <!-- The empty state is deliberately quiet. It is the first thing
