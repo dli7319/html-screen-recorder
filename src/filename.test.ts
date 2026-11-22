@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeFilename, renameFilename, timestampFilename } from './filename';
+import {
+  dedupeFilename,
+  frameFilename,
+  renameFilename,
+  timestampFilename,
+} from './filename';
 
 describe('timestampFilename', () => {
   it('produces a sortable YYYYMMDDHHmmss stamp', () => {
@@ -128,5 +133,34 @@ describe('renameFilename', () => {
     // ".draft" is a base name, not an extension - there is nothing to append.
     expect(renameFilename('.draft', 'demo')).toBe('demo');
     expect(renameFilename('.draft', 'demo.x')).toBe('demo.x');
+  });
+});
+
+describe('frameFilename', () => {
+  it('swaps the extension for the frame position in the clip', () => {
+    expect(frameFilename('clip.webm', 3.24)).toBe('clip-frame-3.2s.png');
+    expect(frameFilename('20261004193012.mp4', 0)).toBe(
+      '20261004193012-frame-0.0s.png'
+    );
+  });
+
+  it('always names a PNG whatever the recording was encoded as', () => {
+    expect(frameFilename('clip.mp4', 1)).toMatch(/\.png$/);
+    expect(frameFilename('clip.webm', 1)).toMatch(/\.png$/);
+  });
+
+  it('rounds the position to tenths of a second', () => {
+    expect(frameFilename('clip.webm', 12.96)).toBe('clip-frame-13.0s.png');
+    expect(frameFilename('clip.webm', 0.04)).toBe('clip-frame-0.0s.png');
+  });
+
+  it('keeps dots that belong to the name', () => {
+    expect(frameFilename('my.clip.webm', 1.5)).toBe('my.clip-frame-1.5s.png');
+  });
+
+  it('handles a take with no extension and a leading-dot name', () => {
+    expect(frameFilename('demo', 2)).toBe('demo-frame-2.0s.png');
+    // ".draft" is a base name, not an extension - same reading as renameFilename.
+    expect(frameFilename('.draft', 2)).toBe('.draft-frame-2.0s.png');
   });
 });

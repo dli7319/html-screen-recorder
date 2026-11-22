@@ -34,6 +34,7 @@ Everything happens on your machine: the recording is captured with
 - **Running timer** on the record button while recording
 - **Keyboard-first** — `R` / `P` / `S` / `Shift+S` drive a capture without
   touching the mouse, and `?` opens a cheat sheet listing every shortcut
+- **Frame grab** — save any moment of a recording as a PNG from its preview
 - **Keeps the screen awake while recording** via the Wake Lock API, so a long
   take is not cut short by the display sleeping (where the browser supports it)
 - **Timestamped filenames** (`20261004193012.mp4`)
