@@ -42,6 +42,26 @@ export function dedupeFilename(
 }
 
 /**
+ * The download name for a still cut from a recording: the take's own name with
+ * its extension swapped for the frame's position in the clip -
+ * `clip.webm` at 3.24s becomes `clip-frame-3.2s.png`.
+ *
+ * The position is part of the name because it is what makes the file
+ * meaningful ("the frame at three seconds") and what keeps two grabs from the
+ * same clip from wearing the same name. The clip's extension is dropped, not
+ * kept: the output is a PNG whatever the recording was encoded as, and a
+ * `clip.webm.png` would misstate that.
+ */
+export function frameFilename(
+  currentFilename: string,
+  atSeconds: number
+): string {
+  const dot = currentFilename.lastIndexOf('.');
+  const base = dot > 0 ? currentFilename.slice(0, dot) : currentFilename;
+  return `${base}-frame-${atSeconds.toFixed(1)}s.png`;
+}
+
+/**
  * The download name for a renamed take: the typed text, kept as spelled, with
  * the take's own extension appended when the name has none.
  *

@@ -1,7 +1,8 @@
 import { Take, TakeStore } from './takes';
-import { renameFilename } from './filename';
+import { frameFilename, renameFilename } from './filename';
 import {
   canCopyImages,
+  captureFrame,
   copyImageToClipboard,
   downloadBlob,
 } from './screenshot';
@@ -28,8 +29,8 @@ function setMediaAspect(
 
 /**
  * A take shown large: the clip playing, or the still at full size, with the
- * actions that matter from here - saving it, and for a still, copying it to
- * the clipboard.
+ * actions that matter from here - saving it, saving one of its frames as a
+ * still, and for a still, copying it to the clipboard.
  *
  * One modal, reused: opening again replaces the content rather than stacking
  * a second dialog. It watches the store because a take can vanish while it is
@@ -47,6 +48,7 @@ export class TakePreview {
   private mediaSlot: HTMLElement;
   private downloadBtn: HTMLButtonElement;
   private copyBtn: HTMLButtonElement;
+  private frameBtn: HTMLButtonElement;
   private closeBtn: HTMLButtonElement;
   private counter: HTMLElement;
   private prevBtn: HTMLButtonElement;
@@ -93,6 +95,7 @@ export class TakePreview {
     this.mediaSlot = this.require('#previewMedia');
     this.downloadBtn = this.require('#previewDownload') as HTMLButtonElement;
     this.copyBtn = this.require('#previewCopy') as HTMLButtonElement;
+    this.frameBtn = this.require('#previewFrame') as HTMLButtonElement;
     this.closeBtn = this.require('#previewClose') as HTMLButtonElement;
     this.counter = this.require('#previewCounter');
     this.prevBtn = this.require('#previewPrev') as HTMLButtonElement;
@@ -121,6 +124,7 @@ export class TakePreview {
     this.scrim.addEventListener('click', this.onCloseClick);
     this.downloadBtn.addEventListener('click', this.onDownload);
     this.copyBtn.addEventListener('click', this.onCopy);
+    this.frameBtn.addEventListener('click', this.onSaveFrame);
     this.prevBtn.addEventListener('click', this.onPrev);
     this.nextBtn.addEventListener('click', this.onNext);
     this.removeBtn.addEventListener('click', this.onRemove);
@@ -139,6 +143,7 @@ export class TakePreview {
     this.scrim.removeEventListener('click', this.onCloseClick);
     this.downloadBtn.removeEventListener('click', this.onDownload);
     this.copyBtn.removeEventListener('click', this.onCopy);
+    this.frameBtn.removeEventListener('click', this.onSaveFrame);
     this.prevBtn.removeEventListener('click', this.onPrev);
     this.nextBtn.removeEventListener('click', this.onNext);
     this.removeBtn.removeEventListener('click', this.onRemove);
@@ -191,6 +196,12 @@ export class TakePreview {
           setMediaAspect(video, video.videoWidth, video.videoHeight);
         }
       });
+      // "Save frame" is armed only once the clip has a frame to cut - a button
+      // that would only ever answer "nothing to save yet" is worse than one
+      // that waits. `loadeddata` is the first moment a decoded frame exists.
+      video.addEventListener('loadeddata', () => {
+        if (this.currentId === take.id) this.frameBtn.disabled = false;
+      });
     } else {
       const img = document.createElement('img');
       img.src = take.url;
@@ -206,6 +217,11 @@ export class TakePreview {
       'hidden',
       take.kind !== 'screenshot' || !canCopyImages()
     );
+    // Save frame mirrors Copy: it cuts a still out of a clip, so it is for
+    // recordings only, and starts disabled until the clip has decoded a frame
+    // (armed by `loadeddata` below).
+    this.frameBtn.classList.toggle('hidden', take.kind !== 'recording');
+    this.frameBtn.disabled = true;
     this.setOpen(true);
     this.updateNav();
     this.releaseTrap?.();
@@ -298,6 +314,32 @@ export class TakePreview {
     // have been rebuilt since. A gone take downloads nothing.
     const take = this.store.list().find((t) => t.id === this.currentId);
     if (take) downloadBlob(take.blob, take.filename);
+  };
+
+  /**
+   * Cut the frame on screen out of the clip and save it as a PNG - the still
+   * Shift+S would have captured at this moment of playback. Clips only: a
+   * screenshot already is its own frame, and its Download button says so.
+   *
+   * The frame position is read before the capture so the name cannot drift
+   * from the pixels while the canvas encodes a playing clip. When nothing has
+   * decoded yet the capture is empty and reports itself instead of writing a
+   * blank image to the user's downloads.
+   */
+  private onSaveFrame = () => {
+    const take = this.store.list().find((t) => t.id === this.currentId);
+    const video = this.mediaSlot.querySelector('video');
+    if (!take || !video) return;
+    const atSeconds = video.currentTime;
+    void captureFrame(video).then((blob) => {
+      if (!blob) {
+        showToast('No frame to save yet');
+        return;
+      }
+      const name = frameFilename(take.filename, atSeconds);
+      downloadBlob(blob, name);
+      showToast(`Saved ${name}`);
+    });
   };
 
   /**

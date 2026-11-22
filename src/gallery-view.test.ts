@@ -23,6 +23,7 @@ const GALLERY_MARKUP = `
       <strong id="previewTitle"></strong>
       <input id="previewRenameInput" />
       <button id="previewCopy"></button>
+      <button id="previewFrame"></button>
       <button id="previewDownload"></button>
       <button id="previewRename"></button>
       <button id="previewRemove"></button>

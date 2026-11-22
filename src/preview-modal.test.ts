@@ -2,6 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TakePreview } from './preview-modal';
 import { Take, TakeStore } from './takes';
 import { runCountdown } from './countdown';
+import { captureFrame } from './screenshot';
+
+/**
+ * Only the capture is faked: it needs a decoding video and a real canvas,
+ * neither of which jsdom has. The output plumbing under test - the download,
+ * the name, the reports - stays real.
+ */
+vi.mock('./screenshot', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./screenshot')>();
+  return { ...actual, captureFrame: vi.fn() };
+});
 
 const PREVIEW_MARKUP = `
   <main>
@@ -10,6 +21,7 @@ const PREVIEW_MARKUP = `
       <strong id="previewTitle"></strong>
       <input id="previewRenameInput" />
       <button id="previewCopy"></button>
+      <button id="previewFrame"></button>
       <button id="previewDownload"></button>
       <button id="previewRename"></button>
       <button id="previewRemove"></button>
@@ -888,5 +900,127 @@ describe('TakePreview rename', () => {
     expect(store.list()[1].filename).toBe('clip.webm');
     expect(input().classList.contains('hidden')).toBe(true);
     expect($('previewTitle').textContent).toBe('clip.webm');
+  });
+});
+
+describe('TakePreview save frame', () => {
+  const png = () => new Blob(['png'], { type: 'image/png' });
+  const frameBtn = () => $('previewFrame') as HTMLButtonElement;
+  const clipVideo = () => media().querySelector('video') as HTMLVideoElement;
+
+  /**
+   * jsdom decodes no video, so the properties a capture reads are pinned by
+   * hand and `loadeddata` is fired by hand - that event is what arms the
+   * button in a real player.
+   */
+  function armFrame(atSeconds = 0) {
+    const video = clipVideo();
+    Object.defineProperty(video, 'currentTime', {
+      value: atSeconds,
+      configurable: true,
+    });
+    video.dispatchEvent(new Event('loadeddata'));
+  }
+
+  /** Record what each download would have written to disk. */
+  function watchDownloads(): {
+    saved: string[];
+    clicks: ReturnType<typeof vi.spyOn>;
+  } {
+    const saved: string[] = [];
+    const clicks = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        saved.push(this.download);
+      });
+    return { saved, clicks };
+  }
+
+  beforeEach(() => {
+    vi.mocked(captureFrame).mockReset().mockResolvedValue(png());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('offers Save frame for a clip and hides it for a still', () => {
+    setup();
+    preview.open(addRecording());
+    expect(frameBtn().classList.contains('hidden')).toBe(false);
+
+    preview.open(addScreenshot());
+
+    expect(frameBtn().classList.contains('hidden')).toBe(true);
+  });
+
+  it('stays disabled until the clip has decoded a frame', () => {
+    setup();
+    preview.open(addRecording());
+    expect(frameBtn().disabled).toBe(true);
+
+    clipVideo().dispatchEvent(new Event('loadeddata'));
+
+    expect(frameBtn().disabled).toBe(false);
+  });
+
+  it('re-arms as disabled when the dialog moves on to another clip', () => {
+    setup();
+    const first = addRecording();
+    preview.open(first);
+    armFrame();
+    expect(frameBtn().disabled).toBe(false);
+
+    const second = addRecording();
+    preview.open(store.list().find((t) => t.id === second.id)!);
+
+    expect(frameBtn().disabled).toBe(true);
+  });
+
+  it('downloads the frame on screen as a PNG named for its position', async () => {
+    setup();
+    const take = addRecording();
+    preview.open(take);
+    armFrame(3.24);
+    const { saved, clicks } = watchDownloads();
+
+    frameBtn().click();
+
+    await vi.waitFor(() => expect(saved).toEqual(['clip-frame-3.2s.png']));
+    expect(vi.mocked(captureFrame)).toHaveBeenCalledWith(clipVideo());
+    await vi.waitFor(() =>
+      expect($('toastText').textContent).toBe('Saved clip-frame-3.2s.png')
+    );
+    clicks.mockRestore();
+  });
+
+  it('names the frame from the take as it is named now', async () => {
+    setup();
+    const take = addRecording();
+    preview.open(take);
+    armFrame();
+    store.rename(take.id, 'demo.webm');
+    const { saved, clicks } = watchDownloads();
+
+    frameBtn().click();
+
+    await vi.waitFor(() => expect(saved).toEqual(['demo-frame-0.0s.png']));
+    clicks.mockRestore();
+  });
+
+  it('reports instead of downloading when there is no frame to capture', async () => {
+    vi.mocked(captureFrame).mockResolvedValue(null);
+    setup();
+    preview.open(addRecording());
+    armFrame();
+    const { saved, clicks } = watchDownloads();
+
+    frameBtn().click();
+
+    await vi.waitFor(() =>
+      expect($('toastText').textContent).toBe('No frame to save yet')
+    );
+    expect(saved).toEqual([]);
+    clicks.mockRestore();
   });
 });
