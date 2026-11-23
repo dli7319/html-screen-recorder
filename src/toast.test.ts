@@ -34,6 +34,13 @@ function movePointer(x: number, y: number): void {
   );
 }
 
+/** Press the pointer without moving it: a parked click, e.g. on a row under the pill. */
+function pressPointer(x: number, y: number): void {
+  window.dispatchEvent(
+    new MouseEvent('pointerdown', { clientX: x, clientY: y })
+  );
+}
+
 /** Pretend the tab is hidden/shown; jsdom's document.hidden is read-only. */
 function setHidden(hidden: boolean): void {
   Object.defineProperty(document, 'hidden', {
@@ -46,6 +53,10 @@ function setHidden(hidden: boolean): void {
 beforeEach(() => {
   document.body.innerHTML = MARKUP;
   vi.useFakeTimers();
+  // Park the pointer somewhere that is off the pill under every rect the tests
+  // use, so a toast's clock runs until a test says otherwise. The tracker is
+  // window-wide and long-lived, so each test must state where the pointer is.
+  movePointer(10, 10);
 });
 
 afterEach(() => {
@@ -229,6 +240,37 @@ describe('toast hold', () => {
     action().click();
 
     expect(onClick).toHaveBeenCalledOnce();
+    expect(visible()).toBe(false);
+  });
+
+  it('holds from the first tick when the pointer is already parked on the pill', () => {
+    stubHostRect();
+    movePointer(150, 420); // parked where the pill will appear
+    showToast('Removed clip.webm', { label: 'Undo', onClick: () => {} });
+
+    // Nothing moves the pointer after the show. The hold must engage on the
+    // show-time hit test alone, or the offer expires under a resting cursor.
+    vi.advanceTimersByTime(10000);
+    expect(visible()).toBe(true);
+  });
+
+  it('treats a parked click as the pointer resting on the pill', () => {
+    stubHostRect();
+    pressPointer(150, 420); // clicked something under where the pill lands
+    showToast('Removed clip.webm', { label: 'Undo', onClick: () => {} });
+
+    vi.advanceTimersByTime(10000);
+    expect(visible()).toBe(true);
+  });
+
+  it('runs the clock on schedule when the pointer is parked off the pill', () => {
+    stubHostRect();
+    movePointer(10, 10); // parked, but away from the pill
+    showToast('Removed clip.webm', { label: 'Undo', onClick: () => {} });
+
+    // The show-time hit test must not over-hold: away is away, even without
+    // any movement after the show.
+    vi.advanceTimersByTime(5200);
     expect(visible()).toBe(false);
   });
 });

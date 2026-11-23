@@ -1230,3 +1230,48 @@ test('holding Record does not cancel the countdown it started', async ({
   await page.click('#stopBtn');
   await expect(page.locator('#takeList [data-take-id]')).toHaveCount(1);
 });
+
+test('a toast under a parked pointer holds its offer instead of expiring', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+  await page.click('#shareBtn');
+
+  // A key press waits for nothing, and captureFrame keeps nothing while the
+  // preview has no frame yet - wait for one so the capture keeps a take.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const video = document.getElementById(
+          'videoPreview'
+        ) as HTMLVideoElement | null;
+        return video?.videoWidth ?? 0;
+      })
+    )
+    .toBeGreaterThan(0);
+
+  // Park the pointer where the toast will appear - the pill is bottom-centre
+  // and laid out even while hidden - and never move it again. The trigger is
+  // a keyboard shortcut precisely so the pointer stays parked: the toast used
+  // to run its clock anyway and expire under the resting cursor.
+  const pill = (await page.locator('#toastHost').boundingBox())!;
+  await page.mouse.move(pill.x + pill.width / 2, pill.y + pill.height / 2);
+  await page.keyboard.press('Shift+S');
+  await expect(page.locator('#toastText')).toHaveText(
+    /^Saved .+\.png to Takes$/
+  );
+  await expect(page.locator('#toastAction')).toHaveText('View');
+
+  // Well past the offer's 5.2s deadline the toast must still be up, with its
+  // action reachable - the pointer resting on the pill holds the clock.
+  await page.waitForTimeout(6000);
+  await expect(page.locator('#toastHost')).toHaveClass(/is-visible/);
+  await expect(page.locator('#toastAction')).toBeVisible();
+
+  // Moving off releases the hold and the offer expires on the clock it kept.
+  await page.mouse.move(5, 5);
+  await expect(page.locator('#toastHost')).not.toHaveClass(/is-visible/, {
+    timeout: 6000,
+  });
+});

@@ -24,6 +24,14 @@
  * (see styles.css) so a confirmation never blocks the gallery - the hover
  * check is a window-level hit test against the pill's own rect, so holding the
  * clock never swallows a click on whatever sits beneath it.
+ *
+ * The hit test runs when the toast appears as well as on later pointer
+ * activity. A hit test that only reacts to `pointermove` misses the pointer
+ * that was ALREADY parked where the pill lands: nothing about a toast fading
+ * in moves the cursor, so the clock ran and the offer expired under a cursor
+ * resting on it. The window-level tracker records where the pointer last was
+ * (any movement, click, or release anywhere counts), and the show-time hit
+ * test reads that - so a toast under a parked pointer is held from the start.
  */
 
 export interface ToastAction {
@@ -40,6 +48,8 @@ let remaining = 0;
 let held = false;
 /** Pointer is over the pill (window-level hit test; the pill ignores events). */
 let pointerOver = false;
+/** Last known pointer position, tracked window-wide (see recordPointer). */
+let lastPointer: { x: number; y: number } | null = null;
 /** Keyboard focus is inside the toast host. */
 let focusWithin = false;
 /** The host the hold listeners are attached to, while a toast is up. */
@@ -80,17 +90,28 @@ function syncHold(): void {
   }
 }
 
-function onPointerMove(e: Event): void {
-  const { clientX, clientY } = e as PointerEvent;
-  const host = document.getElementById('toastHost');
-  if (!host) return;
+/** True when `(x, y)` lands inside the pill's own rect. */
+function withinHost(host: HTMLElement, x: number, y: number): boolean {
   const r = host.getBoundingClientRect();
-  pointerOver =
-    clientX >= r.left &&
-    clientX <= r.right &&
-    clientY >= r.top &&
-    clientY <= r.bottom;
-  syncHold();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
+/**
+ * Remember where the pointer is and re-hit-test while a toast is up.
+ *
+ * This runs for every pointer move, click, and release, window-wide and for
+ * the life of the page - not just while a toast shows. The pill ignores
+ * pointer events (see styles.css), so there is no enter/leave to listen for;
+ * the last raw position is the only way to know the pointer is resting on the
+ * pill even when it never moved after the toast appeared.
+ */
+function recordPointer(e: Event): void {
+  const { clientX, clientY } = e as PointerEvent;
+  lastPointer = { x: clientX, y: clientY };
+  if (watchedHost) {
+    pointerOver = withinHost(watchedHost, clientX, clientY);
+    syncHold();
+  }
 }
 
 function onFocusIn(): void {
@@ -113,7 +134,6 @@ function watch(host: HTMLElement): void {
   if (watchedHost === host) return;
   unwatch();
   watchedHost = host;
-  window.addEventListener('pointermove', onPointerMove);
   host.addEventListener('focusin', onFocusIn);
   host.addEventListener('focusout', onFocusOut);
   document.addEventListener('visibilitychange', onVisibilityChange);
@@ -126,11 +146,16 @@ function unwatch(): void {
     watchedHost.removeEventListener('focusout', onFocusOut);
     watchedHost = null;
   }
-  window.removeEventListener('pointermove', onPointerMove);
   document.removeEventListener('visibilitychange', onVisibilityChange);
   pointerOver = false;
   focusWithin = false;
 }
+
+// Pointer tracking is for the life of the page, not one toast: the position
+// must already be known the moment a toast appears (see recordPointer).
+window.addEventListener('pointermove', recordPointer);
+window.addEventListener('pointerdown', recordPointer);
+window.addEventListener('pointerup', recordPointer);
 
 /**
  * Show `message` bottom-centre, replacing any current one. With `action`, an
@@ -164,6 +189,11 @@ export function showToast(message: string, action?: ToastAction): void {
   host.classList.add('is-visible');
 
   watch(host);
+  // A pointer already parked where the pill lands holds the clock from the
+  // first tick: a toast fading in does not move the cursor, so no later hit
+  // test would ever come.
+  pointerOver =
+    lastPointer !== null && withinHost(host, lastPointer.x, lastPointer.y);
   arm(action ? 5200 : 3200);
 }
 
