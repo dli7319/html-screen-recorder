@@ -9,6 +9,20 @@ on:
 permissions:
   contents: write
 
+# Every run publishes ./dist to the same `dist` branch, so two runs at once are
+# not independent - they race on one ref. A push that lands while an older
+# deploy is still building would otherwise push last and leave the live site
+# serving the OLDER build, with nothing marking it stale. One group per
+# publisher (the whole workflow, since dispatch and push publish the same
+# branch) with cancel-in-progress drops the older run the moment a newer commit
+# arrives: the run that survives always builds the newest main, so the last
+# push to `dist` is always the newest build. Cancelling mid-publish is safe -
+# the push either landed (a newer build overwrites it) or it did not (the
+# newer build pushes) - either way the branch converges to the latest commit.
+concurrency:
+  group: deploy-dist
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
