@@ -300,14 +300,16 @@ async function captureScreenshot() {
  * Make a take's thumbnail and attach it, best-effort. Fired from the capture
  * paths without awaiting: decoding must never delay the stop feedback. `make`
  * is a function so the store can have moved on by the time it resolves -
- * setThumbnail() is then a no-op rather than an error.
+ * setThumbnail() is then a no-op rather than an error. A null outcome is
+ * still reported to the store, so a failed extraction stops the row waiting
+ * on a still that will never come.
  */
 function attachThumbnail(
   take: Take,
   make: () => Promise<Blob | null>
 ): Promise<void> {
   return make().then((thumbnail) => {
-    if (thumbnail) takes.setThumbnail(take.id, thumbnail);
+    takes.setThumbnail(take.id, thumbnail);
   });
 }
 
@@ -315,7 +317,9 @@ function attachThumbnail(
  * Give restored takes that never got a thumbnail one.
  *
  * Rows cached before this feature existed have none, and one may have failed
- * mid-decode on a previous run. Two workers: a dozen simultaneous video
+ * mid-decode on a previous run. A take whose last attempt gave up is retried
+ * as well - a timeout can be transient - and simply keeps its glyph if this
+ * attempt comes up empty too. Two workers: a dozen simultaneous video
  * decodes at startup is a jank source, and there is no user-visible rush -
  * rows show their glyph until each picture lands.
  */

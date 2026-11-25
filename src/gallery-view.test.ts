@@ -669,6 +669,41 @@ describe('GalleryView thumbnail polish', () => {
     expect(thumb.classList.contains('is-loading')).toBe(false);
     expect(thumb.querySelector('img')).toBeTruthy();
   });
+
+  it('drops the shimmer when extraction gives up, keeping the glyph', () => {
+    render();
+    const added = store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+
+    store.setThumbnail(added.id, null);
+
+    // The still is never coming: a plain glyph, not a shimmer that runs
+    // forever claiming one is on the way.
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    expect(thumb.classList.contains('is-loading')).toBe(false);
+    expect(thumb.textContent).toBe('📷');
+  });
+
+  it('shows the still even after an earlier attempt gave up', () => {
+    render();
+    const added = store.add({
+      kind: 'screenshot',
+      blob: new Blob(['b']),
+      filename: 'two.png',
+      formatName: 'PNG',
+    });
+
+    store.setThumbnail(added.id, null);
+    store.setThumbnail(added.id, new Blob(['t']));
+
+    const thumb = $('takeList').querySelector('.take-thumb') as HTMLElement;
+    expect(thumb.classList.contains('is-loading')).toBe(false);
+    expect(thumb.querySelector('img')).toBeTruthy();
+  });
 });
 
 describe('GalleryView expiry tone', () => {

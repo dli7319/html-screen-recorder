@@ -30,6 +30,13 @@ export interface Take {
   /** Object URL for the thumbnail, subject to the same lifetime rules as
    *  `url` - revoked by the store, never by the view. */
   readonly thumbnailUrl?: string;
+  /** Set when a thumbnail attempt finished and produced nothing - an
+   *  undecodable blob, a timeout, a canvas that refuses to be read back. The
+   *  row then shows its glyph for good instead of shimmering on for a still
+   *  that is never coming. Persisted alongside the take so a refresh (or a
+   *  remove -> undo round-trip) cannot resurrect the wait; a later attempt
+   *  that does produce a still clears it. */
+  readonly thumbnailUnavailable?: boolean;
 }
 
 export interface TakeInput {
@@ -149,20 +156,36 @@ export class TakeStore {
   }
 
   /**
-   * Attach a thumbnail that was made after the take landed. Idempotent, and a
-   * no-op for an id that has since been removed or cleared - extraction is
-   * async and the user is faster than any decoder. Reports whether the take
-   * was still there to receive it.
+   * Attach the outcome of a thumbnail attempt: the still itself, or `null`
+   * when extraction finished without one. Idempotent, and a no-op for an id
+   * that has since been removed or cleared - extraction is async and the user
+   * is faster than any decoder. Reports whether the take was still there to
+   * receive it.
+   *
+   * A `null` outcome is a result, not a silence: it marks the take so the
+   * gallery can stop waiting on a still that is never coming. Without that
+   * mark a failed extraction left the row shimmering as "loading" forever.
    */
-  setThumbnail(id: string, thumbnail: Blob): boolean {
+  setThumbnail(id: string, thumbnail: Blob | null): boolean {
     const take = this.takes.find((candidate) => candidate.id === id);
     if (!take) return false;
+
+    if (!thumbnail) {
+      const givenUp: Take = { ...take, thumbnailUnavailable: true };
+      this.takes[this.takes.indexOf(take)] = givenUp;
+      this.cache?.put(TakeStore.toRecord(givenUp)).catch(warnCacheFailure);
+      this.emit();
+      return true;
+    }
 
     if (take.thumbnailUrl) URL.revokeObjectURL(take.thumbnailUrl);
     const updated: Take = {
       ...take,
       thumbnail,
       thumbnailUrl: URL.createObjectURL(thumbnail),
+      // A still landing is the definitive answer, even after an earlier
+      // attempt gave up (the backfill pass retries).
+      thumbnailUnavailable: false,
     };
     this.takes[this.takes.indexOf(take)] = updated;
 

@@ -1967,7 +1967,8 @@ kbd {
 
 /* No thumbnail yet: the box shimmers so the gap reads as "loading", not
    "missing". The glyph underneath stays so the row is never an empty box; the
-   shimmer drops the moment the still lands and the row re-renders. */
+   shimmer drops the moment the still lands - or the moment extraction gives
+   up and the take is marked unavailable - and the row re-renders. */
 .take-thumb.is-loading {
     background:
         linear-gradient(
