@@ -472,6 +472,62 @@ describe('TakeStore thumbnails', () => {
     expect(cache.records.size).toBe(0);
   });
 
+  it('marks the take when extraction produces nothing', () => {
+    const cache = new FakeCache();
+    const store = new TakeStore(cache);
+    const added = store.add(take());
+    const listener = vi.fn();
+    store.onChange(listener);
+
+    expect(store.setThumbnail(added.id, null)).toBe(true);
+
+    const updated = store.list()[0];
+    expect(updated.thumbnailUnavailable).toBe(true);
+    expect(updated.thumbnail).toBeUndefined();
+    // The give-up mark is a fact about the take, so it survives a refresh.
+    expect(cache.records.get(added.id)?.thumbnailUnavailable).toBe(true);
+    // The gallery re-renders on the outcome, whichever way it went.
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the give-up mark when a still lands later', () => {
+    // The backfill pass retries a failed extraction, so "gone for good" is
+    // only true until a later attempt proves otherwise.
+    const store = new TakeStore();
+    const added = store.add(take());
+    store.setThumbnail(added.id, null);
+
+    store.setThumbnail(added.id, thumb());
+
+    const updated = store.list()[0];
+    expect(updated.thumbnailUnavailable).toBe(false);
+    expect(updated.thumbnail).toBeDefined();
+  });
+
+  it('keeps the give-up mark across a remove and undo', () => {
+    const store = new TakeStore();
+    const added = store.add(take());
+    store.setThumbnail(added.id, null);
+
+    const record = store.remove(added.id);
+    if (record) store.reinsert(record);
+
+    expect(store.list()[0].thumbnailUnavailable).toBe(true);
+  });
+
+  it('restores the give-up mark from the cache', async () => {
+    const cache = new FakeCache();
+    const seed = new TakeStore(cache);
+    const added = seed.add(take());
+    seed.setThumbnail(added.id, null);
+
+    const reborn = new TakeStore(cache);
+    await reborn.restore();
+
+    expect(reborn.list()[0].thumbnailUnavailable).toBe(true);
+    expect(reborn.list()[0].thumbnail).toBeUndefined();
+  });
+
   it('replaces a thumbnail and releases the old URL', () => {
     const store = new TakeStore();
     const added = store.add(take());
