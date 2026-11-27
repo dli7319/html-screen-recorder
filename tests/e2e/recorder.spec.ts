@@ -1136,6 +1136,56 @@ test('stopping while paused still saves the take', async ({ page }) => {
 });
 
 /**
+ * A click on a session-bar control parks focus on it - and the audio toggles
+ * and volume faders are inputs that cannot be typed into. The shortcuts must
+ * still answer from there: gating on the INPUT tag alone used to make every
+ * key go dead the moment the pointer touched the bar (click "System audio",
+ * then R, and nothing happened until focus moved elsewhere).
+ */
+test('shortcuts stay live while a session-bar control has focus', async ({
+  page,
+}) => {
+  await stubDisplayMedia(page);
+  await page.goto('/');
+
+  // Drag-focus the mic fader the way a click does, then prove each key still
+  // reaches the shortcut layer from there.
+  await page.click('#micVolume');
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe(
+    'micVolume'
+  );
+
+  // R with no share yet must run its path: the "share first" banner.
+  await page.keyboard.press('r');
+  await expect(page.locator('#error')).toHaveText(
+    'Please share your screen first.'
+  );
+
+  // The keypress must not have quietly moved focus - the next one still
+  // goes out from the fader.
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe(
+    'micVolume'
+  );
+
+  // ? must open the cheat sheet with the fader still focused...
+  await page.keyboard.press('?');
+  await expect(page.locator('body')).toHaveAttribute('data-shortcuts', 'open');
+
+  // ...and the same holds for a checkbox toggle in the session bar.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-shortcuts',
+    'closed'
+  );
+  await page.click('label[for="systemAudioToggle"] .sw');
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe(
+    'systemAudioToggle'
+  );
+  await page.keyboard.press('?');
+  await expect(page.locator('body')).toHaveAttribute('data-shortcuts', 'open');
+});
+
+/**
  * The auto-repeat keydowns a held key delivers. Automation cannot hold a real
  * key past the OS repeat delay, so the exact event the browser would send -
  * `repeat: true` - is dispatched to `window`, where the shortcut listener is.

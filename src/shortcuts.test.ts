@@ -108,6 +108,24 @@ describe('matchShortcut', () => {
     expect(matchShortcut(key('r', { target: select }))).toBeNull();
   });
 
+  it('fires over a checkbox or fader that merely has focus', () => {
+    // Clicking a session-bar toggle or dragging a volume fader parks focus
+    // on an input that cannot be typed into - the keys must still work from
+    // there, or the shortcuts die the moment the pointer touches the bar.
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    expect(matchShortcut(key('r', { target: checkbox }))).toBe('record');
+    expect(matchShortcut(key('?', { target: checkbox }))).toBe('help');
+
+    const fader = document.createElement('input');
+    fader.type = 'range';
+    expect(matchShortcut(key('s', { target: fader }))).toBe('stop');
+    expect(matchShortcut(key('S', { shiftKey: true, target: fader }))).toBe(
+      'screenshot'
+    );
+    expect(matchShortcut(key('p', { target: fader }))).toBe('pause');
+  });
+
   it('still fires when focus is on a button or the page', () => {
     const button = document.createElement('button');
     expect(matchShortcut(key('r', { target: button }))).toBe('record');
@@ -124,6 +142,47 @@ describe('isTypingTarget', () => {
     expect(isTypingTarget(document.createElement('div'))).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
     expect(isTypingTarget(window)).toBe(false);
+  });
+
+  it('treats click-only inputs as controls, not as typing', () => {
+    // The session bar's audio toggles and volume faders are inputs that take
+    // focus on click. A letter over them means nothing to the control, so
+    // they must not swallow the shortcuts - gating on the tag alone left
+    // every shortcut dead the moment one of them had focus.
+    for (const type of [
+      'checkbox',
+      'radio',
+      'range',
+      'file',
+      'color',
+      'button',
+    ]) {
+      const input = document.createElement('input');
+      input.type = type;
+      expect(isTypingTarget(input), type).toBe(false);
+    }
+  });
+
+  it('keeps every text-entry input a typing target', () => {
+    for (const type of [
+      'text',
+      'search',
+      'password',
+      'number',
+      'date',
+      'email',
+    ]) {
+      const input = document.createElement('input');
+      input.type = type;
+      expect(isTypingTarget(input), type).toBe(true);
+    }
+
+    // An unrecognised type reads back as 'text' (the DOM's own fallback), so
+    // it stays gated: the safe direction is a shortcut that waits, never a
+    // keystroke stolen from a field being typed in.
+    const unknown = document.createElement('input');
+    unknown.type = 'banana';
+    expect(isTypingTarget(unknown)).toBe(true);
   });
 
   it('treats a contenteditable region as typing', () => {

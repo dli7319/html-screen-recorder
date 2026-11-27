@@ -10,7 +10,9 @@
  *   ?      toggle the keyboard shortcuts sheet
  *
  * Plain letters only - modifiers are ignored so browser and OS shortcuts keep
- * working - and nothing fires while the user is typing in a form control.
+ * working - and nothing fires while the user is typing in a text field. A
+ * control that merely takes focus (a checkbox, a volume fader) is not typing;
+ * see isTypingTarget for where that line is drawn.
  *
  * One press, one action: the auto-repeat keydowns a held key delivers are not
  * new presses and never re-fire a command. Every action here is discrete (a
@@ -53,12 +55,44 @@ export const SHORTCUT_DOCS: readonly ShortcutDoc[] = [
   { keys: '?', action: 'help', label: 'Show or hide this sheet' },
 ];
 
+/**
+ * Input types that accept typed text. Everything else the DOM calls an
+ * `input` - checkboxes, radios, faders, buttons, file and colour pickers -
+ * is a control you *operate* rather than type into: a letter key over one
+ * of those has no meaning to the control, so it must keep reaching the
+ * shortcuts. `input.type` reports `text` for an absent or unrecognised
+ * type, so anything this list does not name stays a typing target - the
+ * safe failure direction: a shortcut waits, never a keystroke stolen.
+ */
+const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
+  'text',
+  'search',
+  'url',
+  'tel',
+  'email',
+  'password',
+  'number',
+  'date',
+  'month',
+  'week',
+  'time',
+  'datetime-local',
+]);
+
 /** Targets where a bare letter must stay a letter, not a command. */
 export function isTypingTarget(target: unknown): boolean {
   if (!(target instanceof HTMLElement)) return false;
 
   const tag = target.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  // An input counts as typing only when its type takes text. Gating on the
+  // tag alone made every session-bar toggle and volume fader a keyboard
+  // black hole: click "System audio" (or drag a fader) and R / P / S /
+  // Shift+S / ? all went dead until focus moved elsewhere - and the faders
+  // are deliberately left live during a recording, exactly when the
+  // shortcuts matter most.
+  if (tag === 'INPUT')
+    return TEXT_INPUT_TYPES.has((target as HTMLInputElement).type);
 
   // `isContentEditable` is the right signal in a browser, but it is absent in
   // some DOM implementations, so fall back to the attribute. Both spellings are
